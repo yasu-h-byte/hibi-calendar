@@ -1,5 +1,6 @@
 'use client'
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { useEffect, useState, useCallback } from 'react'
 import { visaLabel } from '@/lib/labels'
@@ -7,6 +8,7 @@ import { jobLabel } from '@/lib/jobs'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { PageHeader, ToolButton, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import { SaveButton } from '@/components/ui/SaveButton'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 
@@ -85,8 +87,6 @@ export default function ToolBudgetPage() {
   const [defaultBudget, setDefaultBudget] = useState('30000')
   const [budgetByVisa, setBudgetByVisa] = useState<Record<string, string>>({})
   const [budgetByJob, setBudgetByJob] = useState<Record<string, string>>({})
-  const [settingsSaving, setSettingsSaving] = useState(false)
-  const [settingsMsg, setSettingsMsg] = useState('')
 
   useEffect(() => {
     try {
@@ -149,26 +149,20 @@ export default function ToolBudgetPage() {
   const toNumMap = (m: Record<string, string>) =>
     Object.fromEntries(Object.entries(m).filter(([, v]) => v.trim() !== '').map(([k, v]) => [k, Number(v)]))
 
+  // 保存ボタン（SaveButton）の約束: うまくいったら何も返さない・サーバの断りは { ok: false, error }（ボタンが赤の帯を出す）
   const saveBudgetSettings = async () => {
-    setSettingsSaving(true); setSettingsMsg('')
-    try {
-      const res = await fetch('/api/tool-budget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({
-          action: 'setDefaultBudget',
-          defaultBudget: Number(defaultBudget) || 30000,
-          budgetByVisa: toNumMap(budgetByVisa),
-          budgetByJob: toNumMap(budgetByJob),
-        }),
-      })
-      if (!res.ok) throw new Error(`保存に失敗しました (${res.status})`)
-      setSettingsMsg('保存しました')
-      await fetchData()
-      setTimeout(() => setSettingsMsg(''), 2000)
-    } catch (e) {
-      setSettingsMsg(e instanceof Error ? e.message : '保存に失敗しました')
-    } finally { setSettingsSaving(false) }
+    const res = await fetch('/api/tool-budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({
+        action: 'setDefaultBudget',
+        defaultBudget: Number(defaultBudget) || 30000,
+        budgetByVisa: toNumMap(budgetByVisa),
+        budgetByJob: toNumMap(budgetByJob),
+      }),
+    })
+    if (!res.ok) { const j = await res.json().catch(() => null); return { ok: false, error: j?.error || 'サーバが受け付けませんでした' } }
+    await fetchData()
   }
 
   // 設定欄に出す区分。外国人はまとめキー（jisshu/tokutei）、日本人は現場職種
@@ -224,11 +218,7 @@ export default function ToolBudgetPage() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={saveBudgetSettings} disabled={settingsSaving}
-              className="px-5 py-2 rounded-lg bg-hibi-navy text-white text-sm font-bold hover:opacity-90 disabled:opacity-50">
-              {settingsSaving ? '保存中...' : '保存'}
-            </button>
-            {settingsMsg && <span className="text-xs text-green-700">{settingsMsg}</span>}
+            <SaveButton action="保存" onSave={saveBudgetSettings} />
           </div>
         </div>
       )}
@@ -373,22 +363,16 @@ function WorkerModal({
   onRefresh: () => void
 }) {
   const [anchor, setAnchor] = useState(worker.periodAnchor || '')
-  const [anchorSaving, setAnchorSaving] = useState(false)
-  const [anchorSaved, setAnchorSaved] = useState(false)
 
   const [budget, setBudget] = useState(String(worker.budget))
-  const [budgetSaving, setBudgetSaving] = useState(false)
-  const [budgetSaved, setBudgetSaved] = useState(false)
 
   const [bulkAmount, setBulkAmount] = useState('')
   const [bulkDate, setBulkDate] = useState(worker.period?.start || '')
   const [bulkMemo, setBulkMemo] = useState('既存使用分')
-  const [bulkSaving, setBulkSaving] = useState(false)
 
   const [newDate, setNewDate] = useState('')
   const [newAmount, setNewAmount] = useState('')
   const [newItem, setNewItem] = useState('')
-  const [newSaving, setNewSaving] = useState(false)
 
   // worker props が更新されたら state を同期
   useEffect(() => {
@@ -397,51 +381,38 @@ function WorkerModal({
     if (worker.period) setBulkDate(worker.period.start)
   }, [worker])
 
+  // 保存ボタン（SaveButton）の約束: うまくいったら何も返さない・サーバの断りは { ok: false, error }（ボタンが赤の帯を出す）
   const saveAnchor = async () => {
-    if (anchorSaving) return
-    setAnchorSaving(true)
-    setAnchorSaved(false)
-    try {
-      const r = await fetch('/api/tool-budget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'setPeriodAnchor', workerId: worker.workerId, anchor: anchor || null }),
-      })
-      // 2026-10-02 総合点検: 旧は応答を見ておらず、権限なし・形式不正でも「保存しました」と出た
-      if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('期間の起点を保存', j?.error || 'サーバが受け付けませんでした'); setAnchorSaving(false); return }
-      setAnchorSaved(true)
-      setTimeout(() => setAnchorSaved(false), 1500)
-      onRefresh()
-    } catch { /* ignore */ }
-    setAnchorSaving(false)
+    const r = await fetch('/api/tool-budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ action: 'setPeriodAnchor', workerId: worker.workerId, anchor: anchor || null }),
+    })
+    // 2026-10-02 総合点検: 旧は応答を見ておらず、権限なし・形式不正でも「保存しました」と出た
+    if (!r.ok) { const j = await r.json().catch(() => null); return { ok: false, error: j?.error || 'サーバが受け付けませんでした' } }
+    onRefresh()
   }
 
   const saveBudget = async () => {
-    if (budgetSaving || !worker.period) return
-    setBudgetSaving(true)
-    setBudgetSaved(false)
-    try {
-      const r = await fetch('/api/tool-budget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({
-          action: 'setBudget',
-          workerId: worker.workerId,
-          periodStart: worker.period.start,
-          budget: Number(budget),
-        }),
-      })
-      if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('予算を保存', j?.error || 'サーバが受け付けませんでした'); setBudgetSaving(false); return }
-      setBudgetSaved(true)
-      setTimeout(() => setBudgetSaved(false), 1500)
-      onRefresh()
-    } catch { /* ignore */ }
-    setBudgetSaving(false)
+    if (!worker.period) return null
+    const r = await fetch('/api/tool-budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({
+        action: 'setBudget',
+        workerId: worker.workerId,
+        periodStart: worker.period.start,
+        budget: Number(budget),
+      }),
+    })
+    if (!r.ok) { const j = await r.json().catch(() => null); return { ok: false, error: j?.error || 'サーバが受け付けませんでした' } }
+    onRefresh()
   }
 
   // 2026-09-30: 登録時に残高・期間をサーバで確認する。残高を超えるときは確認してから通す
-  const addPurchase = async (date: string, amount: number, item: string) => {
-    if (!worker.period) return false
+  //   戻り値: true=登録した / null=「やめる」が押された（失敗ではない） / false=だめだった（帯はここで出す）
+  const addPurchase = async (date: string, amount: number, item: string): Promise<boolean | null> => {
+    if (!worker.period) return null
     const post = (allowOver: boolean) => fetch('/api/tool-budget', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
@@ -465,7 +436,7 @@ function WorkerModal({
             description: `${j.error || ''}\n超過分は、次の期間の枠から差し引かれます。`.trim(),
             confirmLabel: '超えて登録する',
           })
-          if (!okOver) return false
+          if (!okOver) return null
           res = await post(true)
         } else {
           notify.failed('登録', j.error || 'サーバが受け付けませんでした')
@@ -484,28 +455,23 @@ function WorkerModal({
     }
   }
 
+  // addPurchase は失敗の帯を自分で出す（残高超えの確認もその中）ので、だめなら false を返すだけ
   const handleBulkRegister = async () => {
-    if (!bulkAmount || !bulkDate || bulkSaving) return
-    setBulkSaving(true)
+    if (!bulkAmount || !bulkDate) return null
     const ok = await addPurchase(bulkDate, Number(bulkAmount), bulkMemo || '既存使用分')
-    if (ok) {
-      setBulkAmount('')
-      onRefresh()
-    }
-    setBulkSaving(false)
+    if (!ok) return ok
+    setBulkAmount('')
+    onRefresh()
   }
 
   const handleAddNew = async () => {
-    if (!newDate || !newAmount || newSaving) return
-    setNewSaving(true)
+    if (!newDate || !newAmount) return null
     const ok = await addPurchase(newDate, Number(newAmount), newItem)
-    if (ok) {
-      setNewDate('')
-      setNewAmount('')
-      setNewItem('')
-      onRefresh()
-    }
-    setNewSaving(false)
+    if (!ok) return ok
+    setNewDate('')
+    setNewAmount('')
+    setNewItem('')
+    onRefresh()
   }
 
   const handleDelete = async (purchaseId: string) => {
@@ -567,14 +533,7 @@ function WorkerModal({
                     onChange={e => setAnchor(e.target.value)}
                     className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-40" />
                 </div>
-                <button
-                  onClick={saveAnchor}
-                  disabled={anchorSaving || anchor === (worker.periodAnchor || '')}
-                  className="bg-hibi-navy text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
-                >
-                  {anchorSaving ? '保存中...' : '保存'}
-                </button>
-                {anchorSaved && <span className="text-xs text-green-600 dark:text-green-400 font-bold">✓ 保存しました</span>}
+                <SaveButton action="保存" onSave={saveAnchor} disabled={anchor === (worker.periodAnchor || '')} />
               </div>
               <p className="text-2xs text-gray-500 dark:text-gray-400 mt-2">
                 起点日を設定すると、その日から1年ごとに自動でサイクルが切り替わります（例: 5/14 → 翌5/13まで）。<br />
@@ -626,14 +585,7 @@ function WorkerModal({
                         onChange={e => setBudget(e.target.value)}
                         className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-32 tabular-nums" />
                     </div>
-                    <button
-                      onClick={saveBudget}
-                      disabled={budgetSaving || Number(budget) === worker.budget}
-                      className="bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-700 transition disabled:opacity-50"
-                    >
-                      {budgetSaving ? '保存中...' : '予算変更'}
-                    </button>
-                    {budgetSaved && <span className="text-xs text-green-600 dark:text-green-400 font-bold">✓ 保存しました</span>}
+                    <SaveButton action="予算を変更" onSave={saveBudget} disabled={Number(budget) === worker.budget} />
                     <span className="text-2xs text-gray-400 ml-auto">デフォルト: ¥{(worker.defaultBudget ?? worker.budget).toLocaleString()}</span>
                   </div>
                 </div>
@@ -677,13 +629,7 @@ function WorkerModal({
                           placeholder="8500"
                           className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-28 tabular-nums" />
                       </div>
-                      <button
-                        onClick={handleBulkRegister}
-                        disabled={bulkSaving || !bulkAmount || !bulkDate}
-                        className="bg-amber-600 text-white px-4 py-1.5 rounded text-sm font-bold hover:bg-amber-700 transition disabled:opacity-50"
-                      >
-                        {bulkSaving ? '登録中...' : 'まとめて計上'}
-                      </button>
+                      <SaveButton action="まとめて計上" onSave={handleBulkRegister} disabled={!bulkAmount || !bulkDate} />
                     </div>
                   </div>
                 </section>
@@ -772,13 +718,7 @@ function WorkerModal({
                         placeholder="3500"
                         className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-28 tabular-nums" />
                     </div>
-                    <button
-                      onClick={handleAddNew}
-                      disabled={newSaving || !newDate || !newAmount}
-                      className="bg-hibi-navy text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
-                    >
-                      {newSaving ? '追加中...' : '+ 追加'}
-                    </button>
+                    <SaveButton action="追加" onSave={handleAddNew} disabled={!newDate || !newAmount} />
                   </div>
                 </div>
               </section>

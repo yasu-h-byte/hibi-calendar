@@ -14,8 +14,10 @@
 
 import { useState, useEffect } from 'react'
 import { notify } from '@/lib/notify'
+import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 
 // 2026-10-03: ブラウザ標準の alert を共通部品（notify）に置き換え。実行結果の明細は窓の中に残す
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 interface HealthCheck {
   ok: boolean
@@ -144,45 +146,31 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
 
   if (loading && !health) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white rounded-xl p-6"><div className="text-gray-500">健全性チェック中...</div></div>
-      </div>
+      <Modal open onClose={onClose} title="メニュー" sub="例外オペレーション・保守ツール" size="lg"
+        footer={<CancelButton onClick={onClose}>閉じる</CancelButton>}>
+        <div className="text-gray-500 text-sm">健全性チェック中...</div>
+      </Modal>
     )
   }
 
   if (!health) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
-          <div className="text-red-600 font-bold text-sm mb-2">⚠️ 保守ツールを開けません</div>
-          <div className="text-sm text-gray-700 mb-4">{error || '健全性チェックの結果を取得できませんでした。'}</div>
-          <div className="flex justify-end gap-2">
-            <button onClick={fetchHealth} className="px-4 py-2 bg-hibi-navy text-white rounded-lg text-sm font-bold hover:opacity-90">
-              再試行
-            </button>
-            <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-300">
-              閉じる
-            </button>
-          </div>
-        </div>
-      </div>
+      <Modal open onClose={onClose} title="保守ツールを開けません"
+        footer={<>
+          <CancelButton onClick={onClose}>閉じる</CancelButton>
+          <PrimaryButton onClick={fetchHealth}>もう一度試す</PrimaryButton>
+        </>}>
+        <div className="text-sm text-gray-700 dark:text-gray-200">{error || '健全性チェックの結果を取得できませんでした。'}</div>
+      </Modal>
     )
   }
   // API 応答に counts が無くてもクラッシュしないようガード（c.xxx は全て optional 参照）
   const c = health.counts ?? {}
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white rounded-xl border border-hibi-line shadow-2xl max-w-2xl w-full my-8" onClick={e => e.stopPropagation()}>
-        <div className="bg-hibi-navy text-white px-5 py-4 rounded-t-xl flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">🔧 メニュー</h2>
-            <div className="text-xs opacity-80 mt-0.5">例外オペレーション・保守ツール</div>
-          </div>
-          <button onClick={onClose} className="text-2xl leading-none hover:opacity-70">&times;</button>
-        </div>
-
-        <div className="px-5 py-4 space-y-4">
+    <Modal open onClose={() => { if (running === null) onClose() }} title="メニュー" sub="例外オペレーション・保守ツール" size="lg"
+      footer={<CancelButton onClick={onClose} disabled={running !== null}>閉じる</CancelButton>}>
+        <div className="space-y-4">
           {lastResult && (
             <div role="status" className="border border-green-200 bg-green-50 rounded-lg p-3">
               <div className="flex justify-between items-start gap-2">
@@ -195,7 +183,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
           {/* ── 例外オペレーション ── */}
           <div className="border-b border-gray-200 pb-4">
             <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
-              ✏️ 例外オペレーション
+              例外オペレーション
             </div>
             <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-3">
               <div className="flex justify-between items-start gap-3">
@@ -205,7 +193,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
                     特定スタッフへの個別付与（過去分の遡及・特別付与・補正用）
                   </div>
                   <div className="text-2xs text-gray-500 mt-1">
-                    💡 通常の年次付与は「🌴 半自動付与バナー」から実行してください
+                    通常の年次付与は「半自動付与」の案内から実行してください
                   </div>
                 </div>
                 <button
@@ -220,13 +208,13 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
 
           {/* ── 保守ツール（健全性） ── */}
           <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
-            🔧 保守ツール（データ整合性）
+            保守ツール（データ整合性）
           </div>
 
           {/* 全体ステータス */}
           <div className={`rounded-lg p-3 border ${health.ok ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-300'}`}>
             <div className="font-bold text-sm">
-              {health.ok ? '✅ 健全 — 保守ツールの実行は不要です' : '⚠️ 修正が必要なレコードがあります'}
+              {health.ok ? '健全です。保守ツールの実行は不要です' : '修正が必要なレコードがあります'}
             </div>
             {!health.ok && (
               <div className="text-xs text-gray-600 mt-1">下記の「実行」ボタンを押してください。冪等な処理なので何度実行しても安全です。</div>
@@ -307,19 +295,12 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
           </div>
 
           <div className="text-2xs text-gray-500 border-t pt-3">
-            ℹ️ 全てのアクションは冪等です。何度実行しても結果は同じです。
+            どの処理も何度実行しても結果は同じです。
             <br />
-            ℹ️ 時効処理は Vercel Cron で月1回自動実行されるため、通常手動実行は不要です。
+            時効処理は毎月1日に自動で動くため、ふだん手で実行する必要はありません。
           </div>
         </div>
-
-        <div className="px-5 py-3 bg-gray-50 rounded-b-xl flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 bg-hibi-navy text-white rounded-lg text-sm font-bold hover:opacity-90">
-            閉じる
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

@@ -3,12 +3,15 @@
  *
  * 本人のトークンで認証された外国人スタッフが、翌月の全現場カレンダーを
  * 確認してサインするモーダル。日本語＋ベトナム語の二言語表記。
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 'use client'
 
 import { useState } from 'react'
 import { STAFF_DOW_VI, STAFF_TEXT, biLine } from '@/lib/labels'
 import { notify } from '@/lib/notify'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 
 const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
@@ -39,8 +42,8 @@ interface Props {
   reviewed: boolean
   onReviewedChange: (next: boolean) => void
   signing: boolean
-  /** 同意セレモニーで本人が入力した氏名を渡す */
-  onSubmit: (consentName: string) => void
+  /** 同意セレモニーで本人が入力した氏名を渡す。サインできたら true（失敗の文は errorMsg で呼び出し側が出す） */
+  onSubmit: (consentName: string) => Promise<boolean>
   /** 質問・異議の送信（成功なら true）。承認とは独立 */
   onQuestion: (message: string) => Promise<boolean>
   onClose: () => void
@@ -70,7 +73,6 @@ export default function CalendarApprovalModal({
   // 質問・異議（承認とは独立して送信できる）
   const [showQuestion, setShowQuestion] = useState(false)
   const [questionText, setQuestionText] = useState('')
-  const [questionSending, setQuestionSending] = useState(false)
   const [questionSent, setQuestionSent] = useState(false)
 
   // 表示対象: 承認済みの現場
@@ -80,40 +82,45 @@ export default function CalendarApprovalModal({
   // ヘッダー文言を変えるための判定: 全てが needsResign なら「更新」モード、混在なら混合
   const hasRevisions = sitesNeedingAction.some(s => s.needsResign)
   const hasFirstTimeSign = sitesNeedingAction.some(s => !s.signed)
+  // 送信している間は閉じない
+  const close = () => { if (!signing) onClose() }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/50 p-2 flex items-start sm:items-center justify-center overflow-y-auto"
-      onClick={() => !signing && onClose()}
+    <Modal
+      open
+      onClose={close}
+      closeOnEsc={!signing}
+      closeOnOverlay={!signing}
+      size="lg"
+      bilingual
+      autoFocus="none"
+      dirty={consentName.trim() !== '' || reviewed || questionText.trim() !== ''}
+      title={`${yearNum}年${monthNum}月 ${sitesNeedingAction.length === 0 ? 'カレンダー' : 'カレンダー承認'}`}
+      sub={sitesNeedingAction.length === 0 ? `Lịch tháng ${monthNum}/${yearNum}` : `Xác nhận lịch tháng ${monthNum}/${yearNum}`}
+      footer={
+        <>
+          <CancelButton onClick={close} disabled={signing} size="lg">
+            {sitesNeedingAction.length === 0 ? biLine(STAFF_TEXT.close) : 'やめる / Hủy'}
+          </CancelButton>
+          {sitesNeedingAction.length > 0 && (
+            <SaveButton
+              action="送信"
+              label={hasRevisions && !hasFirstTimeSign
+                ? `${sitesNeedingAction.length}件の変更を承認する / Xác nhận ${sitesNeedingAction.length} thay đổi`
+                : `${sitesNeedingAction.length}件のカレンダーを承認する / Ký ${sitesNeedingAction.length} lịch`}
+              savingLabel="送信しています / Đang gửi"
+              savedLabel="送信しました / Đã gửi"
+              retryLabel="もう一度送る / Gửi lại"
+              disabled={!reviewed || !consentOk || signing}
+              size="lg"
+              className="flex-1"
+              onSave={async () => { if (!(await onSubmit(consentName.trim()))) return false }}
+            />
+          )}
+        </>
+      }
     >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-4 flex flex-col max-h-[95vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* ヘッダー */}
-        <div className="bg-hibi-navy text-white px-4 py-3 rounded-t-xl flex items-center justify-between">
-          <div>
-            <div className="font-bold text-lg leading-tight">
-              {yearNum}年{monthNum}月 {sitesNeedingAction.length === 0 ? 'カレンダー' : 'カレンダー承認'}
-            </div>
-            <div className="text-xs opacity-80">
-              {sitesNeedingAction.length === 0 ? `Lịch tháng ${monthNum}/${yearNum}` : `Xác nhận lịch tháng ${monthNum}/${yearNum}`}
-            </div>
-          </div>
-          {/* 44px 以上（2026-10-02 総合点検。旧: 余白なしの × だけ） */}
-          <button
-            type="button"
-            onClick={() => !signing && onClose()}
-            className="min-w-[44px] min-h-[44px] -mr-2 rounded-lg text-white/80 hover:text-white text-2xl leading-none active:bg-white/10"
-            disabled={signing}
-            aria-label={biLine(STAFF_TEXT.close)}
-          >
-            &times;
-          </button>
-        </div>
-
-        {/* 本文 */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        <div className="space-y-4">
           {sitesNeedingAction.length === 0 ? (
             // 署名ずみ（2026-09-30）: 休みの日をいつでも見られるように、承認後も開ける
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
@@ -213,16 +220,64 @@ export default function CalendarApprovalModal({
               {errorMsg}
             </div>
           )}
-        </div>
 
-        {/* フッター: 確認チェック + 承認ボタン */}
-        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 rounded-b-xl space-y-3">
+          {/* 質問・異議の窓口（承認とは独立。確認したが疑問・要望がある場合） */}
+          <div className="pt-2 border-t border-gray-200">
+            {questionSent ? (
+              <div className="text-center text-sm text-green-700">
+                送信しました。担当者が確認します / Đã gửi, người phụ trách sẽ kiểm tra
+              </div>
+            ) : !showQuestion ? (
+              /* 異議の入口は 44px 以上（2026-10-02 総合点検。旧: 12px の下線リンク1行） */
+              <button
+                type="button"
+                onClick={() => setShowQuestion(true)}
+                className="w-full min-h-[44px] py-2 rounded-lg text-sm text-blue-700 underline active:bg-blue-50"
+              >
+                質問・相談・変更してほしい点がある方はこちら / Có thắc mắc hoặc đề nghị?
+              </button>
+            ) : (
+              <div className="space-y-2">
+                {/* 16px（旧 text-sm だと iOS がフォーカスで画面を拡大する） */}
+                <textarea
+                  value={questionText}
+                  onChange={e => setQuestionText(e.target.value)}
+                  rows={3}
+                  placeholder="質問・相談・変更してほしい点 / Câu hỏi, đề nghị thay đổi..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <CancelButton onClick={() => { setShowQuestion(false); setQuestionText('') }}>
+                    {biLine(STAFF_TEXT.close)}
+                  </CancelButton>
+                  <SaveButton
+                    action="送信"
+                    label="送信 / Gửi"
+                    savingLabel="送信しています / Đang gửi"
+                    savedLabel="送信しました / Đã gửi"
+                    retryLabel="もう一度送る / Gửi lại"
+                    disabled={questionText.trim().length < 2}
+                    className="flex-1"
+                    onSave={async () => {
+                      const ok = await onQuestion(questionText.trim())
+                      if (ok) { setQuestionSent(true); return }
+                      // 文面は日越で出したいので自分で帯を出す（SaveButton の既定の帯は日本語だけ）
+                      notify.error('送信できませんでした / Gửi thất bại', '電波のよい所でもう一度お試しください / Vui lòng thử lại ở nơi có sóng tốt')
+                      return false
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 確認チェック（承認ボタンは下のボタン列） */}
           {sitesNeedingAction.length === 0 ? (
             <div className="text-center text-sm text-green-700 font-bold">
               すべて署名済みです / Đã ký tất cả
             </div>
           ) : (
-            <>
+            <div className="border-t border-gray-200 pt-3 space-y-3">
               {/* 本人確認: 氏名の入力（同意セレモニー） */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">
@@ -254,78 +309,9 @@ export default function CalendarApprovalModal({
                   </span>
                 </span>
               </label>
-              <button
-                onClick={() => onSubmit(consentName.trim())}
-                disabled={!reviewed || !consentOk || signing}
-                className={`w-full py-3 rounded-xl font-bold text-base transition ${
-                  reviewed && consentOk && !signing
-                    ? 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {signing
-                  ? '送信中... / Đang gửi...'
-                  : hasRevisions && !hasFirstTimeSign
-                    ? `${sitesNeedingAction.length}件の変更を承認する / Xác nhận ${sitesNeedingAction.length} thay đổi`
-                    : `${sitesNeedingAction.length}件のカレンダーを承認する / Ký ${sitesNeedingAction.length} lịch`
-                }
-              </button>
-            </>
+            </div>
           )}
-
-          {/* 質問・異議の窓口（承認とは独立。確認したが疑問・要望がある場合） */}
-          <div className="pt-2 border-t border-gray-200">
-            {questionSent ? (
-              <div className="text-center text-sm text-green-700">
-                ✓ 送信しました。担当者が確認します / Đã gửi, người phụ trách sẽ kiểm tra
-              </div>
-            ) : !showQuestion ? (
-              /* 異議の入口は 44px 以上（2026-10-02 総合点検。旧: 12px の下線リンク1行） */
-              <button
-                type="button"
-                onClick={() => setShowQuestion(true)}
-                className="w-full min-h-[44px] py-2 rounded-lg text-sm text-blue-700 underline active:bg-blue-50"
-              >
-                質問・相談・変更してほしい点がある方はこちら / Có thắc mắc hoặc đề nghị?
-              </button>
-            ) : (
-              <div className="space-y-2">
-                {/* 16px（旧 text-sm だと iOS がフォーカスで画面を拡大する） */}
-                <textarea
-                  value={questionText}
-                  onChange={e => setQuestionText(e.target.value)}
-                  rows={3}
-                  placeholder="質問・相談・変更してほしい点 / Câu hỏi, đề nghị thay đổi..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowQuestion(false); setQuestionText('') }}
-                    disabled={questionSending}
-                    className="min-h-[44px] py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition disabled:opacity-50"
-                  >
-                    {biLine(STAFF_TEXT.close)}
-                  </button>
-                  <button
-                    onClick={async () => {
-                      setQuestionSending(true)
-                      const ok = await onQuestion(questionText.trim())
-                      setQuestionSending(false)
-                      if (ok) setQuestionSent(true)
-                      else notify.error('送信できませんでした / Gửi thất bại', '電波のよい所でもう一度お試しください / Vui lòng thử lại ở nơi có sóng tốt')
-                    }}
-                    disabled={questionSending || questionText.trim().length < 2}
-                    className="min-h-[44px] py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
-                  >
-                    {questionSending ? biLine(STAFF_TEXT.sending) : '送信 / Gửi'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

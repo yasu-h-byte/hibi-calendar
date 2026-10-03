@@ -3,10 +3,13 @@
  *
  * スタッフが自分のスマホから帰国を申請するモーダル。
  * 原則3ヶ月前まで（緊急時は会社相談）の制約あり。
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 'use client'
 
 import { STAFF_DOW_VI, STAFF_HOME_LEAVE_REASON_VI, STAFF_TEXT, biLine } from '@/lib/labels'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 
 export interface HomeLongLeaveRequest {
   id: string
@@ -34,7 +37,8 @@ interface Props {
   setErrorMsg: (s: string | null) => void
   submitting: boolean
   requests: HomeLongLeaveRequest[]
-  onSubmit: () => void
+  /** 送信。うまくいったら true（失敗の文は errorMsg で呼び出し側が出す） */
+  onSubmit: () => Promise<boolean>
   onCancelRequest: (requestId: string) => void
 }
 
@@ -87,15 +91,31 @@ export default function HomeLongLeaveModal({
   onSubmit,
   onCancelRequest,
 }: Props) {
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
-          帰国申請 / Xin về nước
-        </h3>
-
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="帰国申請 / Xin về nước"
+      bilingual
+      dirty={note.trim() !== '' || reason !== '一時帰国' || (!!startDate && startDate !== getHlMinDate())}
+      footer={
+        <>
+          <CancelButton onClick={onClose} disabled={submitting} size="lg">やめる / Hủy</CancelButton>
+          <SaveButton
+            action="申請"
+            label="帰国を申請する / Gửi đơn xin về nước"
+            savingLabel="送信しています / Đang gửi"
+            savedLabel="申請しました / Đã gửi đơn"
+            retryLabel="もう一度申請する / Gửi lại"
+            disabled={submitting || !startDate || !endDate || startDate < getHlMinDate()}
+            size="lg"
+            className="flex-1"
+            onSave={async () => { if (!(await onSubmit())) return false }}
+          />
+        </>
+      }
+    >
+      <div>
         {successMsg && (
           <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold mb-3 animate-pulse">
             {successMsg}
@@ -192,20 +212,6 @@ export default function HomeLongLeaveModal({
           />
         </div>
 
-        {/* Submit */}
-        <button
-          onClick={onSubmit}
-          disabled={submitting || !startDate || !endDate || startDate < getHlMinDate()}
-          className="w-full bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              そうしんちゅう / Đang gửi...
-            </span>
-          ) : '帰国を申請する / Gửi đơn xin về nước'}
-        </button>
-
         {/* Request history */}
         {requests.length > 0 && (
           <div className="mt-6">
@@ -273,13 +279,7 @@ export default function HomeLongLeaveModal({
           </div>
         )}
 
-        <button
-          onClick={onClose}
-          className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
-        >
-          閉じる / Đóng
-        </button>
       </div>
-    </div>
+    </Modal>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
@@ -17,6 +18,7 @@ import { todayJstIso } from '@/lib/date-utils'
 import { STAFF_STATUS_BI, STAFF_TEXT, biLine, staffBreakShortenTag } from '@/lib/labels'
 import StaffHeader from '@/components/StaffHeader'
 import { Icon, type IconName } from '@/components/ui/Icon'
+import { Modal, CancelButton } from '@/components/ui/Modal'
 
 interface SiteBreakConfig {
   enabled: boolean
@@ -333,14 +335,14 @@ export default function StaffAttendancePage() {
   // カレンダー承認のサブミット（本人のトークンで自分自身としてサイン）
   // モーダルで開いている月の「未署名 OR 再署名要」の現場を一括サイン
   //   consentName: 同意セレモニーで本人が入力した氏名（本人同意の証跡）
-  const submitCalendarSign = useCallback(async (consentName: string) => {
-    if (!activePendingCalendar || signingCalendar) return
+  const submitCalendarSign = useCallback(async (consentName: string): Promise<boolean> => {
+    if (!activePendingCalendar || signingCalendar) return false
     const ym = activePendingCalendar.ym
     // 未署名と「再署名要 (needsResign)」の両方を対象に
     const targetSiteIds = activePendingCalendar.sites
       .filter(s => s.status === 'approved' && (!s.signed || s.needsResign))
       .map(s => s.siteId)
-    if (targetSiteIds.length === 0) return
+    if (targetSiteIds.length === 0) return false
     setSigningCalendar(true)
     setCalendarErrorMsg(null)
     try {
@@ -353,7 +355,7 @@ export default function StaffAttendancePage() {
       if (!res.ok || !json.success) {
         setCalendarErrorMsg(json.error || 'サインに失敗しました / Lỗi khi ký')
         setSigningCalendar(false)
-        return
+        return false
       }
       setCalendarSuccessMsg(`✓ ${json.signedCount}件のカレンダーを承認しました / Đã ký ${json.signedCount} lịch`)
       setShowCalendarModal(false)
@@ -361,8 +363,10 @@ export default function StaffAttendancePage() {
       setCalendarReviewed(false)
       await fetchPendingCalendar()
       setTimeout(() => setCalendarSuccessMsg(null), 4000)
+      return true
     } catch {
       setCalendarErrorMsg('通信エラー / Lỗi kết nối')
+      return false
     } finally {
       setSigningCalendar(false)
     }
@@ -531,8 +535,8 @@ export default function StaffAttendancePage() {
     }
   }, [showHomeLongLeaveModal, fetchHlRequests])
 
-  const submitHomeLongLeave = async () => {
-    if (!data || hlSubmitting || !hlStartDate || !hlEndDate) return
+  const submitHomeLongLeave = async (): Promise<boolean> => {
+    if (!data || hlSubmitting || !hlStartDate || !hlEndDate) return false
     setHlSubmitting(true)
     setHlError(null)
     setHlSuccess(null)
@@ -559,6 +563,7 @@ export default function StaffAttendancePage() {
         setHlNote('')
         fetchHlRequests()
         setTimeout(() => setHlSuccess(null), 3000)
+        return true
       } else {
         const d = await res.json().catch(() => ({}))
         const msg = d.error === 'Already requested' ? '申請済みです / Đã gửi rồi'
@@ -567,9 +572,11 @@ export default function StaffAttendancePage() {
           : d.error || biLine(STAFF_TEXT.error)
         // 失敗の文は消さない（旧: 日越の長い文を3秒で消していた）。次に送るときに消える
         setHlError(msg)
+        return false
       }
     } catch {
       setHlError(biLine(STAFF_TEXT.connError))
+      return false
     } finally {
       setHlSubmitting(false)
     }
@@ -603,8 +610,9 @@ export default function StaffAttendancePage() {
     return options
   }
 
-  const submitLeaveRequest = async () => {
-    if (!data || leaveSubmitting || !leaveDateFrom) return
+  // true=全部送れた・false=送れなかった（文は leaveError）・null=日付の不備で止めた（ボタンはふだんの顔に戻る）
+  const submitLeaveRequest = async (): Promise<boolean | null> => {
+    if (!data || leaveSubmitting || !leaveDateFrom) return false
     setLeaveSubmitting(true)
     setLeaveError(null)
     setLeaveSuccess(null)
@@ -623,7 +631,7 @@ export default function StaffAttendancePage() {
         }
         current.setDate(current.getDate() + 1)
       }
-      if (dates.length === 0) { setLeaveError(biLine(STAFF_TEXT.chooseDate)); setLeaveSubmitting(false); return }
+      if (dates.length === 0) { setLeaveError(biLine(STAFF_TEXT.chooseDate)); setLeaveSubmitting(false); return null }
 
       // Submit each date
       let lastError = ''
@@ -662,11 +670,14 @@ export default function StaffAttendancePage() {
         // 失敗の文は消さない（旧: 3秒で消えて読めなかった）。次に送るときに消える
         setLeaveError(msg)
       }
+      // 全部送れたときだけ「申請しました」（一部でも送れなかったら、ボタンはもう一度押せる形に戻す）
+      return successCount === dates.length
     } catch {
       setLeaveError(successCount > 0
         ? `${successCount}日分は送れました。残りは ${biLine(STAFF_TEXT.connError)}`
         : biLine(STAFF_TEXT.connError))
       if (successCount > 0) fetchLeaveRequests()
+      return false
     } finally {
       setLeaveSubmitting(false)
     }
@@ -824,8 +835,8 @@ export default function StaffAttendancePage() {
     return `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`
   }
 
-  const handleRestSubmit = async () => {
-    if (!data || saving) return
+  const handleRestSubmit = async (): Promise<boolean> => {
+    if (!data || saving) return false
     setSaving(true)
     setActionMsg(null)
     // 対象日: モーダルで選択した日（未指定・不正なら今日にフォールバック）
@@ -860,14 +871,17 @@ export default function StaffAttendancePage() {
         setRestNote('')
         showActionMsg({ kind: 'ok', text: biLine(STAFF_TEXT.saved), where: restLockDate ? 'past' : 'today' })
         fetchData()
+        return true
       } else {
         const d = await res.json().catch(() => ({}))
         // 2026-08-27 修正: setError のバナーはモーダル(z-50)の裏に隠れて3秒で消え、
         //   スタッフに失敗が伝わらなかった → モーダルより前（z-[100]）の帯で、閉じるまで残す
         notify.error(BI_SAVE_FAILED, d.error || BI_SERVER_REFUSED)
+        return false
       }
     } catch {
       notify.error(biLine(STAFF_TEXT.connError), BI_NET_FAILED)
+      return false
     } finally {
       setSaving(false)
     }
@@ -1565,14 +1579,15 @@ export default function StaffAttendancePage() {
           if (actionMsg?.where === 'past' && actionMsg.kind === 'err') setActionMsg(null)
         }
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closePast}>
-            <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-hibi-charcoal mb-1 text-center tabular-nums">
-                {pd.date}
-              </h3>
-              {/* 文言は日越並記（2026-10-02 総合点検。旧: このモーダルは見出しから登録ボタンまで日本語だけだった） */}
-              <p className="text-sm text-gray-500 mb-4 text-center">{biLine(STAFF_TEXT.edit)}</p>
-
+          /* 文言は日越並記（2026-10-02 総合点検。旧: このモーダルは見出しから登録ボタンまで日本語だけだった） */
+          <Modal
+            open
+            onClose={closePast}
+            title={pd.date}
+            sub={biLine(STAFF_TEXT.edit)}
+            bilingual
+            footer={<CancelButton onClick={closePast} size="lg">やめる / Hủy</CancelButton>}
+          >
               {pastTimeBased ? (
                 <div className="space-y-4">
                   {/* Start/End time pickers */}
@@ -1677,15 +1692,7 @@ export default function StaffAttendancePage() {
                   ))}
                 </div>
               )}
-
-              <button
-                onClick={closePast}
-                className="w-full mt-3 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-sm font-bold active:bg-gray-100"
-              >
-                やめる / Hủy
-              </button>
-            </div>
-          </div>
+          </Modal>
         )
       })()}
 

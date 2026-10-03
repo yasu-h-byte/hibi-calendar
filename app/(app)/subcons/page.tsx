@@ -1,12 +1,15 @@
 'use client'
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { COMPANY_ROLES, companyRoles, canBorrowFrom, type CompanyRole } from '@/lib/companies'
 import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, FieldError } from '@/components/ui/PageParts'
+import { CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 
@@ -54,7 +57,6 @@ export default function SubconsPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [siteRateForm, setSiteRateForm] = useState<Record<string, string>>({}) // siteId -> rate string
-  const [saving, setSaving] = useState(false)
   const [formErrors, setFormErrors] = useState<{ name?: string; roles?: string }>({})
   // 表示モード: 'flat' = 区分別（鳶/土工）/ 'group' = 会社グループ別（兼業業者を1グループに集約）
   const [viewMode, setViewMode] = useState<'flat' | 'group'>('flat')
@@ -109,46 +111,44 @@ export default function SubconsPage() {
     if (!form.name.trim()) errors.name = '取引先名を入力してください'
     if (!form.roles.length) errors.roles = '役割を1つ以上選んでください'
     setFormErrors(errors)
-    if (errors.name || errors.roles) return
-    setSaving(true)
-    try {
-      // 元請・一次・同業のみ、応援の請求書の宛名用データを一緒に送る
-      const isParty = form.roles.includes('gc') || form.roles.includes('prime') || form.roles.includes('peer')
-      const partyFields = isParty ? {
-        postal: form.postal, address: form.address, honorific: form.honorific || '御中',
-        paymentTerms: { closing: 'end' as const, payMonthOffset: Number(form.payMonthOffset) as 1 | 2, payDay: form.payDay === 'end' ? 'end' as const : (Number(form.payDay) || 'end' as const) },
-      } : {}
-      const body = editId
-        ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles, ...partyFields }
-        : { action: 'add', name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles, ...partyFields }
-      const res = await postJson('/api/subcons', body)
-      if (!res.ok) {
-        notify.failed('保存', res.error || (res.data as { error?: string } | null)?.error || 'サーバが受け付けませんでした'); setSaving(false); return
-      }
+    if (errors.name || errors.roles) return null
+    // ここから下は保存ボタン（SaveButton）の約束: うまくいったら何も返さない・サーバの断りは { ok: false, error }（ボタンが赤の帯を出す）
+    // 元請・一次・同業のみ、応援の請求書の宛名用データを一緒に送る
+    const isParty = form.roles.includes('gc') || form.roles.includes('prime') || form.roles.includes('peer')
+    const partyFields = isParty ? {
+      postal: form.postal, address: form.address, honorific: form.honorific || '御中',
+      paymentTerms: { closing: 'end' as const, payMonthOffset: Number(form.payMonthOffset) as 1 | 2, payDay: form.payDay === 'end' ? 'end' as const : (Number(form.payDay) || 'end' as const) },
+    } : {}
+    const body = editId
+      ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles, ...partyFields }
+      : { action: 'add', name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles, ...partyFields }
+    const res = await postJson('/api/subcons', body)
+    if (!res.ok) {
+      return { ok: false, error: res.error || (res.data as { error?: string } | null)?.error || 'サーバが受け付けませんでした' }
+    }
 
-      // 編集モードで現場別単価を変えた現場だけ updateSiteRates を送る
-      //   2026-10-02 総合点検: 旧は配置現場ぶん全部を毎回送り、サーバが `{ rate }` に置き換えていたので、
-      //   保存のたびに現場別の残業単価（otRate）が消えた。変えていない現場は送らない（サーバ側も otRate を残す）
-      if (editId) {
-        const siteRatesPayload: Record<string, number | null> = {}
-        const existingRates = subconRates[editId] || {}
-        for (const siteId of subconSites[editId] || []) {
-          const inputVal = siteRateForm[siteId]
-          const numVal = inputVal ? Number(inputVal) : 0
-          const next = numVal > 0 ? numVal : null
-          const cur = existingRates[siteId]?.rate || null
-          if (next !== cur) siteRatesPayload[siteId] = next
-        }
-        if (Object.keys(siteRatesPayload).length > 0) {
-          const r = await postJson('/api/subcons', {
-            action: 'updateSiteRates', subconId: editId, siteRates: siteRatesPayload,
-          })
-          if (!r.ok) { notify.failed('現場別単価の保存', r.error || (r.data as { error?: string } | null)?.error || 'サーバが受け付けませんでした'); setSaving(false); return }
-        }
+    // 編集モードで現場別単価を変えた現場だけ updateSiteRates を送る
+    //   2026-10-02 総合点検: 旧は配置現場ぶん全部を毎回送り、サーバが `{ rate }` に置き換えていたので、
+    //   保存のたびに現場別の残業単価（otRate）が消えた。変えていない現場は送らない（サーバ側も otRate を残す）
+    if (editId) {
+      const siteRatesPayload: Record<string, number | null> = {}
+      const existingRates = subconRates[editId] || {}
+      for (const siteId of subconSites[editId] || []) {
+        const inputVal = siteRateForm[siteId]
+        const numVal = inputVal ? Number(inputVal) : 0
+        const next = numVal > 0 ? numVal : null
+        const cur = existingRates[siteId]?.rate || null
+        if (next !== cur) siteRatesPayload[siteId] = next
       }
+      if (Object.keys(siteRatesPayload).length > 0) {
+        const r = await postJson('/api/subcons', {
+          action: 'updateSiteRates', subconId: editId, siteRates: siteRatesPayload,
+        })
+        if (!r.ok) { return { ok: false, error: `現場別単価の保存: ${r.error || (r.data as { error?: string } | null)?.error || 'サーバが受け付けませんでした'}` } }
+      }
+    }
 
-      setShowModal(false); fetchData()
-    } finally { setSaving(false) }
+    setShowModal(false); fetchData()
   }
 
   const handleDelete = async (id: string, name: string): Promise<boolean> => {
@@ -513,12 +513,10 @@ export default function SubconsPage() {
                 <button type="button" onClick={async () => { const ok = await handleDelete(editId, form.name); if (ok) setShowModal(false) }}
                   className="text-xs text-hibi-sub dark:text-gray-400 hover:text-red-700 underline">取引先を削除する</button>
               )}
-              <button onClick={() => setShowModal(false)}
-                className="ml-auto h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">閉じる</button>
-              <button onClick={handleSave} disabled={saving}
-                className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
-                {saving ? '保存中...' : '保存する'}
-              </button>
+              <div className="ml-auto flex items-center gap-2.5">
+                <CancelButton onClick={() => setShowModal(false)}>閉じる</CancelButton>
+                <SaveButton action="保存" onSave={handleSave} />
+              </div>
             </div>
           </div>
         </SidePanel>

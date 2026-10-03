@@ -1,6 +1,7 @@
 'use client'
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { staffLinkOrigin } from '@/lib/public-origin'
 import { useEffect, useState, useCallback } from 'react'
@@ -24,6 +25,8 @@ import { todayJstIso } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
 import { postJson } from '@/lib/api-client'
 import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog, FieldError } from '@/components/ui/PageParts'
+import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 
@@ -137,7 +140,6 @@ export default function WorkersPage() {
   // パネルを開いた時点の内容（未保存の変更があるかの比較用・2026-10-02 総合点検）。
   //   旧: Esc・背景クリック・「閉じる」で、入れかけの内容が確認なしで消えていた
   const [formBase, setFormBase] = useState(JSON.stringify(EMPTY_FORM))
-  const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   // 顔写真（2026-08-03 追加）。名前と顔が一致しない問題への対応
   const { photos, reload: reloadPhotos } = useWorkerPhotos()
@@ -277,8 +279,9 @@ export default function WorkersPage() {
     setShowModal(true)
   }
 
+  // 保存ボタン（SaveButton）の約束: うまくいったら何も返さない・入力の不備や「やめる」は false・サーバの断りは { ok: false, error }
   const handleSave = async () => {
-    if (!form.name.trim()) { setNameError('名前を入力してください'); return }
+    if (!form.name.trim()) { setNameError('名前を入力してください'); return null }
     setNameError(null)
 
     // 新規追加時のみ: 同名スタッフチェック（スペース・全角半角を無視）
@@ -295,7 +298,7 @@ export default function WorkersPage() {
           description: `${list}\n\n別人として新しく追加しますか？\n同じ人を二重に登録しそうなときは「やめる」を押してください。`,
           confirmLabel: '別人として追加する',
         })
-        if (!ok) return
+        if (!ok) return null
       }
     }
 
@@ -322,60 +325,52 @@ export default function WorkersPage() {
             description: `${diffs.map(d => `・${d}`).join('\n')}\n\n保存すると月次集計の金額にすぐ反映されます。変更は記録に残ります。`,
             confirmLabel: '保存する',
           })
-          if (!ok) return
+          if (!ok) return null
         }
       }
     }
 
-    setSaving(true)
-    try {
-      // 「消す・外す」変更を保存できるようにする（2026-10-02 総合点検）。
-      //   旧: 空の項目を `form.x || undefined` で送っていた → JSON でキーごと落ち、サーバは「変更なし」と受け取るので、
-      //   退職日の取り消し・固定月給の解除（月給制→日給制）・旧ルールのチェック外し・休憩短縮の解除・
-      //   メモ／在留期限／生年月日の削除が、パネルは閉じるのに保存されていなかった（確認ダイアログは「解除」と出ていた）。
-      //   新: 値があればその値、元は入っていて今は空なら '' を明示して送る（サーバは '' を「その項目を消す」と扱う）。
-      //   元から空の項目は送らない（変更なし）。旧ルールは false を送ると解除
-      const orig0 = editId !== null ? workers.find(w => w.id === editId) : undefined
-      const origOf = (k: string): unknown => (orig0 as unknown as Record<string, unknown> | undefined)?.[k]
-      const clearable = <T extends string | number>(val: T | '' | undefined | null, key: string): T | '' | undefined => {
-        if (val !== '' && val !== undefined && val !== null) return val
-        const o = origOf(key)
-        return o !== undefined && o !== null && o !== '' && o !== 0 ? '' : undefined
-      }
-      const body = editId !== null
-        ? {
-            action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job,
-            rate: form.rate, hourlyRate: clearable(form.hourlyRate, 'hourlyRate'), otMul: form.otMul,
-            hireDate: form.hireDate, birthDate: clearable(form.birthDate, 'birthDate'),
-            jpGrade: clearable(form.jpGrade, 'jpGrade'), jpStep: clearable(form.jpStep ? Number(form.jpStep) : '', 'jpStep'),
-            canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children,
-            breakShortenMin: clearable(form.breakShortenMin ? Number(form.breakShortenMin) : '', 'breakShortenMin'),
-            breakShortenFrom: clearable(form.breakShortenFrom, 'breakShortenFrom'),
-            retired: clearable(form.retired, 'retired'), salary: clearable(form.salary, 'salary'),
-            visaExpiry: clearable(form.visaExpiry, 'visaExpiry'), memo: clearable(form.memo, 'memo'),
-            dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '',
-            useOldRules: form.useOldRules ? true : (origOf('useOldRules') ? false : undefined),
-            payrollNo: form.payrollNo.trim(),
-          }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined }
-      // 給与欄を書き換えられない人（代表以外）は給与欄を送らない（2026-10-02）。
-      //   給与を見られない人には給与欄が空で届くため、送ると「空にする変更」扱いで保存が止まっていた
-      if (editId !== null && !canEditPay) {
-        for (const k of ['rate', 'hourlyRate', 'otMul', 'jpGrade', 'jpStep', 'salary'] as const) delete (body as Record<string, unknown>)[k]
-      }
-      const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: '' }))
-        notify.failed('保存', err.error || 'サーバが受け付けませんでした')
-        return
-      }
-      setShowModal(false)
-      fetchWorkers()
-    } catch (e) {
-      notify.failed('保存', e)
-    } finally {
-      setSaving(false)
+    // 「消す・外す」変更を保存できるようにする（2026-10-02 総合点検）。
+    //   旧: 空の項目を `form.x || undefined` で送っていた → JSON でキーごと落ち、サーバは「変更なし」と受け取るので、
+    //   退職日の取り消し・固定月給の解除（月給制→日給制）・旧ルールのチェック外し・休憩短縮の解除・
+    //   メモ／在留期限／生年月日の削除が、パネルは閉じるのに保存されていなかった（確認ダイアログは「解除」と出ていた）。
+    //   新: 値があればその値、元は入っていて今は空なら '' を明示して送る（サーバは '' を「その項目を消す」と扱う）。
+    //   元から空の項目は送らない（変更なし）。旧ルールは false を送ると解除
+    const orig0 = editId !== null ? workers.find(w => w.id === editId) : undefined
+    const origOf = (k: string): unknown => (orig0 as unknown as Record<string, unknown> | undefined)?.[k]
+    const clearable = <T extends string | number>(val: T | '' | undefined | null, key: string): T | '' | undefined => {
+      if (val !== '' && val !== undefined && val !== null) return val
+      const o = origOf(key)
+      return o !== undefined && o !== null && o !== '' && o !== 0 ? '' : undefined
     }
+    const body = editId !== null
+      ? {
+          action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job,
+          rate: form.rate, hourlyRate: clearable(form.hourlyRate, 'hourlyRate'), otMul: form.otMul,
+          hireDate: form.hireDate, birthDate: clearable(form.birthDate, 'birthDate'),
+          jpGrade: clearable(form.jpGrade, 'jpGrade'), jpStep: clearable(form.jpStep ? Number(form.jpStep) : '', 'jpStep'),
+          canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children,
+          breakShortenMin: clearable(form.breakShortenMin ? Number(form.breakShortenMin) : '', 'breakShortenMin'),
+          breakShortenFrom: clearable(form.breakShortenFrom, 'breakShortenFrom'),
+          retired: clearable(form.retired, 'retired'), salary: clearable(form.salary, 'salary'),
+          visaExpiry: clearable(form.visaExpiry, 'visaExpiry'), memo: clearable(form.memo, 'memo'),
+          dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '',
+          useOldRules: form.useOldRules ? true : (origOf('useOldRules') ? false : undefined),
+          payrollNo: form.payrollNo.trim(),
+        }
+      : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined }
+    // 給与欄を書き換えられない人（代表以外）は給与欄を送らない（2026-10-02）。
+    //   給与を見られない人には給与欄が空で届くため、送ると「空にする変更」扱いで保存が止まっていた
+    if (editId !== null && !canEditPay) {
+      for (const k of ['rate', 'hourlyRate', 'otMul', 'jpGrade', 'jpStep', 'salary'] as const) delete (body as Record<string, unknown>)[k]
+    }
+    const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: '' }))
+      return { ok: false, error: err.error || 'サーバが受け付けませんでした' }
+    }
+    setShowModal(false)
+    fetchWorkers()
   }
 
   const handleDelete = async (id: number, name: string) => {
@@ -741,7 +736,7 @@ export default function WorkersPage() {
                     <WorkerAvatar name={form.name} src={photos[String(editId)]} size={96} />
                     <div className="flex-1">
                       <label className={`inline-block bg-white border border-gray-300 text-hibi-navy dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium ${photoBusy ? 'opacity-50' : 'cursor-pointer'}`}>
-                        {photoBusy ? '保存中...' : photos[String(editId)] ? '写真を変更' : '写真を選ぶ'}
+                        {photoBusy ? '写真を保存しています' : photos[String(editId)] ? '写真を変更' : '写真を選ぶ'}
                         <input
                           type="file"
                           accept={AVATAR_ACCEPT}
@@ -1428,47 +1423,38 @@ export default function WorkersPage() {
                 <button type="button" onClick={() => handleDelete(editWorker.id, editWorker.name)}
                   className="text-xs text-hibi-sub dark:text-gray-400 hover:text-red-700 underline">登録を完全に消す</button>
               )}
-              <button onClick={closePanel}
-                className="ml-auto h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
-                閉じる
-              </button>
-              {canEdit && (
-                <button onClick={handleSave} disabled={saving}
-                  className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
-                  {saving ? '保存中...' : '保存する'}
-                </button>
-              )}
+              <div className="ml-auto flex items-center gap-2.5">
+                <CancelButton onClick={closePanel}>閉じる</CancelButton>
+                {canEdit && <SaveButton action="保存" onSave={handleSave} />}
+              </div>
             </div>
           </div>
         </SidePanel>
       )}
 
-      {/* QR Modal */}
-      {qrWorker && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]" onClick={() => setQrWorker(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">{qrWorker.name}</h3>
-            <p className="text-xs text-gray-500 mb-4 break-all">{mobileUrl(qrWorker)}</p>
-            <div className="flex justify-center mb-4">
-              <QRCodeSVG value={mobileUrl(qrWorker)} size={200} level="M" />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(mobileUrl(qrWorker))
-                  notify.success('URLをコピーしました')
-                }}
-                className="flex-1 bg-hibi-navy text-white rounded-lg py-2 text-sm"
-              >
-                URLコピー
-              </button>
-              <button onClick={() => setQrWorker(null)} className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm">
-                閉じる
-              </button>
-            </div>
+      {/* スマホ画面の QR コード（見るだけ） */}
+      <Modal
+        open={qrWorker !== null}
+        onClose={() => setQrWorker(null)}
+        title={qrWorker ? `${qrWorker.name} のスマホ画面` : ''}
+        sub={qrWorker ? <span className="break-all">{mobileUrl(qrWorker)}</span> : undefined}
+        size="sm"
+        footer={qrWorker && (
+          <>
+            <CancelButton onClick={() => setQrWorker(null)}>閉じる</CancelButton>
+            <PrimaryButton onClick={() => {
+              navigator.clipboard.writeText(mobileUrl(qrWorker))
+              notify.success('URLをコピーしました')
+            }}>URLをコピーする</PrimaryButton>
+          </>
+        )}
+      >
+        {qrWorker && (
+          <div className="flex justify-center py-2">
+            <QRCodeSVG value={mobileUrl(qrWorker)} size={200} level="M" />
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

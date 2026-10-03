@@ -8,9 +8,12 @@
  *
  * ベトナム人スタッフの「出勤」を空欄に新しく入れることはできない（本人のスマホ入力が原則・
  * lib/attendance.ts canAdminEditEntry）。その分は最初から外して件数を知らせる。
+ *
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { useMemo, useState } from 'react'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
+import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import type { AttEntry, Worker, DayType } from '../types'
 import { calcOvertimeHours, type SiteWorkSchedule } from '@/types'
 
@@ -106,18 +109,45 @@ export default function BulkEntryModal({
   ]
   const hasTimeBased = workers.some(w => who.has(String(w.id)) && timeBasedFor(w))
   const hasLegacy = workers.some(w => who.has(String(w.id)) && !timeBasedFor(w))
+  // 人か日にちを選び始めたら、閉じる前に確かめる
+  const dirty = who.size > 0 || days.size > 0
+
+  const apply = async () => {
+    if (kind === 'clear' && !(await confirmDanger({
+      title: `${plan.items.length}マスの入力を消しますか？`,
+      confirmLabel: '消す',
+    }))) return
+    if (kind !== 'clear' && plan.overwriteStaff > 0 && !(await confirmDialog({
+      title: `本人がスマホで入れた ${plan.overwriteStaff}マスを上書きしますか？`,
+      description: '始業・終業の時刻も置き換わります。',
+      confirmLabel: '上書きする',
+    }))) return
+    if (plan.items.length > 150 && !(await confirmDialog({
+      title: `${plan.items.length}マスに入れますか？`,
+      description: '数が多いので、保存に少し時間がかかります（4件ずつ送ります）。',
+      confirmLabel: '続ける',
+    }))) return
+    onApply(plan.items); onClose()
+  }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-3 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-lg font-bold">一括入力</h3>
-            <p className="text-xs text-gray-500 mt-0.5">人と日にちをまとめて選び、同じ内容を一度に入れます。工種（鉄骨・仮設）は日ごとの指定どおりに振り分けます。</p>
-          </div>
-          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-600">&times;</button>
-        </div>
-
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="一括入力"
+      sub="人と日にちをまとめて選び、同じ内容を一度に入れます。工種（鉄骨・仮設）は日ごとの指定どおりに振り分けます。"
+      size="lg"
+      dirty={dirty}
+      footer={(
+        <>
+          <CancelButton onClick={onClose} />
+          <PrimaryButton onClick={() => { void apply() }} disabled={plan.items.length === 0}>
+            {plan.items.length}マスに入れる
+          </PrimaryButton>
+        </>
+      )}
+    >
+      <div className="space-y-4">
         {/* 人 */}
         <section>
           <div className="flex items-center gap-2 mb-1.5">
@@ -210,32 +240,7 @@ export default function BulkEntryModal({
             </span>
           )}
         </div>
-
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm">やめる</button>
-          <button disabled={plan.items.length === 0}
-            onClick={async () => {
-              if (kind === 'clear' && !(await confirmDanger({
-                title: `${plan.items.length}マスの入力を消しますか？`,
-                confirmLabel: '消す',
-              }))) return
-              if (kind !== 'clear' && plan.overwriteStaff > 0 && !(await confirmDialog({
-                title: `本人がスマホで入れた ${plan.overwriteStaff}マスを上書きしますか？`,
-                description: '始業・終業の時刻も置き換わります。',
-                confirmLabel: '上書きする',
-              }))) return
-              if (plan.items.length > 150 && !(await confirmDialog({
-                title: `${plan.items.length}マスに入れますか？`,
-                description: '数が多いので、保存に少し時間がかかります（4件ずつ送ります）。',
-                confirmLabel: '続ける',
-              }))) return
-              onApply(plan.items); onClose()
-            }}
-            className="px-5 py-2 rounded-lg bg-hibi-navy text-white text-sm font-bold disabled:opacity-40">
-            {plan.items.length}マスに入れる
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

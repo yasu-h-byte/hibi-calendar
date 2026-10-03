@@ -188,7 +188,7 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
                         disabled={acting === n.id}
                         className="flex-1 text-center text-xs font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg py-1.5 transition"
                       >
-                        {acting === n.id ? '処理中...' : `✓ ${n.action.label}`}
+                        {acting === n.id ? '処理しています' : `✓ ${n.action.label}`}
                       </button>
                     )}
                     {n.messengerText && (

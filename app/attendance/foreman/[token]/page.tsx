@@ -1,6 +1,7 @@
 'use client'
 
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { siteLeaderLabel } from '@/lib/companies'
 import { confirmDialog } from '@/lib/confirm-dialog'
@@ -11,6 +12,7 @@ import DriverModal from '@/app/(app)/attendance/components/DriverModal'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus } from '@/types'
 import StaffHeader from '@/components/StaffHeader'
+import { Modal, CancelButton } from '@/components/ui/Modal'
 
 interface MisplacedEntry {
   siteId: string
@@ -674,18 +676,20 @@ export default function ForemanAttendancePage() {
         </div>
       </div>
 
-      {/* Edit worker modal */}
+      {/* Edit worker modal（ボタンを押すとその場で保存されるので、下のボタン列は「閉じる」だけ） */}
       {editingWorker && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setEditingWorker(null)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg px-4 sm:px-6 pt-5 pb-[env(safe-area-inset-bottom,8px)]" onClick={e => e.stopPropagation()} style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}>
-            <h3 className="text-lg font-bold text-hibi-charcoal mb-1 text-center truncate">{editingWorker.name}</h3>
-            <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel}</p>
-
+        <Modal
+          open
+          onClose={() => { if (!saving) setEditingWorker(null) }}
+          title={editingWorker.name}
+          sub={data.date.dateLabel}
+          footer={<CancelButton onClick={() => setEditingWorker(null)} disabled={saving}>閉じる</CancelButton>}
+        >
             {/* スタッフ未入力時のヒント（待機中行から開いた場合） */}
             {!editingWorker.hasEntry && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                 <p className="text-xs text-yellow-800 font-medium mb-1">
-                  💡 スタッフ未入力の状態です
+                  スタッフ未入力の状態です
                 </p>
                 <p className="text-xs text-yellow-700">
                   「現場都合休み」「有給」のみ{siteLeaderLabel(data.site.isSupport)}が代理入力できます。出勤・休みは
@@ -720,7 +724,7 @@ export default function ForemanAttendancePage() {
 
             {/* 出勤時刻＋休憩（2026-08-28: 時刻なし残業ステッパーから置き換え。
                 スタッフのスマホ入力と同じ形式で保存され、残業は時刻から自動計算される） */}
-            <div className="bg-gray-50 rounded-xl p-3 mb-4">
+            <div className="bg-gray-50 rounded-xl p-3">
               <div className="text-xs text-gray-500 text-center mb-2">
                 勤務時刻（「出勤」で保存する内容・残業は自動計算）
               </div>
@@ -761,33 +765,21 @@ export default function ForemanAttendancePage() {
                 ))}
               </div>
             </div>
-
-            <button
-              onClick={() => setEditingWorker(null)}
-              className="w-full bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-sm font-bold active:bg-gray-100"
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* 現場違い修正モーダル */}
       {fixingSite && data && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setFixingSite(null)}>
-          <div
-            className="bg-white rounded-t-2xl w-full max-w-lg px-4 sm:px-6 pt-5 pb-[env(safe-area-inset-bottom,8px)]"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
-          >
-            <h3 className="text-lg font-bold text-hibi-charcoal mb-1 text-center truncate">
-              {fixingSite.workerName} さん
-            </h3>
-            <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel} の現場違い修正</p>
-
+        <Modal
+          open
+          onClose={() => { if (!saving) setFixingSite(null) }}
+          title={`${fixingSite.workerName} さん`}
+          sub={`${data.date.dateLabel} の現場違い修正`}
+          footer={<CancelButton onClick={() => setFixingSite(null)} disabled={saving}>やめる</CancelButton>}
+        >
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
               <p className="text-sm text-orange-800 font-medium mb-1">
-                ⚠️ 別現場で入力されています
+                別現場で入力されています
               </p>
               <p className="text-xs text-orange-700">
                 スタッフがスマホで違う現場を選んだ可能性があります。<br />
@@ -795,7 +787,7 @@ export default function ForemanAttendancePage() {
               </p>
             </div>
 
-            <div className="space-y-2 mb-4">
+            <div className="space-y-2">
               {fixingSite.misplaced.map(m => {
                 const statusText = m.entry.p ? '🌴 有給'
                   : m.entry.r ? '🏠 休み'
@@ -821,22 +813,13 @@ export default function ForemanAttendancePage() {
                       disabled={saving}
                       className="w-full bg-orange-500 text-white rounded-lg py-3 font-bold text-sm active:scale-95 disabled:opacity-50"
                     >
-                      🔄 {data.site.name} に移動する
+                      {data.site.name} に移動する
                     </button>
                   </div>
                 )
               })}
             </div>
-
-            <button
-              onClick={() => setFixingSite(null)}
-              disabled={saving}
-              className="w-full bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 font-bold text-sm active:bg-gray-100 disabled:opacity-50"
-            >
-              キャンセル
-            </button>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

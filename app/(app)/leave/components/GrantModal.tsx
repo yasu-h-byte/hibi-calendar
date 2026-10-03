@@ -6,11 +6,13 @@ import { calcLastUsableDayIso, todayJstIso } from '@/lib/date-utils'
 import { jpDeemedDate } from '@/lib/leave-compute'
 import { PLWorker } from '../types'
 import { confirmDialog } from '@/lib/confirm-dialog'
-import { notify } from '@/lib/notify'
 import { FieldError } from '@/components/ui/PageParts'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 
 // 有給付与モーダル
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 // 常時マウントし open で表示切替（キャンセル後も入力値を保持する従来挙動を踏襲）
 
 interface Props {
@@ -22,7 +24,8 @@ interface Props {
 }
 
 export default function GrantModal({ open, workers, password, onClose, onSaved }: Props) {
-  const [grantForm, setGrantForm] = useState({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
+  const EMPTY_FORM = { workerId: '', grantDays: '10', grantMonth: '', grantDate: '' }
+  const [grantForm, setGrantForm] = useState(EMPTY_FORM)
   const [legalPLInfo, setLegalPLInfo] = useState<{ days: number; years: number; months: number; label: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [workerError, setWorkerError] = useState<string | null>(null)
@@ -56,8 +59,11 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grantForm.workerId, grantForm.grantDate])
 
+  // 対象者か付与日を入れたら「保存していない変更」とみなす（付与日数・発生月は対象者から自動で入る）
+  const dirty = grantForm.workerId !== '' || grantForm.grantDate !== ''
+
   const handleGrant = async () => {
-    if (!grantForm.workerId) { setWorkerError('対象者を選択してください'); return }
+    if (!grantForm.workerId) { setWorkerError('対象者を選択してください'); return null }
     // 2026-06-12 (監査 Sprint2-C): 付与日数は有給日給=支給額に直結するため確認を挟む
     {
       const target = workers.find(w => w.id === Number(grantForm.workerId))
@@ -66,7 +72,7 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
         description: `付与日: ${grantForm.grantDate || '未指定'}\n付与日数は有給手当（支給額）に直結します。操作は記録されます。`,
         confirmLabel: '付与する',
       })
-      if (!ok) return
+      if (!ok) return null
     }
     setSaving(true)
     try {
@@ -86,21 +92,28 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
       //   付与日数は支給額に直結するため、失敗時はフォームを保持して理由を表示する
       if (!res.ok) {
         const err = await res.json().catch(() => null)
-        notify.failed('付与', err?.error)
-        return
+        return { ok: false, error: err?.error }
       }
-      setGrantForm({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
+      setGrantForm(EMPTY_FORM)
       setLegalPLInfo(null)
       onSaved()
-    } catch (e) { notify.failed('付与', e) } finally { setSaving(false) }
+    } finally { setSaving(false) }
   }
 
-  if (!open) return null
+  const close = () => { setLegalPLInfo(null); onClose() }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">有給付与</h3>
+    <Modal
+      open={open}
+      onClose={() => { if (!saving) close() }}
+      title="有給付与"
+      size="sm"
+      dirty={dirty}
+      footer={<>
+        <CancelButton onClick={close} disabled={saving} />
+        <SaveButton action="付与" onSave={handleGrant} />
+      </>}
+    >
         <div className="space-y-3">
           <div>
             <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">対象者</label>
@@ -157,15 +170,6 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
             </div>
           )}
         </div>
-        <div className="flex gap-2 mt-6">
-          <button onClick={handleGrant} disabled={saving}
-            className="flex-1 bg-green-600 text-white rounded-lg py-2.5 font-bold text-sm disabled:opacity-50">
-            {saving ? '処理中...' : '付与'}
-          </button>
-          <button onClick={() => { setLegalPLInfo(null); onClose() }}
-            className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm">キャンセル</button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

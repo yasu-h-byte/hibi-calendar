@@ -7,6 +7,7 @@
  * 同じ会社・同じ月のシステムの請求書（下書き or 発行済み）と並べて差を見る。
  * 画面の型: ① 今月の見比べの状況 → ② 1行一覧 → 行を押すと右に見比べの詳細。
  * 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDanger・notify）に置き換え
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
@@ -19,6 +20,8 @@ import { can } from '@/lib/permissions'
 import { currentYmJst } from '@/lib/date-utils'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 import {
   PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES,
   sanitizePaperLines, parsePaperNumber, isBlankNumberInput,
@@ -423,6 +426,10 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  // 開いたときの内容（閉じる前に「保存していない変更があります」を出す比較用）
+  const snapshot = () => JSON.stringify({ companyId, targetYm, no, issueDate, subtotal, tax, total, note, lines })
+  const [base] = useState(snapshot)
+  const dirty = files.length > 0 || snapshot() !== base
 
   const addFiles = (list: FileList | File[]) => {
     const arr = Array.from(list)
@@ -446,29 +453,30 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   }))
   const linesSum = lines.reduce((s, l) => s + (toNum(l.amount) || 0), 0)
 
+  // 保存ボタン（SaveButton）の約束: 入力の不備は赤字を出して false・途中の失敗は throw（ボタンが赤の帯を出す）
   const submit = async () => {
     // アップロードの前に、サーバ（commit）と同じ決まりで確かめる。落ちる内容ならファイルを送らない
-    if (!companyId) { setErr('請求先の会社を選んでください'); return }
-    if (!(toNum(total) > 0)) { setErr('税込合計を入れてください（数字で）'); return }
+    if (!companyId) { setErr('請求先の会社を選んでください'); return null }
+    if (!(toNum(total) > 0)) { setErr('税込合計を入れてください（数字で）'); return null }
     for (const [label, v] of [['税抜小計', subtotal], ['消費税', tax]] as const) {
-      if (!isBlankNumberInput(v) && Number.isNaN(toNum(v))) { setErr(`${label}の数字が読めません`); return }
+      if (!isBlankNumberInput(v) && Number.isNaN(toNum(v))) { setErr(`${label}の数字が読めません`); return null }
     }
     const lineRows = lines.map(l => ({ site: l.site, item: l.item, unit: l.unit, qty: l.qty, rate: l.rate, amount: l.amount }))
     const lineCheck = sanitizePaperLines(lineRows)
-    if (!lineCheck.ok) { setErr(lineCheck.error); return }
-    if (mode === 'add' && files.length === 0) { setErr('請求書のファイル（PDF・写真）を選んでください'); return }
+    if (!lineCheck.ok) { setErr(lineCheck.error); return null }
+    if (mode === 'add' && files.length === 0) { setErr('請求書のファイル（PDF・写真）を選んでください'); return null }
     setErr('')
     const fields = { companyId, ym: targetYm, total, subtotal, tax, no, issueDate, note, lines: lineRows }
     let uploadedDocId: string | null = null
     try {
       if (mode === 'edit' && rec) {
-        setBusy('保存中...')
+        setBusy('保存しています')
         const r = await postJson('/api/paper-invoice', { action: 'update', docId: rec.id, ...fields })
         if (!r.ok) throw new Error(r.error || '保存に失敗しました')
         onDone(targetYm)
         return
       }
-      setBusy('準備中...')
+      setBusy('準備しています')
       const prep = await postJson<{ docId: string; uploads: { path: string; name: string; contentType: string; size: number; url: string }[] }>(
         '/api/paper-invoice',
         { action: 'prepare', ...fields, files: files.map(f => ({ name: f.name, contentType: contentTypeOf(f), size: f.size })) },
@@ -477,11 +485,11 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
       const { docId, uploads } = prep.data
       uploadedDocId = docId
       for (let i = 0; i < uploads.length; i++) {
-        setBusy(`アップロード中 ${i + 1}/${uploads.length}...`)
+        setBusy(`アップロードしています（${i + 1}/${uploads.length}）`)
         const res = await fetch(uploads[i].url, { method: 'PUT', headers: { 'Content-Type': uploads[i].contentType }, body: files[i] })
         if (!res.ok) throw new Error(`アップロードに失敗しました: ${files[i].name}（${res.status}）`)
       }
-      setBusy('登録中...')
+      setBusy('登録しています')
       const commit = await postJson('/api/paper-invoice', {
         action: 'commit', docId, ...fields,
         files: uploads.map(u => ({ path: u.path, name: u.name, contentType: u.contentType, size: u.size })),
@@ -492,7 +500,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
     } catch (e) {
       // 登録できなかったら、置いたファイルを片付ける（記録の無いファイルを残さない。記録がある docId はサーバが消さない）
       if (uploadedDocId) await postJson('/api/paper-invoice', { action: 'discard', docId: uploadedDocId }).catch(() => null)
-      setErr(e instanceof Error ? e.message : String(e))
+      throw e
     } finally {
       setBusy('')
     }
@@ -503,121 +511,121 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
 
   return (
     // 背景のクリックでは閉じない（2026-10-02 総合点検: 明細を入力中に背景を押すと入力ごと消えていた。閉じるのは × と「やめる」だけ）
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-3xl p-5 my-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-hibi-navy dark:text-white">{mode === 'add' ? '紙で出した請求書を入れる' : '金額・明細を直す'}</h3>
-          <button onClick={busy ? undefined : onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none" aria-label="閉じる">×</button>
+    <Modal
+      open
+      title={mode === 'add' ? '紙で出した請求書を入れる' : '金額・明細を直す'}
+      onClose={busy ? () => {} : onClose}
+      closeOnEsc={!busy}
+      closeOnOverlay={false}
+      dirty={dirty}
+      size="xl"
+      footer={<>
+        <CancelButton onClick={onClose} disabled={!!busy} />
+        <SaveButton action={mode === 'add' ? '登録' : '保存'} label={mode === 'add' ? '入れる' : undefined} savingLabel={busy || undefined} onSave={submit} />
+      </>}
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-xs text-gray-500">請求先の会社 <span className="text-red-600">必須</span></span>
+            <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={inputCls}>
+              <option value="">選んでください</option>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500">対象月 <span className="text-red-600">必須</span></span>
+            <input type="month" value={ymValue} onChange={e => { const v = e.target.value.replace('-', ''); if (/^\d{6}$/.test(v)) setTargetYm(v) }} className={inputCls} />
+          </label>
         </div>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs text-gray-500">請求先の会社 <span className="text-red-600">必須</span></span>
-              <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={inputCls}>
-                <option value="">選んでください</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs text-gray-500">対象月 <span className="text-red-600">必須</span></span>
-              <input type="month" value={ymValue} onChange={e => { const v = e.target.value.replace('-', ''); if (/^\d{6}$/.test(v)) setTargetYm(v) }} className={inputCls} />
-            </label>
-          </div>
 
-          {mode === 'add' && (
-            <div>
-              <div
-                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
-                onClick={() => inputRef.current?.click()}
-                className={`rounded-lg border-2 border-dashed p-4 text-center cursor-pointer text-sm transition ${dragOver ? 'border-hibi-navy bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-hibi-navy'}`}>
-                <div className="text-gray-600 dark:text-gray-300">請求書のファイルをここにドラッグ、またはクリックして選ぶ <span className="text-red-600 text-xs">必須</span></div>
-                <div className="text-2xs text-gray-400 mt-1">PDF・写真（JPEG/PNG/HEIC）／出面明細など添付も一緒に{PAPER_INVOICE_MAX_FILES}個まで／1ファイル25MBまで</div>
-                <input ref={inputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*" className="hidden"
-                  onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
+        {mode === 'add' && (
+          <div>
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
+              onClick={() => inputRef.current?.click()}
+              className={`rounded-lg border-2 border-dashed p-4 text-center cursor-pointer text-sm transition ${dragOver ? 'border-hibi-navy bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-hibi-navy'}`}>
+              <div className="text-gray-600 dark:text-gray-300">請求書のファイルをここにドラッグ、またはクリックして選ぶ <span className="text-red-600 text-xs">必須</span></div>
+              <div className="text-2xs text-gray-400 mt-1">PDF・写真（JPEG/PNG/HEIC）／出面明細など添付も一緒に{PAPER_INVOICE_MAX_FILES}個まで／1ファイル25MBまで</div>
+              <input ref={inputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*" className="hidden"
+                onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
+            </div>
+            {files.length > 0 && (
+              <ul className="text-xs space-y-1 mt-2">
+                {files.map((f, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{f.name}（{fmtSize(f.size)}）</span>
+                    <button type="button" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} className="text-red-500 hover:underline shrink-0">外す</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <label className="block col-span-2 sm:col-span-1">
+            <span className="text-xs text-gray-500">税込合計 <span className="text-red-600">必須</span></span>
+            <input inputMode="numeric" value={total} onChange={e => setTotal(e.target.value)} placeholder="4,366,313" className={`${inputCls} tabular-nums`} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500">税抜小計</span>
+            <input inputMode="numeric" value={subtotal} onChange={e => setSubtotal(e.target.value)} className={`${inputCls} tabular-nums`} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500">消費税</span>
+            <input inputMode="numeric" value={tax} onChange={e => setTax(e.target.value)} className={`${inputCls} tabular-nums`} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500">請求書番号</span>
+            <input value={no} onChange={e => setNo(e.target.value)} className={inputCls} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500">発行日</span>
+            <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className={inputCls} />
+          </label>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-gray-900 dark:text-white">明細（任意・請求書に書いてあるとおり）</span>
+            {lines.length > 0 && <span className="text-xs text-hibi-sub dark:text-gray-400 tabular-nums">金額の合計 {yen(linesSum)}</span>}
+          </div>
+          {lines.length > 0 && (
+            <div className="space-y-2">
+              <div className="hidden sm:grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_70px_64px_90px_100px_28px] gap-2 text-2xs text-gray-500">
+                <span>現場</span><span>内容</span><span>数量</span><span>単位</span><span>単価</span><span>金額</span><span />
               </div>
-              {files.length > 0 && (
-                <ul className="text-xs space-y-1 mt-2">
-                  {files.map((f, i) => (
-                    <li key={i} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{f.name}（{fmtSize(f.size)}）</span>
-                      <button type="button" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} className="text-red-500 hover:underline shrink-0">外す</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {lines.map((l, i) => (
+                <div key={i} className="grid grid-cols-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_70px_64px_90px_100px_28px] gap-2 items-center">
+                  <input value={l.site} onChange={e => setLine(i, { site: e.target.value })} placeholder="現場" className={`${inputCls} col-span-2 sm:col-span-1`} />
+                  <input value={l.item} onChange={e => setLine(i, { item: e.target.value })} placeholder="鳶・土工・鳶 残業" className={inputCls} />
+                  <input inputMode="decimal" value={l.qty} onChange={e => setLine(i, { qty: e.target.value })} placeholder="数量" className={`${inputCls} tabular-nums`} />
+                  <select value={l.unit} onChange={e => setLine(i, { unit: e.target.value })} className={inputCls}>
+                    {(UNIT_OPTIONS.includes(l.unit) ? UNIT_OPTIONS : [...UNIT_OPTIONS, l.unit]).map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                  <input inputMode="numeric" value={l.rate} onChange={e => setLine(i, { rate: e.target.value })} placeholder="単価" className={`${inputCls} tabular-nums`} />
+                  <input inputMode="numeric" value={l.amount} onChange={e => setLine(i, { amount: e.target.value })} placeholder="金額" className={`${inputCls} tabular-nums`} />
+                  <button type="button" onClick={() => setLines(prev => prev.filter((_, j) => j !== i))} className="text-red-500 text-lg leading-none" aria-label="この行を消す">×</button>
+                </div>
+              ))}
             </div>
           )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <label className="block col-span-2 sm:col-span-1">
-              <span className="text-xs text-gray-500">税込合計 <span className="text-red-600">必須</span></span>
-              <input inputMode="numeric" value={total} onChange={e => setTotal(e.target.value)} placeholder="4,366,313" className={`${inputCls} tabular-nums`} />
-            </label>
-            <label className="block">
-              <span className="text-xs text-gray-500">税抜小計</span>
-              <input inputMode="numeric" value={subtotal} onChange={e => setSubtotal(e.target.value)} className={`${inputCls} tabular-nums`} />
-            </label>
-            <label className="block">
-              <span className="text-xs text-gray-500">消費税</span>
-              <input inputMode="numeric" value={tax} onChange={e => setTax(e.target.value)} className={`${inputCls} tabular-nums`} />
-            </label>
-            <label className="block">
-              <span className="text-xs text-gray-500">請求書番号</span>
-              <input value={no} onChange={e => setNo(e.target.value)} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="text-xs text-gray-500">発行日</span>
-              <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className={inputCls} />
-            </label>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-gray-900 dark:text-white">明細（任意・請求書に書いてあるとおり）</span>
-              {lines.length > 0 && <span className="text-xs text-hibi-sub dark:text-gray-400 tabular-nums">金額の合計 {yen(linesSum)}</span>}
-            </div>
-            {lines.length > 0 && (
-              <div className="space-y-2">
-                <div className="hidden sm:grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_70px_64px_90px_100px_28px] gap-2 text-2xs text-gray-500">
-                  <span>現場</span><span>内容</span><span>数量</span><span>単位</span><span>単価</span><span>金額</span><span />
-                </div>
-                {lines.map((l, i) => (
-                  <div key={i} className="grid grid-cols-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_70px_64px_90px_100px_28px] gap-2 items-center">
-                    <input value={l.site} onChange={e => setLine(i, { site: e.target.value })} placeholder="現場" className={`${inputCls} col-span-2 sm:col-span-1`} />
-                    <input value={l.item} onChange={e => setLine(i, { item: e.target.value })} placeholder="鳶・土工・鳶 残業" className={inputCls} />
-                    <input inputMode="decimal" value={l.qty} onChange={e => setLine(i, { qty: e.target.value })} placeholder="数量" className={`${inputCls} tabular-nums`} />
-                    <select value={l.unit} onChange={e => setLine(i, { unit: e.target.value })} className={inputCls}>
-                      {(UNIT_OPTIONS.includes(l.unit) ? UNIT_OPTIONS : [...UNIT_OPTIONS, l.unit]).map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                    <input inputMode="numeric" value={l.rate} onChange={e => setLine(i, { rate: e.target.value })} placeholder="単価" className={`${inputCls} tabular-nums`} />
-                    <input inputMode="numeric" value={l.amount} onChange={e => setLine(i, { amount: e.target.value })} placeholder="金額" className={`${inputCls} tabular-nums`} />
-                    <button type="button" onClick={() => setLines(prev => prev.filter((_, j) => j !== i))} className="text-red-500 text-lg leading-none" aria-label="この行を消す">×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button type="button" onClick={() => setLines(prev => [...prev, { ...emptyLine(), site: prev[prev.length - 1]?.site || '' }])}
-              className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[0.8125rem] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
-              ＋ 明細の行を足す
-            </button>
-          </div>
-
-          <label className="block">
-            <span className="text-xs text-gray-500">メモ（計算で気をつけたこと・いつもと違う点など）</span>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} className={inputCls} />
-          </label>
-
-          {err && <div className="text-sm text-red-600">{err}</div>}
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} disabled={!!busy} className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold disabled:opacity-40">やめる</button>
-            <button type="button" onClick={submit} disabled={!!busy} className="h-10 px-5 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light disabled:opacity-60">
-              {busy || (mode === 'add' ? '入れる' : '保存')}
-            </button>
-          </div>
+          <button type="button" onClick={() => setLines(prev => [...prev, { ...emptyLine(), site: prev[prev.length - 1]?.site || '' }])}
+            className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[0.8125rem] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+            ＋ 明細の行を足す
+          </button>
         </div>
+
+        <label className="block">
+          <span className="text-xs text-gray-500">メモ（計算で気をつけたこと・いつもと違う点など）</span>
+          <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} className={inputCls} />
+        </label>
+
+        {err && <div className="text-sm text-red-600">{err}</div>}
       </div>
-    </div>
+    </Modal>
   )
 }

@@ -29,14 +29,7 @@ export function cardBorderedCls(extra = ''): string {
 //  Modal
 // ────────────────────────────────────────
 
-/** モーダルのオーバーレイ背景 */
-export const modalOverlayCls =
-  'fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fadeIn'
-
-/** モーダルのコンテンツ枠 */
-export function modalContentCls(extra = ''): string {
-  return `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-xl max-w-lg w-full mx-4 p-6 animate-modalIn ${extra}`.trim()
-}
+// モーダルの枠は components/ui/Modal.tsx の <Modal> に統一（2026-10-03 土台③）。旧 modalOverlayCls / modalContentCls は削除
 
 // ────────────────────────────────────────
 //  Buttons

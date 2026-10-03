@@ -6,10 +6,12 @@
  * 表は `lib/jp-wage.ts` の bonusPoints から生成する。写して持つと配分と表がズレる。
  * 原資を入れると、いまの在籍者でいくらになるかを試算できる。
  * 2026-10-03: ブラウザ標準の confirm を共通部品（confirmDialog）に置き換え
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { confirmDialog } from '@/lib/confirm-dialog'
+import { SaveButton } from '@/components/ui/SaveButton'
 import {
   bonusPoints, allocateBonus, GRADE_LABELS, GRADES_IN_ORDER,
   childAllowance, attendanceBonusDays, attendanceBonusAmount,
@@ -70,7 +72,6 @@ export default function BonusTable() {
   const [records, setRecords] = useState<BonusRecord[]>([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
-  const [err, setErr] = useState('')
 
   const load = useCallback(async (password: string, paidOnIso?: string) => {
     try {
@@ -155,8 +156,12 @@ export default function BonusTable() {
   const setOverride = (id: number, patch: Override) =>
     setOv(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
 
+  /**
+   * 確定して保存（SaveButton の約束: だめなら { ok: false, error } を返して赤の帯に出す）。
+   * 確認の窓で「やめる」を選んだときは null（取りやめ。帯は出さず、ボタンはふだんの顔に戻る）。
+   */
   const save = async () => {
-    if (!result) return
+    if (!result) return null
     if (!(await confirmDialog({
       title: `「${label}」として賞与の支給を確定しますか？`,
       description: `対象 ${lines.length}名（うち出向先支給 ${lines.length - own.length}名）\n`
@@ -167,8 +172,8 @@ export default function BonusTable() {
         + `支給総額 ${yen(sum(l => l.totalAmount))}\n`
         + `確定すると、精勤賞与の分は有給の買取としても自動で記録されます（休暇管理での手動記録は不要です）。`,
       confirmLabel: '確定する',
-    }))) return
-    setBusy(true); setErr(''); setMsg('')
+    }))) return null
+    setBusy(true); setMsg('')
     try {
       const res = await fetch('/api/jp-wage/bonus', {
         method: 'POST',
@@ -194,7 +199,7 @@ export default function BonusTable() {
       setLabel('')
       await load(pw)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '保存に失敗しました')
+      return { ok: false, error: e instanceof Error ? e.message : '保存に失敗しました' }
     } finally { setBusy(false) }
   }
 
@@ -253,7 +258,6 @@ export default function BonusTable() {
         </p>
       </div>
 
-      {err && <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300">{err}</div>}
       {msg && <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/20 p-3 text-sm text-green-800 dark:text-green-300">{msg}</div>}
 
       <div>
@@ -414,12 +418,12 @@ export default function BonusTable() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 mt-3">
-              <button
-                onClick={save} disabled={busy || !label.trim() || poolNum <= 0}
-                className="px-5 py-2.5 rounded-lg bg-hibi-navy text-white font-bold text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {busy ? '保存中…' : 'この配分を確定して保存'}
-              </button>
+              <SaveButton
+                action="確定"
+                label="この配分を確定して保存する"
+                onSave={save}
+                disabled={!label.trim() || poolNum <= 0}
+              />
               <span className="text-2xs text-gray-500">
                 評語の初期値は年次改定で決めたもの。千円切り上げのぶん、利益分配の合計は原資をわずかに超えます。
                 役員・事務は対象外。精勤賞与の残日数は今日時点の有給残です。

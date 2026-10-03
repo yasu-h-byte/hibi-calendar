@@ -3,11 +3,14 @@
  *
  * スタッフが自分のスマホから有給を申請するモーダル。
  * 日本語＋ベトナム語の二言語表記。日付範囲指定 + 任意理由。
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 'use client'
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { todayJstIso } from '@/lib/date-utils'
 import { STAFF_TEXT, biLine } from '@/lib/labels'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 
 export interface LeaveRequestData {
   id: string
@@ -35,7 +38,8 @@ interface Props {
   // 申請履歴
   requests: LeaveRequestData[]
   // アクション
-  onSubmit: () => void
+  /** 送信。全部送れたら true・送れなかったら false（失敗の文は errorMsg で呼び出し側が出す）・日付の不備で止めたら null */
+  onSubmit: () => Promise<boolean | null>
   onCancelRequest: (requestId: string) => void
   // 2026-06-XX 追加: 残数表示 + 残0時のボタン disable (監査 finding #26 対応)
   /** 有給残日数（pending申請差し引き済み） */
@@ -70,8 +74,6 @@ export default function LeaveRequestModal({
   onCancelRequest,
   plRemaining,
 }: Props) {
-  if (!isOpen) return null
-
   // 2026-06-XX 追加: 申請日数を計算（日曜以外）
   const requestedDays = (() => {
     // 終了日が空なら開始日1日分として数える（旧: 0扱いで超過チェックが素通りしていた）
@@ -91,12 +93,31 @@ export default function LeaveRequestModal({
   const submitBlocked = isNoBalance || isOverBalance
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
-          有給申請 / Xin nghỉ phép
-        </h3>
-
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="有給申請 / Xin nghỉ phép"
+      bilingual
+      dirty={!!dateFrom || !!dateTo || reason.trim() !== ''}
+      footer={
+        <>
+          <CancelButton onClick={onClose} disabled={submitting} size="lg">やめる / Hủy</CancelButton>
+          {/* 2026-06-XX 修正: 残数不足/超過時はボタン disable */}
+          <SaveButton
+            action="申請"
+            label={isNoBalance ? '残りなし / Không còn ngày phép' : isOverBalance ? '日数超過 / Vượt quá ngày phép' : '有給を申請する / Gửi đơn nghỉ phép'}
+            savingLabel="送信しています / Đang gửi"
+            savedLabel="申請しました / Đã gửi đơn"
+            retryLabel="もう一度申請する / Gửi lại"
+            disabled={submitting || !dateFrom || submitBlocked}
+            size="lg"
+            className="flex-1"
+            onSave={async () => { const r = await onSubmit(); if (r !== true) return r }}
+          />
+        </>
+      }
+    >
+      <div>
         {/* 2026-06-XX 追加: 残数表示（モーダル内でも常時確認できるように） */}
         {plRemaining !== null && plRemaining !== undefined && (
           <div className={`rounded-xl p-3 text-center mb-3 ${
@@ -190,31 +211,6 @@ export default function LeaveRequestModal({
           />
         </div>
 
-        {/* Submit */}
-        {/* 2026-06-XX 修正: 残数不足/超過時はボタン disable */}
-        <button
-          onClick={onSubmit}
-          disabled={submitting || !dateFrom || submitBlocked}
-          className={`w-full rounded-xl py-3 font-bold text-base transition active:scale-95 ${
-            submitBlocked
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white disabled:opacity-50'
-          }`}
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              そうしんちゅう / Đang gửi...
-            </span>
-          ) : isNoBalance ? (
-            '残りなし / Không còn ngày phép'
-          ) : isOverBalance ? (
-            '日数超過 / Vượt quá ngày phép'
-          ) : (
-            '有給を申請する / Gửi đơn nghỉ phép'
-          )}
-        </button>
-
         {/* Request history */}
         {requests.length > 0 && (
           <div className="mt-6">
@@ -282,13 +278,7 @@ export default function LeaveRequestModal({
           </div>
         )}
 
-        <button
-          onClick={onClose}
-          className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
-        >
-          閉じる / Đóng
-        </button>
       </div>
-    </div>
+    </Modal>
   )
 }
