@@ -3,6 +3,7 @@
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
+// 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { staffLinkOrigin } from '@/lib/public-origin'
 import { useEffect, useState, useCallback } from 'react'
@@ -25,7 +26,7 @@ import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
 import { postJson } from '@/lib/api-client'
-import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog, FieldError } from '@/components/ui/PageParts'
+import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog, FieldError, RowButton } from '@/components/ui/PageParts'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
@@ -1398,18 +1399,11 @@ export default function WorkersPage() {
                     <div className="text-xs text-gray-500 mb-2">モバイルトークン</div>
                     <div className="flex items-center gap-2">
                       <code className="text-xs bg-white px-2 py-1 rounded border flex-1 truncate">{w.token}</code>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(mobileUrl(w))
-                          notify.success('URLをコピーしました')
-                        }}
-                        className="text-xs bg-hibi-navy text-white px-3 py-1 rounded"
-                      >
-                        URL
-                      </button>
-                      <button onClick={() => handleRevokeToken(w.id, w.name)} className="text-xs text-red-500 hover:text-red-700">
-                        無効化
-                      </button>
+                      <RowButton tone="main" onClick={() => {
+                        navigator.clipboard.writeText(mobileUrl(w))
+                        notify.success('URLをコピーしました')
+                      }}>URLをコピーする</RowButton>
+                      <RowButton tone="danger" onClick={() => handleRevokeToken(w.id, w.name)}>無効にする</RowButton>
                     </div>
                   </div>
                 ) : null

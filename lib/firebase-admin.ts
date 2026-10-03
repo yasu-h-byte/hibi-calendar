@@ -23,7 +23,6 @@
  */
 
 // firebase-admin の型は any 扱い（依存は遅延ロード）
-/* eslint-disable @typescript-eslint/no-explicit-any */
 type AdminFirestore = any
 
 let cached: { db: AdminFirestore | null; admin: any | null } | null = null
@@ -100,10 +99,8 @@ export function getAdminDb(): AdminFirestore | null {
     // firebase-admin v14 はモジュラー API。app 関数は 'firebase-admin/app'、
     // Firestore は 'firebase-admin/firestore' から取得する（旧 namespaced な
     // admin.apps / admin.credential / admin.firestore() は存在しない）。
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const { initializeApp, getApps, cert } = require('firebase-admin/app')
     const firestoreMod = require('firebase-admin/firestore')
-    /* eslint-enable @typescript-eslint/no-var-requires */
     if (getApps().length === 0) {
       initializeApp({
         credential: cert(svc as any),

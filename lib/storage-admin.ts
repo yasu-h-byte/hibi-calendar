@@ -11,7 +11,6 @@
  *
  * サーバー専用。クライアントからは import しないこと（next.config.js で firebase-admin/storage は空モジュール化）。
  */
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-var-requires */
 import { getAdminDb } from './firebase-admin'
 
 export const STAFF_DOCS_BUCKET = 'dedura-kanri.firebasestorage.app'

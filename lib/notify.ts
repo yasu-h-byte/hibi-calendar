@@ -64,9 +64,12 @@ function emit(m: NotifyMessage): void {
 }
 
 export const notify = {
-  /** 緑の帯・3秒で消える。例: notify.success('葛西のカレンダーを提出しました') */
-  success(title: string, detail?: string): void {
-    emit({ kind: 'success', title, detail })
+  /**
+   * 緑の帯・3秒で消える。例: notify.success('葛西のカレンダーを提出しました')
+   * 長い結果（評価の承認・保守ツールの実行結果など）を読ませたいときは { sticky: true } で閉じるまで残す
+   */
+  success(title: string, detail?: string, opts?: { sticky?: boolean }): void {
+    emit({ kind: 'success', title, detail, sticky: !!opts?.sticky })
   },
   /** 赤の帯・閉じるまで残る。文面を自分で決めるとき */
   error(title: string, detail?: string): void {
