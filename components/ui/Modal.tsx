@@ -19,7 +19,8 @@ import { confirmDiscardDialog } from '@/lib/hooks/discardGuard'
  *   - 日本語入力の変換を取り消す Esc では閉じない
  *   - 開いたら最初の入力欄（無ければ × ）に focus。閉じたら元の場所へ戻す
  *   - 本文が長いときはモーダルの中だけスクロール（見出しとボタン列は固定）
- *   - z-50（右パネル z-60・確認の窓 z-80・お知らせの帯 z-100 より下）
+ *   - z-70（右パネル z-60 の中から開く窓も上に出る。確認の窓 z-80・お知らせの帯 z-100 より下）
+ *     2026-10-03 本番確認: 現場マスタの右パネルから開く「一覧に無い会社を追加」が z-50 でパネルの裏に隠れていた
  */
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full'
 
@@ -118,7 +119,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 print:hidden"
       role="dialog"
       aria-modal="true"
       aria-labelledby={typeof title === 'string' ? titleId : undefined}
