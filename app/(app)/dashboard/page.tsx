@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 
 // ダッシュボード（2026-10-01 改修・UI順次改修 波1・見本キャンバス6段目「ダッシュボード 改善案」）
 //
@@ -229,66 +230,9 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
   userForemanSites: string[]  // 職長の場合、担当現場のIDリスト
   onUpdate: () => void
 }) {
-  const [processing, setProcessing] = useState<string | null>(null)
   const [filter, setFilter] = useState<ReqFilter>('all')
-  // 却下は「理由を入れる → 却下する」の2段階（2026-10-02 総合点検）。
-  //   旧: 承認ボタンの隣の「却下」1クリックで確定し、まとめ行なら N件が理由なしで即却下になっていた。
-  //   理由は本人のスマホに表示される（休暇管理の申請タブ・職長のマイページと同じ送り方）
-  const [rejecting, setRejecting] = useState<{ key: string; reason: string } | null>(null)
-
-  // 権限制御（旧 AttendanceRequestCard と同じ）:
-  //   - 職長承認: admin / approver は全件、foreman は自分の担当現場のみ
-  //   - 最終承認: admin / approver のみ（事業責任者）
-  //   - 却下: 承認できる人だけ（職長承認待ちは職長承認できる人、最終承認待ちは最終承認できる人）。
-  //     2026-10-02 総合点検。旧: 職長承認待ちの却下ボタンが権限の無い役割にも出ていた
-  const isAdminLike = userRole === 'admin' || userRole === 'approver'
-  const isForeman = userRole === 'foreman'
-  const canFinalApprove = isAdminLike
-  const canForemanApproveFor = (siteId?: string): boolean => {
-    if (isAdminLike) return true
-    return isForeman && !!siteId && userForemanSites.includes(siteId)
-  }
-
-  const postOne = async (id: string, action: string, apiPath: string, wid: number, reason?: string) => fetch(apiPath, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-    body: JSON.stringify({
-      action,
-      requestId: id,
-      ...(action === 'foreman_approve' ? { foremanId: wid } : action === 'reject' ? { rejectedBy: wid, reason: reason || '' } : { approvedBy: wid }),
-    }),
-  })
-
-  /** 1件でも複数件でも同じ（同じ人・同じ理由の有給はまとめて1行＝まとめて処理） */
-  const act = async (ids: string[], action: string, apiPath: string = '/api/leave-request', reason?: string) => {
-    if (ids.length === 0) return
-    setProcessing(`${action}:${ids[0]}`)
-    try {
-      const stored = localStorage.getItem('hibi_auth')
-      const wid = (stored ? JSON.parse(stored).user?.workerId : 0) || 0
-      const results = await Promise.all(ids.map(id => postOne(id, action, apiPath, wid, reason)))
-      // 2026-08-27（休暇届総点検）: 失敗（出勤実績との矛盾409・ロック409・権限403等）を必ず表示する
-      const actionLabel = action === 'reject' ? '却下' : action === 'foreman_approve' ? '職長承認' : '承認'
-      const failures: string[] = []
-      for (const res of results) {
-        if (res.ok) continue
-        const err = await res.json().catch(() => null)
-        failures.push(err?.message || err?.error || 'サーバが受け付けませんでした')
-      }
-      if (failures.length > 0) {
-        const uniq = [...new Set(failures)]
-        if (ids.length > 1) {
-          notify.error(`${ids.length}件中 ${failures.length}件を${actionLabel}できませんでした`,
-            uniq.slice(0, 5).map(f => `・${f}`).join('\n') + (uniq.length > 5 ? '\n…ほか' : ''))
-        } else {
-          notify.failed(actionLabel, failures[0])
-        }
-      }
-      setRejecting(null)
-      onUpdate()
-    } catch (e) { notify.failed(action === 'reject' ? '却下' : '承認', e) }
-    finally { setProcessing(null) }
-  }
+  // 承認・却下のボタンは 2026-10-03 に休暇管理の申請タブへ一本化（代表 OK: ダッシュボードは知らせる・休暇管理は処理する）。
+  // 旧: ここでも職長承認・最終承認・却下（理由つき）ができ、同じ処理が2か所にあった
 
   // 有給は「スタッフ + 理由」でまとめる（同じ段階の中で。理由は前後の空白を無視）
   function groupLeaves(list: LeaveRequestItem[]): LeaveRequestItem[][] {
@@ -359,12 +303,6 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
       ) : shown.length === 0 ? (
         <div className="px-5 py-6 text-sm text-hibi-sub dark:text-gray-400">この絞り込みに当てはまる申請はありません</div>
       ) : shown.map(r => {
-        const api = r.kind === 'home' ? '/api/home-long-leave' : '/api/leave-request'
-        // 帰国申請には siteId が無いため、職長は「いずれかの担当現場あり」で押せる扱い（旧と同じ）
-        const canForeman = r.kind === 'home' ? (isAdminLike || (isForeman && userForemanSites.length > 0)) : canForemanApproveFor(r.siteId)
-        const busy = processing !== null
-        const canReject = r.stage === 'foreman' ? canForeman : canFinalApprove
-        const isRejecting = rejecting?.key === r.key
         return (
           <div key={r.key} className="border-t border-hibi-line dark:border-gray-700 px-5 py-3 grid grid-cols-1 sm:grid-cols-[150px_minmax(0,1fr)_auto] gap-2 sm:gap-3.5 items-center">
             <div className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">{r.name}</div>
@@ -381,36 +319,12 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
                 {r.reason && <span className="text-xs text-hibi-sub dark:text-gray-400">{r.reason}</span>}
               </div>
             </div>
-            <div className="flex gap-2 sm:justify-end">
-              {r.stage === 'foreman' ? (
-                canForeman && (
-                  <button onClick={() => act(r.ids, 'foreman_approve', api)} disabled={busy}
-                    className={`${btn} bg-hibi-navy text-white hover:bg-hibi-light`}>{r.count > 1 ? 'まとめて職長承認' : '職長承認'}</button>
-                )
-              ) : canFinalApprove ? (
-                <button onClick={() => act(r.ids, 'approve', api)} disabled={busy}
-                  className={`${btn} bg-green-700 text-white hover:bg-green-800`}>{r.count > 1 ? 'まとめて最終承認' : '最終承認'}</button>
-              ) : (
-                <span className="text-xs text-hibi-sub dark:text-gray-400 self-center">最終承認待ち</span>
-              )}
-              {canReject && !isRejecting && (
-                <button onClick={() => setRejecting({ key: r.key, reason: '' })} disabled={busy}
-                  className={`${btn} border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20`}>却下...</button>
-              )}
+            {/* 承認・却下は休暇管理の申請タブでだけ（2026-10-03 代表 OK: ダッシュボードは知らせる・休暇管理は処理する） */}
+            <div className="flex sm:justify-end">
+              <Link href="/leave?tab=requests" className={`${btn} inline-flex items-center gap-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700`}>
+                休暇管理で処理する<Icon name="chevronRight" size={14} />
+              </Link>
             </div>
-            {canReject && isRejecting && (
-              <div className="sm:col-span-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50/60 dark:bg-red-900/10 p-3 flex flex-wrap items-center gap-2">
-                <label className="text-[0.8125rem] font-bold text-red-700 dark:text-red-300" htmlFor={`reject-reason-${r.key}`}>却下の理由（本人に伝わります）</label>
-                <input id={`reject-reason-${r.key}`} type="text" value={rejecting.reason} autoFocus
-                  onChange={e => setRejecting({ key: r.key, reason: e.target.value })}
-                  placeholder="例: 現場の人数が足りない日です。別の日で申請してください"
-                  className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm" />
-                <button onClick={() => act(r.ids, 'reject', api, rejecting.reason.trim())} disabled={busy || !rejecting.reason.trim()}
-                  className={`${btn} bg-red-600 text-white hover:bg-red-700`}>{r.count > 1 ? `${r.count}件を却下する` : '却下する'}</button>
-                <button onClick={() => setRejecting(null)} disabled={busy}
-                  className={`${btn} border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200`}>やめる</button>
-              </div>
-            )}
           </div>
         )
       })}

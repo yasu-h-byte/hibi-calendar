@@ -6,10 +6,11 @@
  * 評価を入力し、号俸表・年齢調整・特別調整から改定額を出して人員マスタへ反映する。
  * 下書きは Firestore に保存されるので、決算の数字が出るまで置いておける。
  *
- * ⚠️ 個人の賃金を一覧するため、代表（0）と事業責任者（1）以外には表示しない。
+ * 注意: 個人の賃金を一覧するため、代表（0）と事業責任者（1）以外には表示しない。
  *    評価を決めるのはこの2名と定められている（第4節）。
  *
  * 2026-10-03: ブラウザ標準の prompt/alert を共通部品（confirmWithReason・notify）に置き換え
+ * 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
  */
 
 import { staffLinkOrigin } from '@/lib/public-origin'
@@ -591,7 +592,7 @@ export default function RevisionPanel() {
           </div>
           <a href={`/wage/notice?effective=${data.effective}`} target="_blank" rel="noopener noreferrer"
             className="px-5 py-2.5 rounded-lg bg-hibi-navy text-white font-bold text-sm hover:opacity-90">
-            🖨 給料表を開く
+            給料表を開く
           </a>
         </section>
       )}
@@ -638,7 +639,7 @@ export default function RevisionPanel() {
           <div className="flex flex-wrap gap-2">
           <a href={`/wage/notice?effective=${data.effective}`} target="_blank" rel="noopener noreferrer"
             className="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 font-bold text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
-            🖨 給料表の見本（未確定）
+            給料表の見本（未確定）
           </a>
           <button onClick={apply} disabled={busy || totals.blocked > 0 || !data.revision.balance.ok}
             className="px-5 py-2.5 rounded-lg bg-hibi-navy text-white font-bold text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -711,15 +712,15 @@ function SendList({ effective, rows }: {
             <span className="w-28 text-sm font-bold">{r.name}</span>
             {r.hasSheet ? (
               <a href={`/wage/notice?effective=${effective}&worker=${r.id}`} target="_blank" rel="noopener noreferrer"
-                className={`${btn} bg-hibi-navy text-white border-hibi-navy hover:opacity-90 hover:bg-hibi-navy`}>🖨 給料表を開く</a>
+                className={`${btn} bg-hibi-navy text-white border-hibi-navy hover:opacity-90 hover:bg-hibi-navy`}>給料表を開く</a>
             ) : (
               <span className="text-2xs text-gray-400 w-[104px]">{r.fixed ? '給料表は配らない（処遇固定）' : '給料表なし'}</span>
             )}
             <button type="button" className={btn} onClick={() => copy(`u${r.id}`, url(r.token))}>
-              {copied === `u${r.id}` ? '✓ コピーしました' : '🔗 URLをコピー'}
+              {copied === `u${r.id}` ? '✓ コピーしました' : 'URLをコピー'}
             </button>
             <button type="button" className={btn} onClick={() => copy(`m${r.id}`, message(r))}>
-              {copied === `m${r.id}` ? '✓ コピーしました' : '✉ 送る文面をコピー'}
+              {copied === `m${r.id}` ? '✓ コピーしました' : '送る文面をコピー'}
             </button>
           </div>
         ))}

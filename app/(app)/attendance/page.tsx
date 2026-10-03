@@ -1,4 +1,5 @@
 'use client'
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 // 出面入力ページ（司令塔）
 // データ取得・入力状態・デバウンス保存・承認ハンドラを担当し、表示は
@@ -423,7 +424,7 @@ export default function AttendanceGridPage() {
         if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
         saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
       } else {
-        // ⚠️ 2026-05-11 修正: 旧コードはレスポンスを確認せず常に「保存しました」を表示
+        // 注意: 2026-05-11 修正: 旧コードはレスポンスを確認せず常に「保存しました」を表示
         //   していたため、API が 403/409/503 でエラーを返しても画面に出ず、データ消失と
         //   誤認される事案が発生。res.ok を厳密にチェックして失敗を alert で明示する。
         setSaveStatus('error')
@@ -811,7 +812,7 @@ export default function AttendanceGridPage() {
    * 欠勤判定（所定日数 − 出勤日数）が壊れるため。人工は lib/compute.ts の calcManDays が
    * ns から導出する（夜勤のみ 1.5 / 日勤＋夜勤 2.5）。
    *
-   * ⚠️ 「夜勤のみ」に切り替えたときは日勤の時刻・休憩・残業を消す。残しておくと
+   * 注意: 「夜勤のみ」に切り替えたときは日勤の時刻・休憩・残業を消す。残しておくと
    *    日勤ブロックと夜勤ブロックの二重計上になる。API 側は computeAttendanceDeleteFields で
    *    エントリに無いフィールドを削除するので、ここで delete すれば残骸は残らない。
    */
@@ -1165,7 +1166,7 @@ export default function AttendanceGridPage() {
     expectedYm: string,
   ) => {
     if (!password || !data) return
-    // 🛡 多層防御: モーダル open 時点の siteId/ym と現在のものが食い違うと
+    // 多層防御: モーダル open 時点の siteId/ym と現在のものが食い違うと
     //   別現場/別月の配置データで上書きしてしまう。明示的に拒否してアラート。
     //   (2026-05-27 sasazuka → IHIメンバー上書き事案の再発防止)
     if (data.site.id !== expectedSiteId || ym !== expectedYm) {
@@ -1669,7 +1670,7 @@ export default function AttendanceGridPage() {
 
       {/* ── Assignment Modal ── */}
       {showAssignModal && data && (
-        // 🛡 重要: key に siteId+ym を含めることで、開いている間にサイト・月が
+        // 重要: key に siteId+ym を含めることで、開いている間にサイト・月が
         // 切り替わった場合に強制 re-mount し、内部 state を新しい配置で初期化する。
         // これをしないと、サイト切替後に古いサイトの workers がそのまま新しい
         // サイトに保存されるバグが起きる（2026-05-27 sasazuka → IHIメンバー上書き事案）。

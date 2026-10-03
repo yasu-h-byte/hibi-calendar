@@ -2,6 +2,7 @@
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { staffLinkOrigin } from '@/lib/public-origin'
 import { useEffect, useState, useCallback } from 'react'
@@ -132,7 +133,7 @@ export default function WorkersPage() {
   // メインタブ: 'list' (人員一覧) / 'raise-history' (昇給履歴)
   const [mainTab, setMainTab] = useState<'list' | 'raise-history'>('list')
   const [showModal, setShowModal] = useState(false)
-  // ⚠️ 判定は必ず `editId !== null` で行うこと。**日比靖仁さんの workerId は 0** で、
+  // 注意: 判定は必ず `editId !== null` で行うこと。**日比靖仁さんの workerId は 0** で、
   //    `if (editId)` だと編集なのに新規追加として扱われる（2026-08-26 に発生。
   //    自分の生年月日を入れようとしたら「同名スタッフが既にいます」と出た）。
   const [editId, setEditId] = useState<number | null>(null)
@@ -894,7 +895,7 @@ export default function WorkersPage() {
                         {form.retired && (
                           <button type="button" onClick={() => setForm({ ...form, retired: '' })}
                             className="px-2 py-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 transition">
-                            ✕
+                            ×
                           </button>
                         )}
                       </div>
@@ -1011,7 +1012,7 @@ export default function WorkersPage() {
                         className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                       {form.salary && Number(form.salary) > 0 ? (
                         <p className="text-3xs text-amber-600 dark:text-amber-400 mt-1">
-                          ⚠ 月給制: 基本給は毎月この固定額（所定日数で変動しない）。残業・欠勤は日給ベースで固定単価。月途中入退社は日割り。
+                          月給制: 基本給は毎月この固定額（所定日数で変動しない）。残業・欠勤は日給ベースで固定単価。月途中入退社は日割り。
                         </p>
                       ) : (
                         <p className="text-3xs text-gray-400 mt-1">
@@ -1325,7 +1326,7 @@ export default function WorkersPage() {
               {modalTab === 'other' && (<div className="space-y-4">
               {/* ── 出向情報 ── */}
               <div className="border border-purple-200 dark:border-purple-800 rounded-lg p-3 space-y-2 bg-purple-50/30 dark:bg-purple-900/10">
-                <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">🔁 出向情報</h4>
+                <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">出向情報</h4>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1344,7 +1345,7 @@ export default function WorkersPage() {
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
-                    {form.dispatchTo ? `🔁 ${form.dispatchTo} へ出向中` : '通常勤務（出向なし）'}
+                    {form.dispatchTo ? `${form.dispatchTo} へ出向中` : '通常勤務（出向なし）'}
                   </button>
                 </div>
                 {form.dispatchTo && (

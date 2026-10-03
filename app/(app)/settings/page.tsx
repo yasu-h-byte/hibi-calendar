@@ -1,6 +1,7 @@
 'use client'
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
 import { confirmDanger } from '@/lib/confirm-dialog'
@@ -8,6 +9,7 @@ import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { CAPABILITIES, PERM_ROLES, PERM_ROLE_LABEL, type Capability, type PermRole } from '@/lib/permissions'
 import { isAlreadyRetired } from '@/lib/workers'
+import { Icon, type IconName } from '@/components/ui/Icon'
 
 interface DefaultRates {
   tobiRate: number
@@ -269,21 +271,21 @@ const ACTION_LABELS: Record<string, string> = {
   'rates.site': '現場単価変更',
 }
 
-const ACTION_ICONS: Record<string, string> = {
-  'worker': '👷',
-  'site': '🏗',
-  'calendar': '📅',
-  'attendance': '📋',
-  'monthly': '📊',
-  'leave': '🌴',
-  'subcon': '🔧',
-  'settings': '⚙️',
-  'rates': '💰',
+const ACTION_ICONS: Record<string, IconName> = {
+  'worker': 'user',
+  'site': 'site',
+  'calendar': 'calendar',
+  'attendance': 'clipboard',
+  'monthly': 'chart',
+  'leave': 'umbrella',
+  'subcon': 'building',
+  'settings': 'gear',
+  'rates': 'yen',
 }
 
-function getActionIcon(action: string): string {
+function getActionIcon(action: string): IconName {
   const prefix = action.split('.')[0]
-  return ACTION_ICONS[prefix] || '📝'
+  return ACTION_ICONS[prefix] || 'pen'
 }
 
 function getActionLabel(action: string): string {
@@ -322,9 +324,9 @@ interface Announcement {
 }
 
 const ANN_CATEGORIES = [
-  { value: 'new', label: '🆕 新機能', cls: 'bg-blue-100 text-blue-700' },
-  { value: 'fix', label: '🔧 不具合修正', cls: 'bg-green-100 text-green-700' },
-  { value: 'info', label: '📢 お知らせ', cls: 'bg-gray-100 text-gray-700' },
+  { value: 'new', label: '新機能', cls: 'bg-blue-100 text-blue-700' },
+  { value: 'fix', label: '不具合修正', cls: 'bg-green-100 text-green-700' },
+  { value: 'info', label: 'お知らせ', cls: 'bg-gray-100 text-gray-700' },
 ] as const
 
 export default function SettingsPage() {
@@ -1180,7 +1182,7 @@ export default function SettingsPage() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
-                            <span>{getActionIcon(entry.action)}</span>
+                            <Icon name={getActionIcon(entry.action)} size={14} className="text-gray-400 shrink-0" />
                             <span>{getActionLabel(entry.action)}</span>
                           </span>
                         </td>
@@ -1293,7 +1295,7 @@ export default function SettingsPage() {
           {/* 投稿フォーム */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
             <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">
-              {annEditId ? '✏️ お知らせを編集' : '📝 新しいお知らせを投稿'}
+              {annEditId ? 'お知らせを編集' : '新しいお知らせを投稿'}
             </h2>
             <div className="space-y-3">
               <div>

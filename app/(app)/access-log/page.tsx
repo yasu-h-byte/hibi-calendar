@@ -1,7 +1,9 @@
 'use client'
+// 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
 
 import { useEffect, useState, useCallback } from 'react'
 import { isTobiGroup } from '@/lib/jobs'
+import { PageHeader, TodoCard, Segment, Chip, type ChipTone } from '@/components/ui/PageParts'
 
 interface AccessRow {
   workerId: number
@@ -18,23 +20,23 @@ interface AccessRow {
 
 /**
  * 人員マスタの jobType をそのまま表示するためのラベル・色定義
- * （人員マスタのバッジ表示と一致）
+ * （人員マスタのバッジ表示と一致。色は共通の Chip の色から選ぶ）
  */
-function jobTypeBadge(row: AccessRow): { label: string; cls: string } {
+function jobTypeBadge(row: AccessRow): { label: string; tone: ChipTone } {
   // workerId=0 の社長は「管理者」（人員マスタに無いケース）
-  if (row.workerId === 0) return { label: '管理者', cls: 'bg-red-100 text-red-700' }
+  if (row.workerId === 0) return { label: '管理者', tone: 'red' }
   switch (row.jobType) {
-    case 'yakuin':         return { label: '役員', cls: 'bg-red-100 text-red-700' }
-    case 'shokucho':       return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
-    case 'tobi':           return { label: 'とび', cls: 'bg-green-100 text-green-700' }
+    case 'yakuin':         return { label: '役員', tone: 'red' }
+    case 'shokucho':       return { label: '職長', tone: 'blue' }
+    case 'tobi':           return { label: 'とび', tone: 'green' }
     // 2026-06-XX 追加: 鳶見習い (tobi_apprentice) の表示対応
-    case 'tobi_apprentice':return { label: '鳶見習い', cls: 'bg-green-50 text-green-600' }
-    case 'doko':           return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
-    case 'jimu':           return { label: '事務', cls: 'bg-purple-100 text-purple-700' }
+    case 'tobi_apprentice':return { label: '鳶見習い', tone: 'green' }
+    case 'doko':           return { label: '土工', tone: 'gray' }
+    case 'jimu':           return { label: '事務', tone: 'cyan' }
     default:
       // 在留資格ありなら外国人スタッフ
-      if (row.visa && row.visa !== 'none') return { label: 'スタッフ', cls: 'bg-orange-100 text-orange-700' }
-      return { label: '—', cls: 'bg-gray-100 text-gray-500' }
+      if (row.visa && row.visa !== 'none') return { label: 'スタッフ', tone: 'amber' }
+      return { label: '—', tone: 'gray' }
   }
 }
 
@@ -58,23 +60,30 @@ function daysAgo(dateStr: string | null): number | null {
   return diff
 }
 
-function statusBadge(dateStr: string | null) {
+/** 状態の札。赤＝未アクセス・8日以上、琥珀＝4〜7日、灰＝2〜3日、青＝昨日、緑＝今日 */
+function statusBadge(dateStr: string | null): { label: string; tone: ChipTone } {
   const days = daysAgo(dateStr)
-  if (days === null) return { label: '未アクセス', cls: 'bg-red-100 text-red-700', icon: '❌' }
-  if (days === 0) return { label: '今日', cls: 'bg-green-100 text-green-700', icon: '🟢' }
-  if (days === 1) return { label: '昨日', cls: 'bg-blue-100 text-blue-700', icon: '🔵' }
-  if (days <= 3) return { label: `${days}日前`, cls: 'bg-gray-100 text-gray-700', icon: '⚪︎' }
-  if (days <= 7) return { label: `${days}日前`, cls: 'bg-yellow-100 text-yellow-700', icon: '⚠️' }
-  return { label: `${days}日前`, cls: 'bg-red-100 text-red-700', icon: '🚨' }
+  if (days === null) return { label: '未アクセス', tone: 'red' }
+  if (days === 0) return { label: '今日', tone: 'green' }
+  if (days === 1) return { label: '昨日', tone: 'blue' }
+  if (days <= 3) return { label: `${days}日前`, tone: 'gray' }
+  if (days <= 7) return { label: `${days}日前`, tone: 'amber' }
+  return { label: `${days}日前`, tone: 'red' }
 }
+
+type JobFilter = 'all' | 'yakuin' | 'shokucho' | 'tobi' | 'tobi_apprentice' | 'doko' | 'jimu' | 'staff' | 'admin'
+type StatusFilter = 'all' | 'never' | 'stale'
+const STATUS_FILTER_LABEL: Record<Exclude<StatusFilter, 'all'>, string> = { never: '未アクセス', stale: '3日以上開いていない' }
 
 export default function AccessLogPage() {
   const [password, setPassword] = useState('')
   const [rows, setRows] = useState<AccessRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [days, setDays] = useState(30)
+  const [days, setDays] = useState<'7' | '30' | '90'>('30')
   // 2026-06-XX: 鳶見習い (tobi_apprentice) フィルタ追加
-  const [jobFilter, setJobFilter] = useState<'all' | 'yakuin' | 'shokucho' | 'tobi' | 'tobi_apprentice' | 'doko' | 'jimu' | 'staff' | 'admin'>('all')
+  const [jobFilter, setJobFilter] = useState<JobFilter>('all')
+  // 「今やること」カードを押したときの絞り込み（表示だけ）
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   useEffect(() => {
     try {
@@ -90,7 +99,7 @@ export default function AccessLogPage() {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/access-log?days=${days}`, {
+      const res = await fetch(`/api/access-log?days=${Number(days)}`, {
         headers: { 'x-admin-password': password },
       })
       if (res.ok) {
@@ -121,120 +130,94 @@ export default function AccessLogPage() {
 
   // 統計
   const todayCount = filtered.filter(r => daysAgo(r.lastAccessDate) === 0).length
-  const neverCount = filtered.filter(r => r.lastAccessDate === null).length
-  const warningCount = filtered.filter(r => {
+  const never = filtered.filter(r => r.lastAccessDate === null)
+  const stale = filtered.filter(r => {
     const d = daysAgo(r.lastAccessDate)
     return d !== null && d >= 3
-  }).length
+  })
+  const names = (list: AccessRow[]) => list.slice(0, 4).map(r => r.workerName).join('・') + (list.length > 4 ? ` ほか${list.length - 4}名` : '')
+  const toggleStatus = (f: Exclude<StatusFilter, 'all'>) => setStatusFilter(prev => prev === f ? 'all' : f)
+  const shown = statusFilter === 'never' ? never : statusFilter === 'stale' ? stale : filtered
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <h1 className="text-lg font-bold text-hibi-navy flex items-center gap-2">
-          🔐 アクセス履歴
-        </h1>
-        <select
-          value={days}
-          onChange={e => setDays(Number(e.target.value))}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-        >
-          <option value={7}>直近7日</option>
-          <option value={30}>直近30日</option>
-          <option value={90}>直近90日</option>
-        </select>
-        <select
-          value={jobFilter}
-          onChange={e => setJobFilter(e.target.value as typeof jobFilter)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-        >
-          <option value="all">全職種</option>
-          <option value="admin">管理者</option>
-          <option value="yakuin">役員</option>
-          <option value="shokucho">職長</option>
-          <option value="tobi">とび</option>
-          <option value="tobi_apprentice">鳶見習い</option>
-          <option value="doko">土工</option>
-          <option value="jimu">事務</option>
-          <option value="staff">スタッフ（外国人）</option>
-        </select>
-      </div>
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="マスタ・管理"
+        title="スタッフのアクセス履歴"
+        sub="スタッフが最後にアプリを開いた日時。過去90日分を保存し、IPはハッシュ化して保存します（個人は特定できません）"
+      />
 
-      {/* サマリー */}
-      <div className="grid grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">対象人数</div>
-          <div className="text-2xl font-bold text-hibi-navy">{filtered.length}名</div>
-        </div>
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">今日アクセス</div>
-          <div className="text-2xl font-bold text-green-600">{todayCount}名</div>
-        </div>
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">3日以上未</div>
-          <div className="text-2xl font-bold text-yellow-600">{warningCount}名</div>
-        </div>
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">未アクセス</div>
-          <div className="text-2xl font-bold text-red-600">{neverCount}名</div>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-8 text-gray-400">読み込み中...</div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-8 text-center text-gray-400">
-          データがありません
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-hibi-navy text-white">
-                <th className="text-left px-4 py-2">スタッフ</th>
-                <th className="text-center px-2 py-2 w-24">職種</th>
-                <th className="text-center px-2 py-2 w-20">会社</th>
-                <th className="text-center px-2 py-2 w-32">最終アクセス</th>
-                <th className="text-center px-2 py-2 w-28">状態</th>
-                <th className="text-right px-3 py-2 w-28">7日アクセス</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => {
-                const badge = statusBadge(r.lastAccessDate)
-                const jobBadgeData = jobTypeBadge(r)
-                return (
-                  <tr key={r.workerId} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{r.workerName}</td>
-                    <td className="text-center px-2">
-                      <span className={`text-3xs px-1.5 py-0.5 rounded-full font-medium ${jobBadgeData.cls}`}>
-                        {jobBadgeData.label}
-                      </span>
-                    </td>
-                    <td className="text-center px-2 text-xs text-gray-500">
-                      {r.org === 'hfu' ? 'HFU' : '日比'}
-                    </td>
-                    <td className="text-center px-2 tabular-nums text-xs">
-                      {formatDateTime(r.lastAccessAt)}
-                    </td>
-                    <td className="text-center px-2">
-                      <span className={`text-3xs px-1.5 py-0.5 rounded-full font-bold ${badge.cls}`}>
-                        {badge.icon} {badge.label}
-                      </span>
-                    </td>
-                    <td className="text-right px-3 tabular-nums text-gray-600">
-                      {r.accessCountLast7Days}回
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+      {/* ① 今やること */}
+      {!loading && (
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <TodoCard icon="alert" tone={never.length > 0 ? 'urgent' : 'ok'} title="一度も開いていない"
+            big={never.length > 0 ? `${never.length}名` : 'ありません'}
+            sub={never.length > 0 ? `${names(never)}。専用URLが届いているか、ログインできているかを確かめてください` : '対象の全員がアプリを開いたことがあります'}
+            action={never.length > 0 ? '見る' : undefined} active={statusFilter === 'never'}
+            onClick={never.length > 0 ? () => toggleStatus('never') : undefined} />
+          <TodoCard icon="clock" tone={stale.length > 0 ? 'warn' : 'ok'} title="3日以上開いていない"
+            big={stale.length > 0 ? `${stale.length}名` : 'ありません'}
+            sub={stale.length > 0 ? `${names(stale)}。出面の入力が止まっていないか確かめてください` : '全員が3日以内に開いています'}
+            action={stale.length > 0 ? '見る' : undefined} active={statusFilter === 'stale'}
+            onClick={stale.length > 0 ? () => toggleStatus('stale') : undefined} />
+          <TodoCard icon="check" tone="info" title="今日開いた人"
+            big={`${todayCount}名`}
+            sub={`対象 ${filtered.length}名のうち、今日アプリを開いた人数`} />
+        </section>
       )}
 
-      <p className="text-xs text-gray-400">
-        ※ アクセスログは過去90日分保存されます。IPはハッシュ化されて保存（個人特定不可）。
-      </p>
+      <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+          <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">スタッフ（{shown.length}名）</h2>
+          <Segment value={days} onChange={setDays} items={[['7', '直近7日'], ['30', '直近30日'], ['90', '直近90日']]} />
+          <Segment value={jobFilter} onChange={v => { setJobFilter(v); setStatusFilter('all') }} items={[
+            ['all', '全職種'], ['admin', '管理者'], ['yakuin', '役員'], ['shokucho', '職長'], ['tobi', 'とび'],
+            ['tobi_apprentice', '鳶見習い'], ['doko', '土工'], ['jimu', '事務'], ['staff', 'スタッフ（外国人）'],
+          ]} />
+          {statusFilter !== 'all' && (
+            <button onClick={() => setStatusFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[0.8125rem] font-bold">
+              {STATUS_FILTER_LABEL[statusFilter]}だけ表示中 ×
+            </button>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="px-5 py-8 text-center text-sm text-gray-400">読み込み中...</div>
+        ) : shown.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-hibi-sub">当てはまる人はいません</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
+                  <th className="text-left px-5 py-2.5">スタッフ</th>
+                  <th className="text-left px-3 py-2.5 w-24">職種</th>
+                  <th className="text-left px-3 py-2.5 w-20">会社</th>
+                  <th className="text-left px-3 py-2.5 w-32">最終アクセス</th>
+                  <th className="text-left px-3 py-2.5 w-28">状態</th>
+                  <th className="text-right px-5 py-2.5 w-28">7日間の回数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(r => {
+                  const badge = statusBadge(r.lastAccessDate)
+                  const job = jobTypeBadge(r)
+                  return (
+                    <tr key={r.workerId} className="border-t border-hibi-line dark:border-gray-700 hover:bg-hibi-bg dark:hover:bg-gray-700/40">
+                      <td className="px-5 py-3 font-bold text-gray-900 dark:text-white">{r.workerName}</td>
+                      <td className="px-3 py-3"><Chip tone={job.tone}>{job.label}</Chip></td>
+                      <td className="px-3 py-3 text-xs text-hibi-sub dark:text-gray-400">{r.org === 'hfu' ? 'HFU' : '日比'}</td>
+                      <td className="px-3 py-3 tabular-nums text-xs text-gray-700 dark:text-gray-300">{formatDateTime(r.lastAccessAt)}</td>
+                      <td className="px-3 py-3"><Chip tone={badge.tone}>{badge.label}</Chip></td>
+                      <td className="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">{r.accessCountLast7Days}回</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

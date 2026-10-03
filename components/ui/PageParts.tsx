@@ -1,4 +1,5 @@
 'use client'
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -8,7 +9,7 @@ import { confirmDiscardDialog } from '@/lib/hooks/discardGuard'
 // 画面の型（2026-10-01 代表決定「全ページを休暇管理・月次集計と同じデザイン言語で順次改修」）の共通部品。
 //   休暇管理（leave）と月次集計（monthly）で同じ見た目を別々に書いていたものをここへ集めた（UI改修 波0）。
 //   新しい画面はこの部品を組み合わせて作る。見た目を直すときもここ1か所を直せば全画面にそろう。
-//   ⚠️ Tailwind のクラスは必ず完全な文字列で書く（`bg-${c}-50` のような組み立ては CSS が生成されず無色になる）。
+//   注意: Tailwind のクラスは必ず完全な文字列で書く（`bg-${c}-50` のような組み立ては CSS が生成されず無色になる）。
 
 // ─── 見出し ─────────────────────────────────────
 
@@ -89,7 +90,7 @@ export function Segment<K extends string>({ value, onChange, items }: {
   items: readonly (readonly [K, string])[]
 }) {
   return (
-    <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800 w-fit">
+    <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800 w-fit max-w-full overflow-x-auto">
       {items.map(([k, label]) => (
         <button key={k} onClick={() => onChange(k)} aria-pressed={value === k}
           className={`h-8 px-3.5 rounded-lg text-[0.8125rem] whitespace-nowrap transition ${

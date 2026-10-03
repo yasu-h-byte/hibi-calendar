@@ -1,5 +1,6 @@
 'use client'
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -12,7 +13,7 @@ import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConf
 import { can } from '@/lib/permissions'
 import { postJson } from '@/lib/api-client'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
-import { Icon } from '@/components/ui/Icon'
+import { Icon, type IconName } from '@/components/ui/Icon'
 import { UnderlineTabs, ToolButton, Segment, SearchBox } from '@/components/ui/PageParts'
 import { CloseCard, OverviewList, needsAttention, type ApprovalStatus } from './components/MonthlyOverview'
 
@@ -133,7 +134,7 @@ interface SubconMonthly {
 type ExportType = 'monthlyExcel' | 'perSite' | 'subcon' | 'bukake' | 'pl' | 'consentLedger'
 
 interface ExportCard {
-  icon: string
+  icon: IconName
   title: string
   description: string
   format: 'Excel出力' | 'PDF出力'
@@ -144,7 +145,7 @@ interface ExportCard {
 
 const EXPORT_CARDS: ExportCard[] = [
   {
-    icon: '📊',
+    icon: 'chart',
     title: '月次集計 Excel（全社・外注込み）',
     description: '日比建設・HFU・協力業者を1冊にまとめた社内用。キャシュモに送る会社別のものは上の「キャシュモ提出」から。',
     format: 'Excel出力',
@@ -152,7 +153,7 @@ const EXPORT_CARDS: ExportCard[] = [
     needsYm: true,
   },
   {
-    icon: '🏗',
+    icon: 'site',
     title: '現場別 出面一覧',
     description: '現場ごとにシートを分け、日比建設・HFUのセクション別で出面データを出力します。社内の原価確認用。',
     format: 'Excel出力',
@@ -160,7 +161,7 @@ const EXPORT_CARDS: ExportCard[] = [
     needsYm: true,
   },
   {
-    icon: '📄',
+    icon: 'doc',
     title: '外注先向け 出面確認書',
     description: '外注先ごとの出面確認書をExcel形式で出力します。外注先への送付・確認用です。',
     format: 'Excel出力',
@@ -168,7 +169,7 @@ const EXPORT_CARDS: ExportCard[] = [
     needsYm: true,
   },
   {
-    icon: '📐',
+    icon: 'trend',
     title: '歩掛管理表',
     description: '現場別の歩掛（人工数・鳶換算）をExcel形式で出力します。原価管理・見積もりに活用できます。',
     format: 'Excel出力',
@@ -176,7 +177,7 @@ const EXPORT_CARDS: ExportCard[] = [
     needsYm: true,
   },
   {
-    icon: '🌴',
+    icon: 'umbrella',
     title: '有給管理台帳',
     description: '年次有給休暇管理簿（管理簿・取得日一覧・買取記録・時季指定記録の4シート）。会社別に出力可能。労基署対応用。',
     format: 'Excel出力',
@@ -186,7 +187,7 @@ const EXPORT_CARDS: ExportCard[] = [
   },
   // 2026-09-26: 帳票はすべてここから（就業カレンダー画面の下にも同じボタンあり）
   {
-    icon: '✍️',
+    icon: 'pen',
     title: 'カレンダー 周知・同意台帳',
     description: '変形労働時間制の周知・同意の記録（誰がいつどの現場のカレンダーを承認したか）。労基署対応用。過去の月もいつでも出力できます。',
     format: 'Excel出力',
@@ -807,7 +808,7 @@ function MonthlyPageInner() {
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">帳票はすべてここから出します。対象月は右で選びます（集計タブと共通）</p>
               {(!data?.lockedHibi || !data?.lockedHfu) && (
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                  ⚠ 月締めの前に出した提出用の帳票（出面一覧・月次集計・実労働時間明細・現場別出面一覧・外注確認書）は、
+                  注意: 月締めの前に出した提出用の帳票（出面一覧・月次集計・実労働時間明細・現場別出面一覧・外注確認書）は、
                   先頭に「未確定（締め前）」のシートが入り、ファイル名に【未確定】が付きます。提出には締めたあとに出し直したものを使ってください。
                 </p>
               )}
@@ -824,8 +825,8 @@ function MonthlyPageInner() {
                 ))}
               </select>
               <div className="flex items-center gap-1.5">
-                {data?.lockedHibi && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-3xs font-bold rounded-full">🔒 日比 締め済</span>}
-                {data?.lockedHfu && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-3xs font-bold rounded-full">🔒 HFU 締め済</span>}
+                {data?.lockedHibi && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-3xs font-bold rounded-full inline-flex items-center gap-1"><Icon name="lock" size={11} />日比 締め済</span>}
+                {data?.lockedHfu && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-3xs font-bold rounded-full inline-flex items-center gap-1"><Icon name="lock" size={11} />HFU 締め済</span>}
               </div>
             </div>
           </div>
@@ -838,13 +839,13 @@ function MonthlyPageInner() {
 
           {/* ── ① キャシュモ提出（毎月の2点）── 2026-09-17 代表決定 */}
           <section className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-xl p-4">
-            <h2 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">📤 キャシュモ提出（毎月の2点・会社別）</h2>
+            <h2 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">キャシュモ提出（毎月の2点・会社別）</h2>
             <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1 mb-2">
               月締めロック後に会社ごとに出してキャシュモへ送る。この2点にその会社の全員（日本人・ベトナム人）が載ります。PDF はブラウザの「PDFとして保存」
             </p>
             {(['hibi', 'hfu'] as const).map(org => orgRow(org, (
               <>
-                {btn(`monthlyExcel-${org}`, '📊 月次集計 Excel', '支給額の内訳（日本人シート／ベトナム人シート）。マネーフォワードに入れる数字',
+                {btn(`monthlyExcel-${org}`, '月次集計 Excel', '支給額の内訳（日本人シート／ベトナム人シート）。マネーフォワードに入れる数字',
                   'bg-green-600 text-white hover:bg-green-700',
                   () => downloadOrgExcel('monthlyExcel', org, `月次集計_${orgLabelOf(org)}_${ymClean}.xlsx`))}
                 <button
@@ -852,7 +853,7 @@ function MonthlyPageInner() {
                   className="px-3 py-1.5 text-xs rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition"
                   title="1人1ページの内訳＋日別カレンダー＋自動検算。新タブで開く → Cmd+P で PDF 保存"
                 >
-                  🔍 計算根拠 PDF
+                  計算根拠 PDF
                 </button>
               </>
             )))}
@@ -860,19 +861,19 @@ function MonthlyPageInner() {
 
           {/* ── ② 根拠書類（求められたら出す）── */}
           <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl p-4">
-            <h2 className="text-sm font-bold text-hibi-navy dark:text-white">📁 根拠書類（毎月は送らない・会社別）</h2>
+            <h2 className="text-sm font-bold text-hibi-navy dark:text-white">根拠書類（毎月は送らない・会社別）</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
               キャシュモ・社労士・労基署に求められたときに出す。勤務予定シフト＝変形労働時間制で事前に定めた所定の記録／実労働時間明細＝残業時間の根拠（ベトナム人）／出面一覧＝全員の日別記録
             </p>
             {(['hibi', 'hfu'] as const).map(org => orgRow(org, (
               <>
-                {btn(`plannedShift-${org}`, '📅 勤務予定シフト', 'ベトナム人・各日各週の所定労働時間',
+                {btn(`plannedShift-${org}`, '勤務予定シフト', 'ベトナム人・各日各週の所定労働時間',
                   'border border-teal-500 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30',
                   () => downloadOrgExcel('plannedShift', org, `勤務予定シフト_${orgLabelOf(org)}_${ymClean}.xlsx`))}
-                {btn(`actualHours-${org}`, '⏱ 実労働時間明細', 'ベトナム人・日別の始業・終業・休憩・実労働h',
+                {btn(`actualHours-${org}`, '実労働時間明細', 'ベトナム人・日別の始業・終業・休憩・実労働h',
                   'border border-emerald-500 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30',
                   () => downloadOrgExcel('actualHours', org, `実労働時間明細_${orgLabelOf(org)}_${ymClean}.xlsx`))}
-                {btn(`${org}-${org}`, '📋 出面一覧', '全員の日別 出勤・残業 ＋ 外国人の勤務時間一覧・勤怠サマリー',
+                {btn(`${org}-${org}`, '出面一覧', '全員の日別 出勤・残業 ＋ 外国人の勤務時間一覧・勤怠サマリー',
                   'border border-sky-500 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30',
                   () => downloadOrgExcel(org, org, `出面一覧_${orgLabelOf(org)}_${ymClean}.xlsx`))}
               </>
@@ -881,14 +882,14 @@ function MonthlyPageInner() {
 
           {/* ── ③ 社内用 ── */}
           <section>
-            <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-2">🏢 社内用（原価・外注・有給）</h2>
+            <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-2">社内用（原価・外注・有給）</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {EXPORT_CARDS.map((card) => {
                 const isDownloading = exportDownloading === card.type
                 return (
                   <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 hover:shadow-md transition-shadow p-4 flex flex-col">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-2xl">{card.icon}</span>
+                      <Icon name={card.icon} size={22} className="text-hibi-navy dark:text-white shrink-0" />
                       <h3 className="font-bold text-hibi-navy dark:text-white text-sm">{card.title}</h3>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 flex-1">{card.description}</p>
@@ -921,7 +922,7 @@ function MonthlyPageInner() {
                         </>
                       ) : (
                         <>
-                          <span>📥</span>
+                          <Icon name="download" size={14} />
                           <span>{card.needsYm ? `${card.format}（${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月）` : card.format}</span>
                         </>
                       )}
@@ -989,7 +990,7 @@ function MonthlyPageInner() {
             使うため毎月の設定が必要。旧: 欄が消えて Firestore 直編集が必要だった） */}
         {data?.hasCalendarData && !data?.hasOldRulesWorkers && (
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
-            <span className="text-xs text-green-600 dark:text-green-400 font-medium whitespace-nowrap">📅 所定日数: カレンダーから自動取得</span>
+            <span className="text-xs text-green-600 dark:text-green-400 font-medium whitespace-nowrap">所定日数: カレンダーから自動取得</span>
           </div>
         )}
         {(!data?.hasCalendarData || data?.hasOldRulesWorkers) && (
@@ -998,7 +999,7 @@ function MonthlyPageInner() {
               {data?.hasCalendarData ? '所定日数(旧ルール用):' : '所定日数:'}
             </label>
             {data?.hasOldRulesWorkers && (Number(prescribedDays) || 0) === 0 && (
-              <span className="text-xs text-red-600 dark:text-red-400 font-bold whitespace-nowrap">⚠ 未設定（フンさんの欠勤控除が計算できません）</span>
+              <span className="text-xs text-red-600 dark:text-red-400 font-bold whitespace-nowrap">未設定（フンさんの欠勤控除が計算できません）</span>
             )}
             <input
               type="number"
@@ -1028,7 +1029,7 @@ function MonthlyPageInner() {
                   title="クリックで基準値（日曜以外の日数）にリセット。特別休暇分はここから手動で減算してください"
                   onClick={() => setPrescribedDays(String(baseDays))}
                 >
-                  📅 基準値: {baseDays}日 (日曜以外)
+                  基準値: {baseDays}日 (日曜以外)
                   {diff < 0 && <span className="ml-1 text-amber-600">{diff}日</span>}
                 </span>
               )
@@ -1049,7 +1050,7 @@ function MonthlyPageInner() {
               ? 'クリックして全員表示に戻す'
               : 'クリックして検算で違反のあるスタッフだけ表示'}
           >
-            <span className="text-base">{showAnomalyOnly ? '🔴' : '⚪'}</span>
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${showAnomalyOnly ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
             <span className="text-xs whitespace-nowrap">
               {showAnomalyOnly ? '異常者のみ表示中' : `異常者のみ (${validationOnTab.affectedWorkerIds.length}名)`}
             </span>
@@ -1116,7 +1117,7 @@ function MonthlyPageInner() {
       {!loading && data && (data.snapshotDiffs?.length || 0) > 0 && (
         <div className="rounded-xl p-4 border bg-red-50 dark:bg-red-900/20 border-red-400 dark:border-red-700">
           <div className="flex items-start gap-3">
-            <span className="text-2xl">🚨</span>
+            <Icon name="alert" size={24} className="text-red-600 dark:text-red-400 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="font-bold text-red-800 dark:text-red-300">
                 締め（給与確定）後に支給額が変わっています
@@ -1159,7 +1160,7 @@ function MonthlyPageInner() {
             : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
         }`}>
           <div className="flex items-start gap-3">
-            <span className="text-2xl">{validationResult.critical > 0 ? '⚠️' : '🔔'}</span>
+            <Icon name={validationResult.critical > 0 ? 'alert' : 'bell'} size={24} className={validationResult.critical > 0 ? 'text-red-600 dark:text-red-400 shrink-0' : 'text-yellow-600 dark:text-yellow-400 shrink-0'} />
             <div className="flex-1 min-w-0">
               <div className={`font-bold ${
                 validationResult.critical > 0
@@ -1178,7 +1179,7 @@ function MonthlyPageInner() {
                 {validationResult.issues.slice(0, 5).map((iss, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className={iss.severity === 'critical' ? 'text-red-600' : 'text-yellow-600'}>
-                      {iss.severity === 'critical' ? '❌' : '⚠'}
+                      <Icon name="alert" size={14} className="mt-0.5" />
                     </span>
                     <span className="text-gray-800 dark:text-gray-200">
                       <span className="font-semibold">{iss.workerName}</span>: {iss.message}
@@ -1208,7 +1209,7 @@ function MonthlyPageInner() {
         const exempt = tabFilteredWorkers.length - targets.length
         return (
           <div className="rounded-xl px-4 py-3 border bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 flex items-center gap-3 text-sm">
-            <span className="text-xl">✅</span>
+            <Icon name="check" size={20} strokeWidth={2.4} className="text-green-600 dark:text-green-400 shrink-0" />
             <div className="text-green-800 dark:text-green-300">
               <span className="font-bold">自動検算OK</span>
               <span className="ml-2">対象 {targets.length}名（ベトナム人・新ルール時給制）に異常なし。</span>
@@ -1418,7 +1419,7 @@ function MonthlyPageInner() {
                           title={(() => {
                             // 2026-06-XX 追加 (UI #4): ホバーで支給額内訳を即表示
                             //   モーダルを開かなくても合計の構成が把握できる
-                            const lines: string[] = ['📋 給与内訳（クリックで詳細）']
+                            const lines: string[] = ['給与内訳（クリックで詳細）']
                             lines.push('')
                             if ((w.fixedBasePay || w.basePay || 0) > 0)
                               lines.push(`基本給:        ¥${(w.fixedBasePay || w.basePay || 0).toLocaleString()}`)
@@ -1452,14 +1453,14 @@ function MonthlyPageInner() {
                           })()}
                         >
                           {w.name}
-                          <span className="ml-1 text-3xs text-blue-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100">🔍</span>
+                          <span className="ml-1 text-3xs text-blue-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 inline-flex align-middle"><Icon name="search" size={11} /></span>
                         </button>
                         {w.isDispatched && (
                           <span
                             className="ml-1.5 text-3xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`出向先: ${w.dispatchTo || ''}`}
                           >
-                            🔁 出向中
+                            出向中
                           </span>
                         )}
                         {(w.hkDays || 0) > 0 && (
@@ -1467,7 +1468,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`当月 ${w.hkDays}日 帰国中（所定から除外・無給。欠勤ではありません）`}
                           >
-                            ✈ 帰国中{w.hkDays}日
+                            帰国中{w.hkDays}日
                           </span>
                         )}
                         {/* 申請より早く復帰して出勤している。給与は打刻ベースで正しく計算されるが、
@@ -1477,7 +1478,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`帰国申請の期間内に出勤打刻が ${w.hkEarlyReturnDays}日 あります（${w.hkEarlyReturnFirstDate} から復帰済み）。給与は打刻どおり計算していますが、休暇管理の帰国申請の「最終帰国日」を実際の復帰前日に直してください。`}
                           >
-                            ⚠ 早期復帰{w.hkEarlyReturnDays}日
+                            早期復帰{w.hkEarlyReturnDays}日
                           </span>
                         )}
                         {/* 夜勤の 1.5人工 が法定割増を下回った場合の警告。
@@ -1487,7 +1488,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`夜勤日の法定必要額 ¥${Math.ceil(w.legalRequiredPay || 0).toLocaleString()} に対し支給 ¥${(w.nightShiftPaid || 0).toLocaleString()}。¥${(w.legalShortfall || 0).toLocaleString()} 不足しています（日曜の夜勤 または 長時間の通し勤務）。1.5人工の慣例では法定割増を満たさないケースです。`}
                           >
-                            ⚠ 法定不足 ¥{(w.legalShortfall || 0).toLocaleString()}
+                            法定不足 ¥{(w.legalShortfall || 0).toLocaleString()}
                           </span>
                         )}
                         {/* 2026-09-30: 日本人は日曜の割増なし（代表決定）。ただし週に休みが無いまま日曜に出た日は
@@ -1497,7 +1498,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`${(w.sundayNoRestDays || []).join('・')}日の日曜は、前の6日すべて出勤しています（その週に休みがありません）。この場合の日曜出勤は法定休日の労働になり、35%の割増が法律上必要です。日比では日本人の日曜割増を付けない運用のため、支給額には入れていません。振替休日を取らせるか、キャシュモ・社労士に扱いを確認してください。`}
                           >
-                            ⚠ 休みなし週の日曜 {(w.sundayNoRestDays || []).join('・')}日
+                            休みなし週の日曜 {(w.sundayNoRestDays || []).join('・')}日
                           </span>
                         )}
                         {/* 2026-09-15: 旧ルール（固定月給）の人は計算の形が違うので、名前の横で分かるようにする */}
@@ -1516,7 +1517,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`残業時間から逆算すると22時を超えている日が ${w.lateNightRiskDays}日 ありますが、夜勤として登録されていません。22時以降の労働は夜勤（1.5人工）で登録する運用です。出面画面で確認してください。`}
                           >
-                            ⚠ 夜勤未登録{w.lateNightRiskDays}日
+                            夜勤未登録{w.lateNightRiskDays}日
                           </span>
                         )}
                         {/* 2026-09-13: 配置現場カレンダーの稼働日に出面が無い日。閑散期に「現場都合休(0.6)」の
@@ -1527,7 +1528,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`${(w.suspectCompRestDays || []).join('・')}日は「その他」の休み（欠勤）で登録されていますが、メモが会社都合（60%・現場休みなど）を指しています。会社の都合の休みなら、出面を「0.6補」に直してください。このままだと欠勤として計算されます。`}
                           >
-                            ⚠ 会社都合の休み？ {(w.suspectCompRestDays || []).join('・')}日
+                            会社都合の休み？ {(w.suspectCompRestDays || []).join('・')}日
                           </span>
                         )}
                         {/* 2026-09-30: 自分の都合の休みの日に、同じ現場でほかの人が0.6補（人数調整）＝取り違えの疑い */}
@@ -1536,7 +1537,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs px-1.5 py-0.5 rounded-full font-bold align-middle bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
                             title={`${(w.restMismatchDays || []).join('・')}日は「自分の都合の休み」ですが、同じ日に同じ現場でほかの人が現場休み（0.6補）です。人数調整で休ませたのなら、出面を「0.6補」に直してください。このままだと欠勤として最低保証から引かれます。`}
                           >
-                            ⚠ 休みの区別？ {(w.restMismatchDays || []).join('・')}日
+                            休みの区別？ {(w.restMismatchDays || []).join('・')}日
                           </span>
                         )}
                         {/* 2026-09-30: 本人の出面確認（スタッフのスマホ）。連絡は押すと中身を見て対応済みにできる */}
@@ -1549,7 +1550,7 @@ function MonthlyPageInner() {
                             className="ml-1.5 text-3xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`配置現場のカレンダーでは稼働日なのに出面に何も記録が無い日が ${w.calendarBlankDays}日 あります。現場都合の休みなら「0.6補」、本人都合なら「欠」を入力してください。空欄のままだと欠勤（100%控除）として計算されます。`}
                           >
-                            ⚠ 稼働日未入力{w.calendarBlankDays}日
+                            稼働日未入力{w.calendarBlankDays}日
                           </span>
                         )}
                       </td>
