@@ -135,7 +135,7 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
 
 ブラウザ標準の `confirm()` / `alert()` / `prompt()` は使わない（OS ごとに見た目が違う・ボタンがいつも OK／キャンセル・理由を書けない・
 スマホで字が小さい・「通信エラーが発生しました」だけで次の手が分からない）。見本: https://claude.ai/artifact/CVvMip58wSYuRKnDukadrh
-`npm run lint:dialog` が置き換え済みの場所（`scripts/lint-browser-dialogs.mjs` の CONVERTED）で検出する。画面を置き換えたら CONVERTED に足す。
+2026-10-03 に全画面（計 268か所）を置き換え済み。`npm run lint:dialog` が app/・components/・lib/ のどこでも検出する。
 
 **確認（`lib/confirm-dialog.ts`・窓は `components/ui/Confirm.tsx` の `<ConfirmHost />`）**
 

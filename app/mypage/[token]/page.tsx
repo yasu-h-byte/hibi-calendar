@@ -16,9 +16,12 @@
  * 2026-10-01（代表）: 職長・政仁さん・代表には先頭に「承認すること」を出す。
  *   職長 = 出面のまとめ承認・有給／帰国申請の職長承認。政仁さん・代表 = 最終承認・職長がいない現場の代行・配置の見直し。
  *   components/mypage/ForemanApprovals.tsx。それ以外の人には何も出ない。
+ * 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
  */
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { todayJstIso } from '@/lib/date-utils'
+import { confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import StaffHeader from '@/components/StaffHeader'
@@ -193,7 +196,7 @@ export default function MyPage() {
         }),
       })
       if (!res.ok) {
-        alert((await res.json().catch(() => null))?.error || '申請できませんでした')
+        notify.failed('申請', (await res.json().catch(() => null))?.error || 'サーバが受け付けませんでした')
         return
       }
       setShowApply(false)
@@ -202,14 +205,17 @@ export default function MyPage() {
       setMsg('有給を申請しました。承認されるとここに反映されます。')
       setTimeout(() => setMsg(''), 4000)
       load()
-    } catch {
+    } catch (e) {
       // 通信が切れたときも知らせる（2026-10-02 総合点検。旧: catch がなく何も出なかった）
-      alert('通信エラー: 申請できませんでした。電波のある所でもう一度お試しください')
+      notify.failed('申請', e)
     } finally { setSaving(false) }
   }
 
   const cancelRequest = async (r: LeaveRequest) => {
-    if (!confirm(`${fmtDate(r.date)} の有給申請を取り消します。よろしいですか？`)) return
+    if (!(await confirmDanger({
+      title: `${fmtDate(r.date)} の有給申請を取り消しますか？`,
+      confirmLabel: '取り消す',
+    }))) return
     try {
       const res = await fetch('/api/leave-request', {
         method: 'POST',
@@ -217,11 +223,11 @@ export default function MyPage() {
         body: JSON.stringify({ action: 'cancel', requestId: r.id, token }),
       })
       if (!res.ok) {
-        alert((await res.json().catch(() => null))?.error || '取り消しできませんでした')
+        notify.failed('取り消し', (await res.json().catch(() => null))?.error || 'サーバが受け付けませんでした')
         return
       }
       load()
-    } catch { alert('通信エラーが発生しました') }
+    } catch (e) { notify.failed('取り消し', e) }
   }
 
   if (loading && !data) {

@@ -8,7 +8,9 @@
 //       ② 左＝やること（申請を1件1行・気になること）／右＝数字を見るもの（前日の稼働・今月の数字・お知らせ・評価）
 //   計算・権限・承認の処理は変えない（見せ方だけ）。承認ボタンの出し分けは旧 AttendanceRequestCard と同じ。
 
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 import { can } from '@/lib/permissions'
+import { notify } from '@/lib/notify'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { fmtYenMan, fmtNum } from '@/lib/format'
@@ -266,20 +268,25 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
       const wid = (stored ? JSON.parse(stored).user?.workerId : 0) || 0
       const results = await Promise.all(ids.map(id => postOne(id, action, apiPath, wid, reason)))
       // 2026-08-27（休暇届総点検）: 失敗（出勤実績との矛盾409・ロック409・権限403等）を必ず表示する
+      const actionLabel = action === 'reject' ? '却下' : action === 'foreman_approve' ? '職長承認' : '承認'
       const failures: string[] = []
       for (const res of results) {
         if (res.ok) continue
         const err = await res.json().catch(() => null)
-        failures.push(err?.message || err?.error || `処理に失敗しました (${res.status})`)
+        failures.push(err?.message || err?.error || 'サーバが受け付けませんでした')
       }
       if (failures.length > 0) {
-        alert(ids.length > 1
-          ? `${ids.length}件中 ${failures.length}件が失敗しました:\n${[...new Set(failures)].slice(0, 4).map(f => `・${f}`).join('\n')}`
-          : failures[0])
+        const uniq = [...new Set(failures)]
+        if (ids.length > 1) {
+          notify.error(`${ids.length}件中 ${failures.length}件を${actionLabel}できませんでした`,
+            uniq.slice(0, 5).map(f => `・${f}`).join('\n') + (uniq.length > 5 ? '\n…ほか' : ''))
+        } else {
+          notify.failed(actionLabel, failures[0])
+        }
       }
       setRejecting(null)
       onUpdate()
-    } catch { alert('通信エラーが発生しました') }
+    } catch (e) { notify.failed(action === 'reject' ? '却下' : '承認', e) }
     finally { setProcessing(null) }
   }
 

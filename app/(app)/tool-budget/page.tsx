@@ -1,8 +1,11 @@
 'use client'
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { useEffect, useState, useCallback } from 'react'
 import { visaLabel } from '@/lib/labels'
 import { jobLabel } from '@/lib/jobs'
+import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { PageHeader, ToolButton, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -405,7 +408,7 @@ function WorkerModal({
         body: JSON.stringify({ action: 'setPeriodAnchor', workerId: worker.workerId, anchor: anchor || null }),
       })
       // 2026-10-02 総合点検: 旧は応答を見ておらず、権限なし・形式不正でも「保存しました」と出た
-      if (!r.ok) { const j = await r.json().catch(() => null); alert(j?.error || '期間の起点を保存できませんでした'); setAnchorSaving(false); return }
+      if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('期間の起点を保存', j?.error || 'サーバが受け付けませんでした'); setAnchorSaving(false); return }
       setAnchorSaved(true)
       setTimeout(() => setAnchorSaved(false), 1500)
       onRefresh()
@@ -428,7 +431,7 @@ function WorkerModal({
           budget: Number(budget),
         }),
       })
-      if (!r.ok) { const j = await r.json().catch(() => null); alert(j?.error || '予算を保存できませんでした'); setBudgetSaving(false); return }
+      if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('予算を保存', j?.error || 'サーバが受け付けませんでした'); setBudgetSaving(false); return }
       setBudgetSaved(true)
       setTimeout(() => setBudgetSaved(false), 1500)
       onRefresh()
@@ -457,22 +460,26 @@ function WorkerModal({
       if (res.status === 409) {
         const j = await res.json().catch(() => ({}))
         if (j.code === 'over_budget') {
-          const okOver = confirm(`${worker.workerName} さんの道具代の残高を超えます。\n\n${j.error}\n\n超過分は、次の期間の枠から差し引かれます。\nそれでも登録しますか？`)
+          const okOver = await confirmDialog({
+            title: `${worker.workerName} さんの道具代の残高を超えます。それでも登録しますか？`,
+            description: `${j.error || ''}\n超過分は、次の期間の枠から差し引かれます。`.trim(),
+            confirmLabel: '超えて登録する',
+          })
           if (!okOver) return false
           res = await post(true)
         } else {
-          alert(j.error || '登録できませんでした')
+          notify.failed('登録', j.error || 'サーバが受け付けませんでした')
           return false
         }
       }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        alert(j.error || '登録できませんでした')
+        notify.failed('登録', j.error || 'サーバが受け付けませんでした')
         return false
       }
       return true
-    } catch {
-      alert('通信エラーで登録できませんでした')
+    } catch (e) {
+      notify.failed('登録', e)
       return false
     }
   }
@@ -503,7 +510,11 @@ function WorkerModal({
 
   const handleDelete = async (purchaseId: string) => {
     if (!worker.period) return
-    if (!confirm('この購入記録を削除しますか？')) return
+    if (!(await confirmDanger({
+      title: 'この購入記録を削除しますか？',
+      description: '使った額から差し引かれ、残高が戻ります。',
+      confirmLabel: '削除する',
+    }))) return
     try {
       const r = await fetch('/api/tool-budget', {
         method: 'POST',
@@ -515,7 +526,7 @@ function WorkerModal({
           purchaseId,
         }),
       })
-      if (!r.ok) { const j = await r.json().catch(() => null); alert(j?.error || '購入記録を削除できませんでした'); return }
+      if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('購入記録を削除', j?.error || 'サーバが受け付けませんでした'); return }
       onRefresh()
     } catch { /* ignore */ }
   }

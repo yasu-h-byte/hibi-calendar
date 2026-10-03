@@ -1,6 +1,10 @@
 'use client'
 
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+
 import { siteLeaderLabel } from '@/lib/companies'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { todayJstIso } from '@/lib/date-utils'
 import DriverModal from '@/app/(app)/attendance/components/DriverModal'
@@ -183,11 +187,11 @@ export default function ForemanAttendancePage() {
   const handleApprove = async () => {
     if (!data || saving) return
     // 未入力が残る日の承認は誤操作の可能性が高い（9/1 誤承認事故の再発防止）
-    if (data.summary.noneCount > 0 && !confirm(
-      `まだ ${data.summary.noneCount}名 が未入力です。\n`
-      + `承認するとこの日はロックされ、スタッフは入力できなくなります。\n\n`
-      + `本当に確認済みにしますか？`
-    )) return
+    if (data.summary.noneCount > 0 && !(await confirmDialog({
+      title: `まだ ${data.summary.noneCount}名 が未入力です。確認済みにしますか？`,
+      description: '確認済みにするとこの日はロックされ、スタッフは入力できなくなります。',
+      confirmLabel: '確認済みにする',
+    }))) return
     setSaving(true)
     try {
       const res = await fetch('/api/attendance/foreman', {
@@ -204,12 +208,12 @@ export default function ForemanAttendancePage() {
       // 失敗（ロック済み等）を必ず表示（2026-08-27 休暇届総点検）
       if (!res.ok) {
         const d = await res.json().catch(() => null)
-        alert(d?.error || `確認に失敗しました (${res.status})`)
+        notify.failed('確認', d?.error || 'サーバが受け付けませんでした')
       }
       fetchData()
-    } catch {
+    } catch (e) {
       // 通信が切れたときも知らせる（2026-10-02 総合点検。旧: catch がなく何も出なかった）
-      alert('通信エラー: 確認できませんでした。電波のある所でもう一度お試しください')
+      notify.failed('確認', e)
     } finally {
       setSaving(false)
     }
@@ -239,14 +243,14 @@ export default function ForemanAttendancePage() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)
-        alert(d?.error || `変更に失敗しました (${res.status})`)
+        notify.failed('変更', d?.error || 'サーバが受け付けませんでした')
         return
       }
       setEditingWorker(null)
       setEditOT(0)
       fetchData()
-    } catch {
-      alert('通信エラー: 変更できませんでした。電波のある所でもう一度お試しください')
+    } catch (e) {
+      notify.failed('変更', e)
     } finally {
       setSaving(false)
     }
@@ -270,10 +274,11 @@ export default function ForemanAttendancePage() {
   )
   const handleBulkApprove = async () => {
     if (!data || bulkApproving || bulkTargets.length === 0) return
-    if (!confirm(
-      `${bulkTargets.map(o => `${o.day}日`).join('・')} の ${bulkTargets.length}日分をまとめて確認します。\n`
-      + `（全員の入力がそろっている日だけが対象です）\n\nよろしいですか？`
-    )) return
+    if (!(await confirmDialog({
+      title: `${bulkTargets.length}日分をまとめて確認しますか？`,
+      description: `${bulkTargets.map(o => `${o.day}日`).join('・')}\n全員の入力がそろっている日だけが対象です。`,
+      confirmLabel: 'まとめて確認する',
+    }))) return
     setBulkApproving(true)
     try {
       const res = await fetch('/api/attendance/foreman', {
@@ -287,14 +292,19 @@ export default function ForemanAttendancePage() {
       })
       const d = await res.json().catch(() => null)
       if (!res.ok) {
-        alert(d?.error || `まとめ確認に失敗しました (${res.status})`)
+        notify.failed('まとめて確認', d?.error || 'サーバが受け付けませんでした')
       } else if (d?.skipped?.length) {
-        alert(`✅ ${d.approvedDays.length}日分を確認しました\n\n以下は確認できませんでした:\n`
-          + d.skipped.map((x: { day: number; reason: string }) => `・${x.day}日: ${x.reason}`).join('\n'))
+        const skipped = d.skipped as { day: number; reason: string }[]
+        const lines = skipped.slice(0, 5).map(x => `・${x.day}日: ${x.reason}`)
+        if (skipped.length > 5) lines.push(`…ほか${skipped.length - 5}日`)
+        notify.error(
+          `${d.approvedDays.length}日分を確認しました。${skipped.length}日は確認できませんでした`,
+          lines.join('\n'),
+        )
       }
       fetchData()
-    } catch {
-      alert('通信エラー: まとめて確認できませんでした。電波のある所でもう一度お試しください')
+    } catch (e) {
+      notify.failed('まとめて確認', e)
     } finally {
       setBulkApproving(false)
     }
@@ -321,13 +331,13 @@ export default function ForemanAttendancePage() {
       if (res.ok) {
         setFixingSite(null)
         await fetchData()
-        alert(`✅ ${fixingSite.workerName} さんの入力を ${data.site.name} に移動しました`)
+        notify.success(`${fixingSite.workerName} さんの入力を ${data.site.name} に移動しました`)
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`❌ 移動に失敗しました\n\n${err.error || res.statusText}`)
+        notify.failed('移動', err.error || 'サーバが受け付けませんでした')
       }
     } catch (e) {
-      alert(`❌ 通信エラー: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed('移動', e)
     } finally {
       setSaving(false)
     }
@@ -493,7 +503,12 @@ export default function ForemanAttendancePage() {
           <button
             onClick={async () => {
               if (saving) return
-              if (!confirm('この日の確認（承認）を取り消します。スタッフが再び入力できるようになります。よろしいですか？')) return
+              if (!(await confirmDialog({
+                tone: 'danger',
+                title: 'この日の確認（承認）を取り消しますか？',
+                description: 'スタッフが再び入力できるようになります。あとでもう一度、確認済みにできます。',
+                confirmLabel: '取り消す',
+              }))) return
               setSaving(true)
               try {
                 const res = await fetch('/api/attendance/foreman', {
@@ -503,11 +518,11 @@ export default function ForemanAttendancePage() {
                 })
                 if (!res.ok) {
                   const d = await res.json().catch(() => null)
-                  alert(d?.error || `取り消しに失敗しました (${res.status})`)
+                  notify.failed('取り消し', d?.error || 'サーバが受け付けませんでした')
                 }
                 fetchData()
-              } catch {
-                alert('通信エラー: 取り消しできませんでした。電波のある所でもう一度お試しください')
+              } catch (e) {
+                notify.failed('取り消し', e)
               } finally { setSaving(false) }
             }}
             className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-red-300 text-red-600 active:bg-red-50"

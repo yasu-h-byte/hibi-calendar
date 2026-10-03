@@ -1,6 +1,8 @@
 'use client'
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import { confirmDanger } from '@/lib/confirm-dialog'
 import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
 import { CAPABILITIES, PERM_ROLES, PERM_ROLE_LABEL, type Capability, type PermRole } from '@/lib/permissions'
 import { isAlreadyRetired } from '@/lib/workers'
@@ -573,7 +575,11 @@ export default function SettingsPage() {
   }
 
   const handleDeleteAnnouncement = async (id: string, title: string) => {
-    if (!confirm(`「${title}」を削除しますか？`)) return
+    if (!(await confirmDanger({
+      title: `お知らせ「${title}」を削除しますか？`,
+      description: 'スタッフの画面からも消えます。',
+      confirmLabel: '削除する',
+    }))) return
     const res = await fetch('/api/announcements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-password': password },

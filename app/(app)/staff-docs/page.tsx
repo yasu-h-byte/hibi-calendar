@@ -7,10 +7,13 @@
  * - 上: 期限切れ・90日以内・人員マスタとの食い違い・不足書類のまとめ
  * - 下: スタッフごとの書類（最新／旧版）。ファイルは署名つきURLで新しいタブに開く
  * - 「＋ 書類を入れる」: ファイルを選ぶ（またはドラッグ）→ 種類・期限 → 登録
+ * - 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { can } from '@/lib/permissions'
 import { cardCls } from '@/lib/styles'
@@ -161,20 +164,24 @@ function StaffDocsInner() {
       else window.location.href = j.url
     } catch (e) {
       win?.close()
-      alert(e instanceof Error ? e.message : String(e))
+      notify.failed('ファイルを表示', e)
     }
   }
 
   const setStatus = async (d: StaffDoc, status: 'current' | 'old') => {
     const r = await postJson('/api/staff-docs', { action: 'setStatus', docId: d.id, status })
-    if (!r.ok) { alert(r.error || '変更できませんでした'); return }
+    if (!r.ok) { notify.failed(status === 'old' ? '旧版への変更' : '最新への変更', r.error || 'サーバが受け付けませんでした'); return }
     load()
   }
 
   const remove = async (d: StaffDoc) => {
-    if (!confirm(`「${staffDocTypeDef(d.type).label}${d.title ? `（${d.title}）` : ''}」をファイルごと削除します。元に戻せません。よろしいですか？\n\n古くなっただけなら、削除ではなく「旧版にする」を使ってください。`)) return
+    if (!(await confirmDanger({
+      title: `「${staffDocTypeDef(d.type).label}${d.title ? `（${d.title}）` : ''}」をファイルごと削除しますか？`,
+      description: '古くなっただけなら、削除ではなく「旧版にする」を使ってください。',
+      confirmLabel: '削除する',
+    }))) return
     const r = await postJson('/api/staff-docs', { action: 'delete', docId: d.id })
-    if (!r.ok) { alert(r.error || '削除できませんでした'); return }
+    if (!r.ok) { notify.failed('削除', r.error || 'サーバが受け付けませんでした'); return }
     load()
   }
 

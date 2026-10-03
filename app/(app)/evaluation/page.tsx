@@ -1,5 +1,6 @@
 'use client'
 
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -15,7 +16,9 @@ import {
 } from '@/types'
 import { fmtYen } from '@/lib/format'
 import WorkerAvatar from '@/components/WorkerAvatar'
-import { PageHeader, ToolButton, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
+import { PageHeader, ToolButton, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, FieldError, type ChipTone } from '@/components/ui/PageParts'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
@@ -31,6 +34,13 @@ import {
   yearsFromHire as yearsFromDate,
 } from '@/lib/evaluation-config'
 import { minWageAt } from '@/lib/wage-analysis'
+
+/** 一括再計算の結果の帯（更新・対象外・できなかった件数） */
+function notifyBulkResult(what: string, d: { updated?: number; skipped?: number; errors?: unknown[] }) {
+  const detail = `更新 ${d.updated ?? 0}件・対象外 ${d.skipped ?? 0}件`
+  if (d.errors?.length) notify.error(`${what}を再計算できなかったセッションが ${d.errors.length}件あります`, detail)
+  else notify.success(`${what}を再計算しました`, detail)
+}
 
 function rankColor(r: EvaluationRank): string {
   switch (r) {
@@ -257,6 +267,8 @@ export default function EvaluationPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createWorkerId, setCreateWorkerId] = useState<number | null>(null)
   const [createEvaluatorIds, setCreateEvaluatorIds] = useState<number[]>([])
+  const [createWorkerError, setCreateWorkerError] = useState<string | null>(null)
+  const [createEvaluatorError, setCreateEvaluatorError] = useState<string | null>(null)
 
   // 詳細閲覧モーダル
   const [detailSessionId, setDetailSessionId] = useState<string | null>(null)
@@ -283,7 +295,11 @@ export default function EvaluationPage() {
 
   // ── ウェイト再計算（個別セッション） ──
   const handleRecalculateWeights = async (evaluationId: string) => {
-    if (!confirm('このセッションのウェイトを再計算しますか？\n（過去出勤データから共働日数を再集計します）')) return
+    if (!(await confirmDialog({
+      title: 'このセッションのウェイトを再計算しますか？',
+      description: '過去の出面から共働日数を集計し直します。',
+      confirmLabel: '再計算する',
+    }))) return
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
@@ -296,17 +312,21 @@ export default function EvaluationPage() {
         await fetchData()
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+        notify.failed('再計算', err.error || 'サーバが受け付けませんでした')
       }
     } catch (e) {
-      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed('再計算', e)
     }
     setRecalculatingWeights(false)
   }
 
   // ── ウェイト一括再計算（既存セッション全部） ──
   const handleRecalculateAllWeights = async () => {
-    if (!confirm('全ての進行中セッション（収集中・最終確認待ち）のウェイトを再計算します。\n（承認済みは対象外）\n\n実行しますか？')) return
+    if (!(await confirmDialog({
+      title: '進行中の全セッションのウェイトを再計算しますか？',
+      description: '収集中・最終確認待ちのセッションが対象です。承認済みは変わりません。',
+      confirmLabel: '再計算する',
+    }))) return
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
@@ -317,21 +337,25 @@ export default function EvaluationPage() {
       })
       if (res.ok) {
         const d = await res.json()
-        alert(`一括再計算完了\n更新: ${d.updated}件\nスキップ: ${d.skipped}件${d.errors?.length ? `\nエラー: ${d.errors.length}件` : ''}`)
+        notifyBulkResult('ウェイト', d)
         await fetchData()
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+        notify.failed('再計算', err.error || 'サーバが受け付けませんでした')
       }
     } catch (e) {
-      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed('再計算', e)
     }
     setRecalculatingWeights(false)
   }
 
   // ── 出勤指標 一括再計算（既存セッション全部） ──
   const handleRecalculateAllMetrics = async () => {
-    if (!confirm('全ての進行中セッションの出勤指標（出勤率・残業平均・有給取得・ボーナス）を再計算します。\n（承認済みは対象外）\n\n出勤率の100%超え等を直すために、新ロジックで再算出します。\n実行しますか？')) return
+    if (!(await confirmDialog({
+      title: '進行中の全セッションの出勤指標を再計算しますか？',
+      description: '出勤率・残業平均・有給取得・ボーナスを今の決まりで出し直します。\n収集中・最終確認待ちのセッションが対象です。承認済みは変わりません。',
+      confirmLabel: '再計算する',
+    }))) return
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
@@ -342,21 +366,25 @@ export default function EvaluationPage() {
       })
       if (res.ok) {
         const d = await res.json()
-        alert(`✅ 出勤指標 一括再計算完了\n更新: ${d.updated}件\nスキップ: ${d.skipped}件${d.errors?.length ? `\nエラー: ${d.errors.length}件` : ''}`)
+        notifyBulkResult('出勤指標', d)
         await fetchData()
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+        notify.failed('再計算', err.error || 'サーバが受け付けませんでした')
       }
     } catch (e) {
-      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed('再計算', e)
     }
     setRecalculatingWeights(false)
   }
 
   // ── 出勤指標 再計算（個別セッション） ──
   const handleRecalculateMetrics = async (evaluationId: string) => {
-    if (!confirm('このセッションの出勤指標を再計算しますか？\n（過去出勤データから出勤率・残業平均等を再集計します）')) return
+    if (!(await confirmDialog({
+      title: 'このセッションの出勤指標を再計算しますか？',
+      description: '過去の出面から出勤率・残業平均などを集計し直します。',
+      confirmLabel: '再計算する',
+    }))) return
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
@@ -369,10 +397,10 @@ export default function EvaluationPage() {
         await fetchData()
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+        notify.failed('再計算', err.error || 'サーバが受け付けませんでした')
       }
     } catch (e) {
-      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed('再計算', e)
     }
     setRecalculatingWeights(false)
   }
@@ -526,30 +554,30 @@ export default function EvaluationPage() {
           isEdit: wasEditing,
           at: new Date().toISOString(),
         })
-        // 確認ダイアログ — 提出完了が確実に伝わるように
-        alert(`✅ ${targetName} さんの評価を${wasEditing ? '修正' : '提出'}しました\n\n他の評価対象者がいる場合は、上の「対象スタッフ」から続けて評価してください。`)
+        notify.success(`${targetName} さんの評価を${wasEditing ? '修正' : '提出'}しました`, 'ほかの評価対象者がいるときは、上の「対象スタッフ」から続けて評価してください。')
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`❌ 提出に失敗しました\n\n${err.error || res.statusText}\n\nもう一度お試しください。`)
+        notify.failed('提出', err.error || 'サーバが受け付けませんでした', '入力は画面に残っています。もう一度お試しください。')
       }
     } catch (e) {
-      alert(`❌ 通信エラー\n\n${e instanceof Error ? e.message : String(e)}\n\n通信状態を確認してもう一度お試しください。`)
+      notify.failed('提出', e)
     }
     setSaving(false)
   }
 
   // ── Create evaluation session ──
   const handleCreateSession = async () => {
-    if (!createWorkerId || createEvaluatorIds.length === 0) {
-      alert('対象スタッフと評価者を選択してください')
-      return
-    }
+    const workerError = createWorkerId ? null : '対象スタッフを選んでください'
+    const evaluatorError = createEvaluatorIds.length > 0 ? null : '評価者を1人以上選んでください'
+    setCreateWorkerError(workerError)
+    setCreateEvaluatorError(evaluatorError)
+    if (workerError || evaluatorError) return
     setSaving(true)
     const { password } = getAuth()
     try {
       const worker = workers.find(w => w.id === createWorkerId)
       if (!worker) {
-        alert('スタッフが見つかりません')
+        notify.error('スタッフが見つかりません', '人員の一覧を読み直してから、もう一度選んでください。')
         setSaving(false)
         return
       }
@@ -576,13 +604,13 @@ export default function EvaluationPage() {
         setCreateWorkerId(null)
         setCreateEvaluatorIds([])
         await fetchData()
-        alert(`✅ ${worker.name} さんの評価セッションを作成しました\n\n評価者 ${createEvaluatorIds.length}名に通知が送信されます。`)
+        notify.success(`${worker.name} さんの評価セッションを作成しました`, `評価者 ${createEvaluatorIds.length}名に知らせが届きます。`)
       } else {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-        alert(`❌ 作成に失敗しました\n\n${err.error || res.statusText}`)
+        const err = await res.json().catch(() => ({}))
+        notify.failed('作成', err.error || 'サーバが受け付けませんでした')
       }
     } catch (e) {
-      alert(`❌ エラーが発生しました: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed('作成', e)
     }
     setSaving(false)
   }
@@ -628,17 +656,17 @@ export default function EvaluationPage() {
         const result = await res.json().catch(() => null)
         const finalRaise = result?.raiseAmount ?? raiseAmount
         const floorNote = result?.raiseFlooredToLegalMin
-          ? `\n⚖️ 法令下限（時給${result.raiseLegalMinRate}円）により +${result.raiseBaseAmount}円 → +${finalRaise}円 に底上げされました`
+          ? ` 法令の下限（時給${result.raiseLegalMinRate}円）に合わせ、+${result.raiseBaseAmount}円 → +${finalRaise}円 に底上げしました。`
           : ''
         setApproveSessionId(null)
         await fetchData()
-        alert(`✅ ${session.workerName} さんの評価を承認しました\n\nランク: ${rank} / 推奨昇給: +${finalRaise}円/h${floorNote}`)
+        notify.success(`${session.workerName} さんの評価を承認しました`, `ランク ${rank}・推奨昇給 +${finalRaise}円/h${floorNote}`)
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`❌ 承認に失敗しました\n\n${err.error || res.statusText}`)
+        notify.failed('承認', err.error || 'サーバが受け付けませんでした')
       }
     } catch (e) {
-      alert(`❌ 通信エラー: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed('承認', e)
     }
     setSaving(false)
   }
@@ -1712,7 +1740,8 @@ export default function EvaluationPage() {
                   </label>
                   <select
                     value={createWorkerId ?? ''}
-                    onChange={e => setCreateWorkerId(e.target.value ? Number(e.target.value) : null)}
+                    aria-invalid={!!createWorkerError}
+                    onChange={e => { setCreateWorkerId(e.target.value ? Number(e.target.value) : null); setCreateWorkerError(null) }}
                     className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
                   >
                     <option value="">選択してください</option>
@@ -1722,6 +1751,7 @@ export default function EvaluationPage() {
                       </option>
                     ))}
                   </select>
+                  <FieldError>{createWorkerError}</FieldError>
                 </div>
 
                 {/* Evaluator checkboxes */}
@@ -1736,6 +1766,7 @@ export default function EvaluationPage() {
                           type="checkbox"
                           checked={createEvaluatorIds.includes(w.id)}
                           onChange={e => {
+                            setCreateEvaluatorError(null)
                             if (e.target.checked) {
                               setCreateEvaluatorIds(prev => [...prev, w.id])
                             } else {
@@ -1751,6 +1782,7 @@ export default function EvaluationPage() {
                       </label>
                     ))}
                   </div>
+                  <FieldError>{createEvaluatorError}</FieldError>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     選択済み: {createEvaluatorIds.length}名
                   </p>
@@ -1762,6 +1794,8 @@ export default function EvaluationPage() {
                       setShowCreateModal(false)
                       setCreateWorkerId(null)
                       setCreateEvaluatorIds([])
+                      setCreateWorkerError(null)
+                      setCreateEvaluatorError(null)
                     }}
                     className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >

@@ -24,7 +24,7 @@
  */
 
 import RestMismatchBanner from '../components/RestMismatchBanner'
-import { confirmDialog, confirmDanger, confirmWithReason } from '@/lib/confirm-dialog'
+import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { siteLeaderLabel } from '@/lib/companies'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -486,9 +486,10 @@ export default function ForemanMobilePage() {
       notify.error('この日は取り消せません', '政仁さんの最終承認がついています。直すときは政仁さんか代表に頼んでください。')
       return
     }
-    if (!(await confirmDanger({
+    if (!(await confirmDialog({
+      tone: 'danger',
       title: `この日の${siteLeaderLabel(data?.isSupportSite)}確認を取り消しますか？`,
-      description: 'スタッフが再び入力できるようになります。',
+      description: 'スタッフが再び入力できるようになります。あとでもう一度、確認済みにできます。',
       confirmLabel: '取り消す',
     }))) return
     const ok = await postGrid({ action: 'unapprove_foreman', day })

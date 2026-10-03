@@ -1,8 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 
 // マイページの「承認すること」（2026-10-01 代表依頼）
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 //   職長: 出面（全員入力済みの日をまとめて）・有給申請・帰国申請 の職長承認
 //   政仁さん・代表: 出面の最終承認・有給／帰国申請の最終承認・職長がいない現場の代行・配置の見直し
 //   屋外・日光の下で押すので、ボタンは大きく・色だけに頼らず文字で状態を書く。
@@ -65,8 +68,12 @@ export default function ForemanApprovals({ token, canApprove }: {
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(''), 5000) }
   const manager = data?.role === 'manager'
 
-  const postDays = async (action: 'approve_days' | 'final_days', siteId: string, ym: string, days: number[], question: string) => {
-    if (!confirm(question)) return
+  const postDays = async (
+    action: 'approve_days' | 'final_days', siteId: string, ym: string, days: number[],
+    ask: { title: string; description: string },
+  ) => {
+    const verb = action === 'final_days' ? '最終承認' : '承認'
+    if (!(await confirmDialog({ ...ask, confirmLabel: `${verb}する` }))) return
     setBusy(`${action}_${siteId}_${ym}`)
     try {
       const res = await fetch('/api/mypage/approvals', {
@@ -74,20 +81,29 @@ export default function ForemanApprovals({ token, canApprove }: {
         body: JSON.stringify({ token, action, siteId, ym, days }),
       })
       const j = await res.json().catch(() => null)
-      if (!res.ok) { alert(j?.error || '承認できませんでした'); return }
+      if (!res.ok) { notify.failed(verb, j?.error || 'サーバが受け付けませんでした'); return }
       const skipped = (j?.skipped || []) as { day: number; reason: string }[]
-      flash(`${j?.approvedDays?.length ?? 0}日分を${action === 'final_days' ? '最終承認' : '承認'}しました${skipped.length ? `（${skipped.length}日は条件がそろっていないため承認していません）` : ''}`)
+      flash(`${j?.approvedDays?.length ?? 0}日分を${verb}しました${skipped.length ? `（${skipped.length}日は条件がそろっていないため承認していません）` : ''}`)
       load()
-    } catch { alert('通信エラーが発生しました') } finally { setBusy('') }
+    } catch (e) { notify.failed(verb, e) } finally { setBusy('') }
   }
 
   const actLeave = async (kind: 'leave' | 'home', id: string, stage: Stage, approve: boolean, label: string) => {
     let reason = ''
     if (approve) {
-      const after = stage === 'foreman' ? '（このあと政仁さんが最終承認します）' : '（これで承認が完了します）'
-      if (!confirm(`${label}\n\nこの申請を承認します${after}。よろしいですか？`)) return
+      const after = stage === 'foreman' ? 'このあと政仁さんが最終承認します。' : 'これで承認が完了します。'
+      if (!(await confirmDialog({
+        title: 'この申請を承認しますか？',
+        description: `${label}\n${after}`,
+        confirmLabel: '承認する',
+      }))) return
     } else {
-      const r = prompt(`${label}\n\n却下する理由を入れてください（本人に伝わります）`)
+      const r = await confirmWithReason({
+        title: 'この申請を却下しますか？',
+        description: `${label}\n理由は本人に伝わります。`,
+        confirmLabel: '却下する',
+        reason: { label: '却下する理由', placeholder: '例: その日は人が足りません' },
+      })
       if (r === null) return
       reason = r
     }
@@ -105,12 +121,12 @@ export default function ForemanApprovals({ token, canApprove }: {
       if (!res.ok) {
         // 理由の文（message）を優先して出す（帰国申請の期間内に出勤がある 409 は error がコード名だけ・2026-10-01）
         const j = await res.json().catch(() => null)
-        alert(j?.message ?? j?.error ?? 'できませんでした')
+        notify.failed(approve ? '承認' : '却下', j?.message ?? j?.error ?? 'サーバが受け付けませんでした')
         return
       }
       flash(!approve ? '却下しました。' : stage === 'foreman' ? '承認しました。政仁さんの最終承認を待ちます。' : '承認しました。')
       load()
-    } catch { alert('通信エラーが発生しました') } finally { setBusy('') }
+    } catch (e) { notify.failed(approve ? '承認' : '却下', e) } finally { setBusy('') }
   }
 
   if (!data) {
@@ -160,8 +176,10 @@ export default function ForemanApprovals({ token, canApprove }: {
             {b.days.map(d => <span key={d.day} className="text-xs px-2 py-1 rounded-md bg-green-50 text-green-800 font-bold tabular-nums">{md(d.dateISO)}</span>)}
           </div>
           <button disabled={!!busy}
-            onClick={() => postDays('final_days', b.siteId, b.ym, b.days.map(d => d.day),
-              `${b.siteName} の ${b.ymLabel}\n${b.days.map(d => md(d.dateISO)).join('、')}\n\nこの ${b.days.length}日分の出面を最終承認します。よろしいですか？`)}
+            onClick={() => postDays('final_days', b.siteId, b.ym, b.days.map(d => d.day), {
+              title: `${b.siteName} ${b.ymLabel}の ${b.days.length}日分を最終承認しますか？`,
+              description: b.days.map(d => md(d.dateISO)).join('、'),
+            })}
             className="w-full rounded-xl py-3.5 bg-green-700 text-white text-base font-extrabold active:opacity-80 disabled:opacity-40">
             {busy === `final_days_${b.siteId}_${b.ym}` ? '最終承認中...' : `${b.days.length}日分を最終承認する`}
           </button>
@@ -185,8 +203,10 @@ export default function ForemanApprovals({ token, canApprove }: {
                 ))}
               </div>
               <button disabled={!!busy}
-                onClick={() => postDays('approve_days', b.siteId, b.ym, b.ready.map(d => d.day),
-                  `${b.siteName} の ${b.ymLabel}\n${b.ready.map(d => md(d.dateISO)).join('、')}\n\nこの ${b.ready.length}日分の出面を承認します。承認するとスタッフはその日を直せなくなります。よろしいですか？`)}
+                onClick={() => postDays('approve_days', b.siteId, b.ym, b.ready.map(d => d.day), {
+                  title: `${b.siteName} ${b.ymLabel}の ${b.ready.length}日分を承認しますか？`,
+                  description: `${b.ready.map(d => md(d.dateISO)).join('、')}\n承認するとスタッフはその日を直せなくなります。`,
+                })}
                 className="w-full rounded-xl py-3.5 bg-hibi-navy text-white text-base font-extrabold active:opacity-80 disabled:opacity-40">
                 {busy === `approve_days_${b.siteId}_${b.ym}` ? '承認中...' : `全員入力済みの ${b.ready.length}日分を承認する`}
               </button>

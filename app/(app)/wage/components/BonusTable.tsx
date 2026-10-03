@@ -5,9 +5,11 @@
  *
  * 表は `lib/jp-wage.ts` の bonusPoints から生成する。写して持つと配分と表がズレる。
  * 原資を入れると、いまの在籍者でいくらになるかを試算できる。
+ * 2026-10-03: ブラウザ標準の confirm を共通部品（confirmDialog）に置き換え
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { confirmDialog } from '@/lib/confirm-dialog'
 import {
   bonusPoints, allocateBonus, GRADE_LABELS, GRADES_IN_ORDER,
   childAllowance, attendanceBonusDays, attendanceBonusAmount,
@@ -155,18 +157,17 @@ export default function BonusTable() {
 
   const save = async () => {
     if (!result) return
-    if (!confirm(
-      `「${label}」として支給を確定します。\n\n`
-      + `対象 ${lines.length}名（うち出向先支給 ${lines.length - own.length}名）\n`
-      + `利益分配 ${yen(sum(l => l.amount))}\n`
-      + `精勤賞与 ${yen(sum(l => l.attendanceAmount))}\n`
-      + `禁煙手当 ${yen(sum(l => l.nonSmokerAmount))}\n`
-      + `子ども手当 ${yen(sum(l => l.childAmount))}\n`
-      + `─────────────\n`
-      + `支給総額 ${yen(sum(l => l.totalAmount))}\n\n`
-      + `確定すると、精勤賞与の分は有給の買取としても自動記録されます\n`
-      + `（休暇管理での手動記録は不要です）。よろしいですか？`
-    )) return
+    if (!(await confirmDialog({
+      title: `「${label}」として賞与の支給を確定しますか？`,
+      description: `対象 ${lines.length}名（うち出向先支給 ${lines.length - own.length}名）\n`
+        + `利益分配 ${yen(sum(l => l.amount))}\n`
+        + `精勤賞与 ${yen(sum(l => l.attendanceAmount))}\n`
+        + `禁煙手当 ${yen(sum(l => l.nonSmokerAmount))}\n`
+        + `子ども手当 ${yen(sum(l => l.childAmount))}\n`
+        + `支給総額 ${yen(sum(l => l.totalAmount))}\n`
+        + `確定すると、精勤賞与の分は有給の買取としても自動で記録されます（休暇管理での手動記録は不要です）。`,
+      confirmLabel: '確定する',
+    }))) return
     setBusy(true); setErr(''); setMsg('')
     try {
       const res = await fetch('/api/jp-wage/bonus', {

@@ -6,9 +6,11 @@
  * 等級を上げると、新等級で「現在の日額を上回る最初の号」へ読み替わる（日額は下がらない）。
  * 人員マスタを直接書き換えるだけだと「いつ・なぜ昇格したか」が残らないので、
  * この画面から行い、履歴として積む。
+ * 2026-10-03: ブラウザ標準の confirm を共通部品（confirmDialog）に置き換え
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { confirmDialog } from '@/lib/confirm-dialog'
 import {
   promote, dailyForStep, capDaily, GRADE_LABELS, GRADES_IN_ORDER, type JpGrade,
 } from '@/lib/jp-wage'
@@ -77,12 +79,12 @@ export default function PromotionPanel() {
 
   const apply = async () => {
     if (!target || !toGrade || !preview) return
-    if (!confirm(
-      `${target.name} さんを ${toGrade} ${GRADE_LABELS[toGrade]} へ昇格します。\n\n` +
-      `${target.grade || '未設定'} ${target.step ?? '—'}号 ${yen(target.daily)}\n` +
-      `　→ ${toGrade} ${preview.newStep}号 ${yen(preview.newDaily)}\n\n` +
-      `人員マスタが書き換わり、履歴に残ります。よろしいですか？`
-    )) return
+    if (!(await confirmDialog({
+      title: `${target.name} さんを ${toGrade} ${GRADE_LABELS[toGrade]} へ昇格しますか？`,
+      description: `${target.grade || '未設定'} ${target.step ?? '—'}号 ${yen(target.daily)} → ${toGrade} ${preview.newStep}号 ${yen(preview.newDaily)}\n`
+        + '人員マスタが書き換わり、履歴に残ります。',
+      confirmLabel: '昇格する',
+    }))) return
     setBusy(true); setErr(''); setMsg('')
     try {
       const res = await fetch('/api/jp-wage/promotion', {

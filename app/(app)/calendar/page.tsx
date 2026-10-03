@@ -7,9 +7,13 @@ import CalendarEditor from '@/components/CalendarEditor'
 import { AuthUser, DayType, CalendarStatus } from '@/types'
 import { getNextMonth, generateDefaultDays, getHoliday } from '@/lib/calendar'
 import { checkCalendarLegal } from '@/lib/calendar-legal'
-import { PageHeader, ToolButton, TodoCard, Chip } from '@/components/ui/PageParts'
+import { PageHeader, ToolButton, TodoCard, Chip, FieldError } from '@/components/ui/PageParts'
 import { Icon } from '@/components/ui/Icon'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
+import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
+
+// 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify・FieldError）に置き換え
 
 interface OverviewMonth {
   ym: string
@@ -154,6 +158,7 @@ export default function CalendarManagePage() {
   const [downloadingLedger, setDownloadingLedger] = useState(false)
   // 周知・同意台帳のダウンロード対象月（任意の過去月を指定可。既定は表示中の月）
   const [ledgerYm, setLedgerYm] = useState(defaultYm)
+  const [ledgerYmError, setLedgerYmError] = useState<string | null>(null)
   const [copiedMsg, setCopiedMsg] = useState(false)
   // 月またぎ運用ダッシュボード（全体状況）
   const [overview, setOverview] = useState<OverviewResp | null>(null)
@@ -237,8 +242,8 @@ export default function CalendarManagePage() {
         body: JSON.stringify({ resolve: true, id, resolvedBy: user?.workerId || 0 }),
       })
       if (res.ok) fetchQuestions()
-      else alert('更新に失敗しました')
-    } catch { alert('更新に失敗しました') }
+      else { const d = await res.json().catch(() => ({})); notify.failed('対応済みに', d.error || 'サーバが受け付けませんでした') }
+    } catch (e) { notify.failed('対応済みに', e) }
   }
 
   // Reset editingDays when ym changes
@@ -256,6 +261,14 @@ export default function CalendarManagePage() {
   const handleDaysChange = (siteId: string, days: Record<string, DayType>) => {
     setEditingDays(prev => ({ ...prev, [siteId]: days }))
   }
+
+  // 法令上の警告（requiresAcknowledge）を見せて、承知のうえで続けるかを聞く（承認・確定・承認後修正の保存で共通）
+  const confirmLegalWarnings = (warnings: unknown, confirmLabel: string) =>
+    confirmDialog({
+      title: '法令上の確認事項があります',
+      description: `${(Array.isArray(warnings) ? warnings : []).join('\n')}\n\n4週4日制など正当な例外がある場合だけ続けてください。`,
+      confirmLabel,
+    })
 
   // クイック設定: 月全体の休日パターンを一括適用（毎月の手作業トグルを削減）
   //   weekends = 土日祝休み（変形労働で月上限内・各週に休みが入る推奨設定）
@@ -287,14 +300,11 @@ export default function CalendarManagePage() {
     if (res.ok) return true
     const data = await res.json().catch(() => ({}))
     if (data.requiresAcknowledge && !ack) {
-      const ok = confirm(
-        `法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
-        `（4週4日制など正当な例外がある場合のみ）この内容で承認しますか？`,
-      )
+      const ok = await confirmLegalWarnings(data.warnings, 'この内容で承認する')
       if (!ok) return false
       return postBulkConfirmWithAck(sitesPayload, true)
     }
-    alert(data.error || '確定に失敗しました')
+    notify.failed('確定', data.error || 'サーバが受け付けませんでした')
     return false
   }
 
@@ -308,14 +318,11 @@ export default function CalendarManagePage() {
     if (res.ok) return true
     const data = await res.json().catch(() => ({}))
     if (data.requiresAcknowledge && !ack) {
-      const ok = confirm(
-        `法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
-        `（4週4日制など正当な例外がある場合のみ）この内容で承認しますか？`,
-      )
+      const ok = await confirmLegalWarnings(data.warnings, 'この内容で承認する')
       if (!ok) return false
       return postApproveWithAck(siteId, true)
     }
-    alert(data.error || '承認に失敗しました')
+    notify.failed('承認', data.error || 'サーバが受け付けませんでした')
     return false
   }
 
@@ -328,7 +335,7 @@ export default function CalendarManagePage() {
       await navigator.clipboard.writeText(text)
       setCopiedReminderYm(mo.ym)
       setTimeout(() => setCopiedReminderYm(null), 2500)
-    } catch { alert('コピーに失敗しました') }
+    } catch { notify.error('コピーできませんでした', 'もう一度押してください。それでもだめなら文面を選んで手でコピーしてください。') }
   }
 
   const handleBulkConfirm = async () => {
@@ -344,7 +351,7 @@ export default function CalendarManagePage() {
           siteId: site.siteId,
           days: getEditDays(site.siteId, site.days),
         }))
-      if (payload.length === 0) { alert('確定する現場がありません（すべて承認済みです）'); return }
+      if (payload.length === 0) { notify.info('確定する現場がありません', 'すべての現場が承認済みです。'); return }
       const ok = await postBulkConfirmWithAck(payload)
       if (ok) {
         setEditingDays({})
@@ -353,7 +360,7 @@ export default function CalendarManagePage() {
       }
     } catch (error) {
       console.error('Failed to bulk confirm:', error)
-      alert('確定に失敗しました')
+      notify.failed('確定', error)
     } finally {
       setSaving(false)
     }
@@ -667,7 +674,11 @@ export default function CalendarManagePage() {
                         {canSubmit && (
                           <button
                             onClick={async () => {
-                              if (!confirm(`${site.siteName} のカレンダーを提出しますか？`)) return
+                              if (!(await confirmDialog({
+                                title: `${site.siteName} のカレンダーを提出しますか？`,
+                                description: '提出すると政仁さんの承認待ちになります。承認されるまでは取り消して直せます。',
+                                confirmLabel: '提出する',
+                              }))) return
                               setSaving(true)
                               try {
                                 // まず日付を保存（失敗したら提出しない・2026-10-02 総合点検。旧: 結果を見ずに古い内容のまま提出が進んだ）
@@ -678,7 +689,7 @@ export default function CalendarManagePage() {
                                 })
                                 if (!saveRes.ok) {
                                   const sd = await saveRes.json().catch(() => ({}))
-                                  alert(sd.error || '保存に失敗したため提出していません')
+                                  notify.failed('保存', sd.error || 'サーバが受け付けませんでした', '提出はしていません。')
                                   return
                                 }
                                 // 提出
@@ -688,13 +699,14 @@ export default function CalendarManagePage() {
                                   body: JSON.stringify({ siteId: site.siteId, ym, submittedBy: user?.workerId || 0 }),
                                 })
                                 if (!res.ok) {
-                                  const data = await res.json()
-                                  alert(data.error || '提出に失敗しました')
+                                  const data = await res.json().catch(() => ({}))
+                                  notify.failed('提出', data.error || 'サーバが受け付けませんでした')
                                 } else {
                                   setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
                                   fetchData()
+                                  notify.success(`${site.siteName} のカレンダーを提出しました`)
                                 }
-                              } catch { alert('提出に失敗しました') }
+                              } catch (e) { notify.failed('提出', e) }
                               finally { setSaving(false) }
                             }}
                             disabled={saving || exceedsLimit}
@@ -715,7 +727,12 @@ export default function CalendarManagePage() {
                         {isSubmitted && user.role !== 'foreman' && (
                           <button
                             onClick={async () => {
-                              if (!confirm(`${site.siteName} の提出を取消しますか？\n${siteLeaderLabel(site.isSupport)}が再編集できるようになります。`)) return
+                              if (!(await confirmDialog({
+                                title: `${site.siteName} の提出を取り消しますか？`,
+                                description: `${siteLeaderLabel(site.isSupport)}が直して、もう一度提出できるようになります。`,
+                                confirmLabel: '提出を取り消す',
+                                tone: 'danger',
+                              }))) return
                               setSaving(true)
                               try {
                                 const res = await fetch('/api/calendar/revert', {
@@ -724,8 +741,8 @@ export default function CalendarManagePage() {
                                   body: JSON.stringify({ siteId: site.siteId, ym, action: 'unsubmit', revertedBy: user?.workerId || 0 }),
                                 })
                                 if (res.ok) { fetchData() }
-                                else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
-                              } catch { alert('取消しに失敗しました') }
+                                else { const d = await res.json().catch(() => ({})); notify.failed('提出の取り消し', d.error || 'サーバが受け付けませんでした') }
+                              } catch (e) { notify.failed('提出の取り消し', e) }
                               finally { setSaving(false) }
                             }}
                             disabled={saving}
@@ -739,7 +756,12 @@ export default function CalendarManagePage() {
                         {isSubmitted && user.role !== 'foreman' && (
                           <button
                             onClick={async () => {
-                              const reason = prompt(`${site.siteName} を${siteLeaderLabel(site.isSupport)}へ差し戻します。\n理由を入力してください（${siteLeaderLabel(site.isSupport)}の画面に表示されます）:`)
+                              const reason = await confirmWithReason({
+                                title: `${site.siteName} を${siteLeaderLabel(site.isSupport)}へ差し戻しますか？`,
+                                description: `理由は${siteLeaderLabel(site.isSupport)}の画面に表示されます。`,
+                                confirmLabel: '差し戻す',
+                                reason: { label: '差し戻す理由', placeholder: '例: 第2土曜を出勤にしてください' },
+                              })
                               if (reason === null) return
                               setSaving(true)
                               try {
@@ -749,8 +771,8 @@ export default function CalendarManagePage() {
                                   body: JSON.stringify({ siteId: site.siteId, ym, reason: reason.trim(), rejectedBy: user?.workerId || 0 }),
                                 })
                                 if (res.ok) { fetchData() }
-                                else { const d = await res.json(); alert(d.error || '差し戻しに失敗しました') }
-                              } catch { alert('差し戻しに失敗しました') }
+                                else { const d = await res.json().catch(() => ({})); notify.failed('差し戻し', d.error || 'サーバが受け付けませんでした') }
+                              } catch (e) { notify.failed('差し戻し', e) }
                               finally { setSaving(false) }
                             }}
                             disabled={saving}
@@ -764,12 +786,16 @@ export default function CalendarManagePage() {
                         {canApprove && (
                           <button
                             onClick={async () => {
-                              if (!confirm(`${site.siteName} のカレンダーを承認しますか？`)) return
+                              if (!(await confirmDialog({
+                                title: `${site.siteName} のカレンダーを承認しますか？`,
+                                description: '承認済みになり、配置されたスタッフが確認・署名できるようになります。',
+                                confirmLabel: '承認する',
+                              }))) return
                               setSaving(true)
                               try {
                                 const ok = await postApproveWithAck(site.siteId)
                                 if (ok) fetchData()
-                              } catch { alert('承認に失敗しました') }
+                              } catch (e) { notify.failed('承認', e) }
                               finally { setSaving(false) }
                             }}
                             disabled={saving}
@@ -783,7 +809,11 @@ export default function CalendarManagePage() {
                         {canForceApprove && (
                           <button
                             onClick={async () => {
-                              if (!confirm(`${site.siteName} のカレンダーを直接承認しますか？（提出を省略）`)) return
+                              if (!(await confirmDialog({
+                                title: `${site.siteName} のカレンダーを直接承認しますか？`,
+                                description: `${siteLeaderLabel(site.isSupport)}の提出を省略して、今の内容をそのまま承認済みにします。`,
+                                confirmLabel: '直接承認する',
+                              }))) return
                               setSaving(true)
                               try {
                                 const ok = await postBulkConfirmWithAck([{ siteId: site.siteId, days }])
@@ -791,7 +821,7 @@ export default function CalendarManagePage() {
                                   setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
                                   fetchData()
                                 }
-                              } catch { alert('確定に失敗しました') }
+                              } catch (e) { notify.failed('確定', e) }
                               finally { setSaving(false) }
                             }}
                             disabled={saving || exceedsLimit}
@@ -879,8 +909,8 @@ export default function CalendarManagePage() {
                                                       body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 }),
                                                     })
                                                     if (res.ok) { fetchData() }
-                                                    else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
-                                                  } catch { alert('取消しに失敗しました') }
+                                                    else { const d = await res.json().catch(() => ({})); notify.failed('承認の取り消し', d.error || 'サーバが受け付けませんでした') }
+                                                  } catch (e) { notify.failed('承認の取り消し', e) }
                                                   finally { setSaving(false) }
                                                 }}
                                                 disabled={saving}
@@ -924,7 +954,11 @@ export default function CalendarManagePage() {
                                   </button>
                                   <button
                                     onClick={async () => {
-                                      if (!confirm(`${site.siteName} の修正を保存しますか？\n署名済みのスタッフへ再確認依頼が出ます。`)) return
+                                      if (!(await confirmDialog({
+                                        title: `${site.siteName} の修正を保存しますか？`,
+                                        description: '署名済みのスタッフへ再確認のお願いが出ます。',
+                                        confirmLabel: '保存する',
+                                      }))) return
                                       setSaving(true)
                                       try {
                                         const postRevise = (ack: boolean) => fetch('/api/calendar/save-days', {
@@ -937,10 +971,7 @@ export default function CalendarManagePage() {
                                         if (!res.ok) {
                                           const d0 = await res.clone().json().catch(() => ({}))
                                           if (d0.requiresAcknowledge) {
-                                            const okAck = confirm(
-                                              `法令上の確認事項があります:\n\n${(d0.warnings || []).join('\n')}\n\n` +
-                                              `（4週4日制など正当な例外がある場合のみ）この内容で保存しますか？`,
-                                            )
+                                            const okAck = await confirmLegalWarnings(d0.warnings, 'この内容で保存する')
                                             if (!okAck) { setSaving(false); return }
                                             res = await postRevise(true)
                                           }
@@ -950,14 +981,16 @@ export default function CalendarManagePage() {
                                           setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
                                           setRevisingApproved(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
                                           fetchData()
-                                          alert(data.unchanged
-                                            ? '休日設定に変更がなかったため、カレンダーはそのままです。署名済みスタッフへの再確認依頼は出ていません。'
-                                            : '修正を保存しました。署名済みスタッフへ再確認依頼が出ます。')
+                                          if (data.unchanged) {
+                                            notify.info('休日の設定に変更はありませんでした', 'カレンダーはそのままです。署名済みスタッフへの再確認のお願いは出ていません。')
+                                          } else {
+                                            notify.success('修正を保存しました', '署名済みスタッフへ再確認のお願いが出ます。')
+                                          }
                                         } else {
-                                          const d = await res.json()
-                                          alert(d.error || '保存に失敗しました')
+                                          const d = await res.json().catch(() => ({}))
+                                          notify.failed('保存', d.error || 'サーバが受け付けませんでした')
                                         }
-                                      } catch { alert('保存に失敗しました') }
+                                      } catch (e) { notify.failed('保存', e) }
                                       finally { setSaving(false) }
                                     }}
                                     disabled={saving || exceedsLimit}
@@ -1139,23 +1172,32 @@ export default function CalendarManagePage() {
           <div className="flex flex-wrap items-center gap-3 pt-1">
             {user.role !== 'foreman' && (
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="month"
-                  value={ledgerYm}
-                  onChange={e => setLedgerYm(e.target.value)}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100"
-                  title="台帳を出力する月（過去の月も指定できます）"
-                />
+                <div>
+                  <input
+                    type="month"
+                    value={ledgerYm}
+                    onChange={e => { setLedgerYm(e.target.value); setLedgerYmError(null) }}
+                    aria-invalid={!!ledgerYmError}
+                    className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100"
+                    title="台帳を出力する月（過去の月も指定できます）"
+                  />
+                  <FieldError>{ledgerYmError}</FieldError>
+                </div>
                 <button
                   onClick={async () => {
                     const ymClean = (ledgerYm || ym).replace('-', '')
-                    if (!/^\d{6}$/.test(ymClean)) { alert('出力する月を選んでください'); return }
+                    if (!/^\d{6}$/.test(ymClean)) { setLedgerYmError('出力する月を選んでください'); return }
+                    setLedgerYmError(null)
                     setDownloadingLedger(true)
                     try {
                       const res = await fetch(`/api/export?type=consentLedger&ym=${ymClean}`, {
                         headers: { 'x-admin-password': password },
                       })
-                      if (!res.ok) { alert('台帳の出力に失敗しました'); return }
+                      if (!res.ok) {
+                        const d = await res.json().catch(() => ({}))
+                        notify.failed('台帳の出力', d.error || 'サーバが受け付けませんでした')
+                        return
+                      }
                       const blob = await res.blob()
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')
@@ -1163,7 +1205,7 @@ export default function CalendarManagePage() {
                       a.download = `カレンダー周知同意台帳_${ymClean}.xlsx`
                       a.click()
                       URL.revokeObjectURL(url)
-                    } catch { alert('台帳の出力に失敗しました') }
+                    } catch (e) { notify.failed('台帳の出力', e) }
                     finally { setDownloadingLedger(false) }
                   }}
                   disabled={downloadingLedger}

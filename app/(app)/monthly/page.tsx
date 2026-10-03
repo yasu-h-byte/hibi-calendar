@@ -1,8 +1,11 @@
 'use client'
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
@@ -482,8 +485,19 @@ function MonthlyPageInner() {
     const isCurrentlyLocked = org === 'hibi' ? data.lockedHibi : data.lockedHfu
     const newLocked = !isCurrentlyLocked
     const orgLabel = org === 'hibi' ? '日比建設' : 'HFU'
-    const msg = newLocked ? `${ym} の${orgLabel}を月締めしますか？` : `${ym} の${orgLabel}の月締めを解除しますか？`
-    if (!confirm(msg)) return
+    const actionLabel = newLocked ? '月締め' : '月締めの解除'
+    const ok = newLocked
+      ? await confirmDialog({
+          title: `${ym} の${orgLabel}を月締めしますか？`,
+          description: '締めると、この月の出面と給与は直せなくなります。職長承認と政仁さんの最終承認がそろっていることを確かめてください。',
+          confirmLabel: '締める',
+        })
+      : await confirmDialog({
+          title: `${ym} の${orgLabel}の月締めを解除しますか？`,
+          description: '解除すると、この月の出面と給与をまた直せるようになります。直し終わったらもう一度締めてください。',
+          confirmLabel: '解除する',
+        })
+    if (!ok) return
     setLockToggling(true)
     try {
       const post = (extra: Record<string, unknown> = {}) => fetch('/api/monthly/lock', {
@@ -498,22 +512,25 @@ function MonthlyPageInner() {
         if (j?.code === 'STAFF_CONFIRM_PENDING' && j.pending) {
           const list = j.pending.slice(0, 15).map(p => `・${p.name}: ${p.state}${p.note ? `「${p.note}」` : ''}`).join('\n')
           const more = j.pending.length > 15 ? `\n…他 ${j.pending.length - 15}名` : ''
-          if (!confirm(
-            `本人の出面確認が済んでいないスタッフが ${j.pending.length}名 います。\n\n${list}${more}\n\n`
-            + `連絡があった人は出面を見直してください。確認は、その月の職長承認と最終承認がそろうとスマホに出ます。\n\n`
-            + `それでも締めますか？（締めた人と名前が記録に残ります）`)) return
+          if (!(await confirmDialog({
+            title: `本人の出面確認が済んでいないスタッフが ${j.pending.length}名 います。それでも締めますか？`,
+            description: `${list}${more}\n\n`
+              + '連絡があった人は出面を見直してください。確認は、その月の職長承認と最終承認がそろうとスマホに出ます。\n'
+              + '締めると、締めた人と確認が済んでいない人の名前が記録に残ります。',
+            confirmLabel: 'それでも締める',
+          }))) return
           res = await post({ allowUnconfirmed: true })
         }
       }
       // 2026-06-13: 締め前チェック（月未了・職長未承認）の 409 メッセージを表示
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: '締め処理に失敗しました' }))
-        alert(`締めできません:\n\n${err.error || res.statusText}`)
+        const err = await res.json().catch(() => null)
+        notify.failed(actionLabel, err?.error || 'サーバが受け付けませんでした')
         return
       }
       fetchData()
-    } catch {
-      alert('エラーが発生しました')
+    } catch (e) {
+      notify.failed(actionLabel, e)
     } finally {
       setLockToggling(false)
     }
@@ -529,7 +546,7 @@ function MonthlyPageInner() {
       //   保存できていないのに何も出ず、再取得で元の値に戻るだけだった
       const res = await postJson('/api/monthly', { action: 'setWorkDays', ym, value: Number(prescribedDays) || 0 }, { password })
       if (!res.ok) {
-        alert(`所定日数を保存できませんでした。\n${res.error || ''}`)
+        notify.failed('所定日数を保存', res.error || 'サーバが受け付けませんでした')
         return
       }
       fetchData()

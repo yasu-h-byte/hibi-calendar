@@ -8,9 +8,13 @@
  *
  * ⚠️ 個人の賃金を一覧するため、代表（0）と事業責任者（1）以外には表示しない。
  *    評価を決めるのはこの2名と定められている（第4節）。
+ *
+ * 2026-10-03: ブラウザ標準の prompt/alert を共通部品（confirmWithReason・notify）に置き換え
  */
 
 import { staffLinkOrigin } from '@/lib/public-origin'
+import { confirmWithReason } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Hyogo, RosterStatus, SpecialReason } from '@/lib/jp-wage'
 import LaborCostPanel from './LaborCostPanel'
@@ -153,13 +157,16 @@ export default function RevisionPanel() {
     if (!data) return
     // 2026-09-30: 評価を保存するつもりで押され、全員Aのまま確定された事故の再発防止。
     //   入力は自動保存なので、このボタンは「最後に1回」だけ。文字を打たないと進めない
-    const typed = prompt(
-      `${data.effective} の改定を確定し、人員マスタの号と日額を書き換えます。\n`
-      + `評語・コメントの入力は自動で保存されています。保存のためにこのボタンを押す必要はありません。\n\n`
-      + `昇給額 合計 ${yen(data.revision.raisePerDay)}/日（年 ${yen(data.revision.annualCost)}）\n\n`
-      + `確定する場合は「確定」と入力してください。`)
+    const typed = await confirmWithReason({
+      title: `${data.effective} の改定を確定しますか？`,
+      description: `人員マスタの号と日額を書き換えます。\n`
+        + `評語・コメントは自動で保存されています。保存のためにこのボタンを押す必要はありません。\n`
+        + `昇給額 合計 ${yen(data.revision.raisePerDay)}/日（年 ${yen(data.revision.annualCost)}）`,
+      confirmLabel: '確定する',
+      reason: { label: '確定する場合は「確定」と入力してください', placeholder: '確定' },
+    })
     if (typed === null) return
-    if (typed.trim() !== '確定') { setErr('「確定」と入力されなかったので、確定しませんでした'); return }
+    if (typed !== '確定') { setErr('「確定」と入力されなかったので、確定しませんでした'); return }
     setBusy(true); setMsg('')
     try {
       const res = await fetch('/api/jp-wage/revision', {
@@ -183,14 +190,17 @@ export default function RevisionPanel() {
   /** 確定の取り消し（2026-09-30）。人員マスタを改定前に戻し、下書きに戻す。評語・コメントは残る */
   const unapply = async () => {
     if (!data) return
-    const typed = prompt(
-      `${data.effective} の改定の確定を取り消します。\n\n`
-      + `・人員マスタの号と日額を、改定前（9月まで払っていた額）に戻します\n`
-      + `・評語・理由・コメントは残り、下書きとして入力し直せます\n`
-      + `・入れ直したら、もう一度「改定を確定する」を押してください\n\n`
-      + `取り消す場合は「取り消し」と入力してください。`)
+    const typed = await confirmWithReason({
+      title: `${data.effective} の改定の確定を取り消しますか？`,
+      description: `・人員マスタの号と日額を、改定前（9月まで払っていた額）に戻します\n`
+        + `・評語・理由・コメントは残り、下書きとして入力し直せます\n`
+        + `・入れ直したら、もう一度「改定を確定する」を押してください`,
+      confirmLabel: '確定を取り消す',
+      tone: 'danger',
+      reason: { label: '取り消す場合は「取り消し」と入力してください', placeholder: '取り消し' },
+    })
     if (typed === null) return
-    if (typed.trim() !== '取り消し') { setErr('「取り消し」と入力されなかったので、取り消しませんでした'); return }
+    if (typed !== '取り消し') { setErr('「取り消し」と入力されなかったので、取り消しませんでした'); return }
     setBusy(true); setMsg(''); setErr('')
     try {
       const res = await fetch(`/api/jp-wage/revision?effective=${data.effective}`, {
@@ -683,7 +693,7 @@ function SendList({ effective, rows }: {
   ].join('\n')
   const copy = async (key: string, text: string) => {
     try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 1500) }
-    catch { alert('コピーできませんでした') }
+    catch { notify.error('コピーできませんでした', 'ブラウザがクリップボードを使えませんでした。文面を選んで手で写してください。') }
   }
   const btn = 'px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap'
   return (

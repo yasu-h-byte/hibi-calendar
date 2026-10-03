@@ -1,7 +1,9 @@
 'use client'
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { useEffect, useState, useCallback } from 'react'
 import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
+import { notify } from '@/lib/notify'
 import { visaLabel } from '@/lib/labels'
 import { isTobiGroup, jobLabel as jobLabelLib } from '@/lib/jobs'
 import { currentYmJst, todayJstDate } from '@/lib/date-utils'
@@ -245,12 +247,12 @@ export default function CostPage() {
         headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
         body: JSON.stringify({ siteId, ym: month, amounts }),
       })
-    } catch {
-      alert('請求額を保存できませんでした（通信に失敗しました）'); return
+    } catch (e) {
+      notify.failed('請求額を保存', e); return
     }
     if (!res.ok) {
       const j = await res.json().catch(() => null)
-      alert(j?.error || '請求額を保存できませんでした')
+      notify.failed('請求額を保存', j?.error || 'サーバが受け付けませんでした')
     }
     fetchData({ silent: true })  // 静かに更新（表を縮めない＝スクロールが飛ばない）
   }

@@ -1,5 +1,7 @@
 'use client'
 
+// 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
+
 import { staffLinkOrigin } from '@/lib/public-origin'
 import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
@@ -21,7 +23,9 @@ import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
 import { postJson } from '@/lib/api-client'
-import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog } from '@/components/ui/PageParts'
+import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog, FieldError } from '@/components/ui/PageParts'
+import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = {
@@ -134,6 +138,7 @@ export default function WorkersPage() {
   //   旧: Esc・背景クリック・「閉じる」で、入れかけの内容が確認なしで消えていた
   const [formBase, setFormBase] = useState(JSON.stringify(EMPTY_FORM))
   const [saving, setSaving] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
   // 顔写真（2026-08-03 追加）。名前と顔が一致しない問題への対応
   const { photos, reload: reloadPhotos } = useWorkerPhotos()
   const [photoBusy, setPhotoBusy] = useState(false)
@@ -205,13 +210,17 @@ export default function WorkersPage() {
   const handleTransfer = async (w: Worker) => {
     const newOrg = w.company === 'HFU' ? 'hibi' : 'hfu'
     const newLabel = newOrg === 'hfu' ? 'HFU' : '日比建設'
-    if (!confirm(`${w.name} を ${newLabel} に転籍しますか？`)) return
+    if (!(await confirmDialog({
+      title: `${w.name} を ${newLabel} に転籍しますか？`,
+      description: `所属を ${ORG_LABELS[w.company === 'HFU' ? 'hfu' : 'hibi']} から ${newLabel} に変えます。`,
+      confirmLabel: '転籍する',
+    }))) return
     setTransferring(w.id)
     try {
       // 失敗を必ず出す（2026-10-02 総合点検。旧: 応答を見ておらず、断られてもパネルの所属だけ変わって見えた）
       const res = await postJson('/api/workers', { action: 'update', id: w.id, org: newOrg }, { password })
       if (!res.ok) {
-        alert(`転籍できませんでした。\n${res.error || ''}`)
+        notify.failed('転籍', res.error || 'サーバが受け付けませんでした')
         return
       }
       // 右のパネルで開いている人なら、フォームの所属も合わせる（古い所属のまま保存し直さないように）
@@ -263,12 +272,14 @@ export default function WorkersPage() {
     }
     setForm(next)
     setFormBase(JSON.stringify(next))
+    setNameError(null)
     setModalTab('basic')
     setShowModal(true)
   }
 
   const handleSave = async () => {
-    if (!form.name.trim()) { alert('名前を入力してください'); return }
+    if (!form.name.trim()) { setNameError('名前を入力してください'); return }
+    setNameError(null)
 
     // 新規追加時のみ: 同名スタッフチェック（スペース・全角半角を無視）
     //   2026-05-30 「日比靖仁」が誤って 2 回追加された事案を受けて追加。
@@ -279,10 +290,11 @@ export default function WorkersPage() {
       const duplicates = workers.filter(w => normalize(w.name) === inputName)
       if (duplicates.length > 0) {
         const list = duplicates.map(w => `  - ID ${w.id}: ${w.name}${isAlreadyRetired(w.retired) ? '（退職済）' : w.retired ? '（退職予定）' : ''}`).join('\n')
-        const ok = confirm(
-          `⚠️ 同じ名前のスタッフが既に登録されています:\n\n${list}\n\n` +
-          `別人として新規追加しますか？\n（同じ人を誤って二重登録しようとしている場合は「キャンセル」してください）`
-        )
+        const ok = await confirmDialog({
+          title: '同じ名前のスタッフがすでに登録されています',
+          description: `${list}\n\n別人として新しく追加しますか？\n同じ人を二重に登録しそうなときは「やめる」を押してください。`,
+          confirmLabel: '別人として追加する',
+        })
         if (!ok) return
       }
     }
@@ -305,10 +317,11 @@ export default function WorkersPage() {
         if (Number(form.otMul) !== (orig.otMul || 1.25)) diffs.push(`残業倍率: ${orig.otMul || 1.25} → ${form.otMul}`)
         if (!!form.useOldRules !== !!orig.useOldRules) diffs.push(`旧ルール継続: ${orig.useOldRules ? 'ON' : 'OFF'} → ${form.useOldRules ? 'ON' : 'OFF'}`)
         if (diffs.length > 0) {
-          const ok = confirm(
-            `⚠️ ${form.name} さんの給与計算に直結する設定を変更します:\n\n${diffs.map(d => `  - ${d}`).join('\n')}\n\n` +
-            `保存すると月次集計の金額に即反映されます（変更は監査ログに記録されます）。よろしいですか？`
-          )
+          const ok = await confirmDialog({
+            title: `${form.name} さんの給与計算に関わる設定を変えます`,
+            description: `${diffs.map(d => `・${d}`).join('\n')}\n\n保存すると月次集計の金額にすぐ反映されます。変更は記録に残ります。`,
+            confirmLabel: '保存する',
+          })
           if (!ok) return
         }
       }
@@ -352,14 +365,14 @@ export default function WorkersPage() {
       }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
-        alert(`保存エラー: ${err.error || res.statusText}`)
+        const err = await res.json().catch(() => ({ error: '' }))
+        notify.failed('保存', err.error || 'サーバが受け付けませんでした')
         return
       }
       setShowModal(false)
       fetchWorkers()
     } catch (e) {
-      alert(`通信エラー: ${e instanceof Error ? e.message : '不明なエラー'}`)
+      notify.failed('保存', e)
     } finally {
       setSaving(false)
     }
@@ -369,19 +382,18 @@ export default function WorkersPage() {
     // 2026-06-13 (監査 Sprint3): 「完全削除」と「退職」を取り違えないよう導線を明示。
     //   退職は編集画面の退職日設定で（過去の給与記録は保持・翌月から自動で集計対象外）。
     //   完全削除は出面実績のないスタッフのみ可能（サーバが実績ありをブロック）。
-    if (!confirm(
-      `${name} を完全に削除しますか？\n\n` +
-      `⚠ 退職させたいだけなら「キャンセル」して、編集画面で「退職日」を設定してください。\n` +
-      `　退職日設定なら過去の給与記録は残り、翌月から自動で集計対象外になります。\n\n` +
-      `完全削除は出面実績のないスタッフのみ可能で、取り消せません。`,
-    )) return
+    if (!(await confirmDanger({
+      title: `${name} を完全に削除しますか？`,
+      description: '退職させたいだけなら「やめる」を押して、編集画面で「退職日」を設定してください。退職日なら過去の給与記録は残り、翌月から自動で集計の対象外になります。\n完全削除は出面の実績がないスタッフだけできます。',
+      confirmLabel: '完全に削除する',
+    }))) return
     const res = await fetch('/api/workers', {
       method: 'POST', headers: headers(),
       body: JSON.stringify({ action: 'delete', id }),
     })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: '削除に失敗しました' }))
-      alert(err.error || '削除に失敗しました')
+      const err = await res.json().catch(() => ({ error: '' }))
+      notify.failed('削除', err.error || 'サーバが受け付けませんでした')
       return
     }
     setShowModal(false)
@@ -391,14 +403,19 @@ export default function WorkersPage() {
   // スマホURLの発行・無効化の失敗を必ず出す（2026-10-02 総合点検。旧: 失敗しても何も起きないように見えた）
   const handleGenToken = async (id: number) => {
     const res = await postJson('/api/workers', { action: 'generateToken', id }, { password })
-    if (!res.ok) { alert(`スマホURLを発行できませんでした。\n${res.error || ''}`); return }
+    if (!res.ok) { notify.failed('スマホURLの発行', res.error || 'サーバが受け付けませんでした'); return }
     fetchWorkers()
   }
 
   const handleRevokeToken = async (id: number, name: string) => {
-    if (!confirm(`${name} のトークンを無効化しますか？`)) return
+    if (!(await confirmDialog({
+      title: `${name} のスマホURLを無効にしますか？`,
+      description: '今のURLとQRコードは使えなくなります。必要になったら新しいURLを発行し直せます。',
+      confirmLabel: '無効にする',
+      tone: 'danger',
+    }))) return
     const res = await postJson('/api/workers', { action: 'revokeToken', id }, { password })
-    if (!res.ok) { alert(`無効化できませんでした。\n${res.error || ''}`); return }
+    if (!res.ok) { notify.failed('無効化', res.error || 'サーバが受け付けませんでした'); return }
     fetchWorkers()
   }
 
@@ -761,7 +778,7 @@ export default function WorkersPage() {
                           type="button"
                           disabled={photoBusy}
                           onClick={async () => {
-                            if (!confirm(`${form.name} さんの写真を削除しますか？`)) return
+                            if (!(await confirmDanger({ title: `${form.name} さんの写真を削除しますか？`, confirmLabel: '削除する' }))) return
                             setPhotoError('')
                             setPhotoBusy(true)
                             try {
@@ -800,10 +817,12 @@ export default function WorkersPage() {
                   <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">名前 *</label>
                   <input
                     value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    onChange={e => { setForm({ ...form, name: e.target.value }); setNameError(null) }}
                     placeholder="例：山田太郎"
+                    aria-invalid={!!nameError}
                     className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                   />
+                  <FieldError>{nameError}</FieldError>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -1386,7 +1405,7 @@ export default function WorkersPage() {
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(mobileUrl(w))
-                          alert('URLをコピーしました')
+                          notify.success('URLをコピーしました')
                         }}
                         className="text-xs bg-hibi-navy text-white px-3 py-1 rounded"
                       >
@@ -1437,7 +1456,7 @@ export default function WorkersPage() {
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(mobileUrl(qrWorker))
-                  alert('URLをコピーしました')
+                  notify.success('URLをコピーしました')
                 }}
                 className="flex-1 bg-hibi-navy text-white rounded-lg py-2 text-sm"
               >

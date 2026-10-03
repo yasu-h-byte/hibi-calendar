@@ -6,9 +6,12 @@
  * 応援の請求書はしばらく手作りで発行する。手作りの請求書（PDF・写真）と合計金額をここに入れ、
  * 同じ会社・同じ月のシステムの請求書（下書き or 発行済み）と並べて差を見る。
  * 画面の型: ① 今月の見比べの状況 → ② 1行一覧 → 行を押すと右に見比べの詳細。
+ * 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDanger・notify）に置き換え
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { shiftYm } from '@/lib/month-nav'
@@ -130,14 +133,18 @@ export default function PaperInvoicePage() {
       else window.location.href = j.url
     } catch (e) {
       win?.close()
-      alert(e instanceof Error ? e.message : String(e))
+      notify.failed('ファイルを表示', e)
     }
   }
 
   const remove = async (r: PaperInvoice) => {
-    if (!confirm(`${r.companyName} ${ymLabelOf(r.ym)}の紙の請求書を削除します。ファイルも消えます。よろしいですか？`)) return
+    if (!(await confirmDanger({
+      title: `${r.companyName} ${ymLabelOf(r.ym)}の紙の請求書を削除しますか？`,
+      description: '入れたファイルも消えます。',
+      confirmLabel: '削除する',
+    }))) return
     const res = await postJson('/api/paper-invoice', { action: 'delete', docId: r.id })
-    if (!res.ok) { alert(res.error || '削除に失敗しました'); return }
+    if (!res.ok) { notify.failed('削除', res.error || 'サーバが受け付けませんでした'); return }
     setOpenId(null)
     load()
   }
