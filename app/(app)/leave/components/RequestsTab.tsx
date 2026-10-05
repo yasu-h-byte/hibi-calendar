@@ -5,6 +5,7 @@
 import { LeaveRequest, SiteOption, MforemanMap } from '../types'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
+import { todayJstIso } from '@/lib/date-utils'
 import { FieldError, RowButton } from '@/components/ui/PageParts'
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify・FieldError）に置き換え
@@ -75,8 +76,20 @@ export default function RequestsTab({
   }, {})
   const months = Object.keys(monthCounts).sort((a, b) => b.localeCompare(a))
   const getSiteName = (siteId: string) => sites.find(s => s.id === siteId)?.name || siteId
-  const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
-  const fmtTs = (ts: string) => { const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }
+  // 取る日・申請した日とも、今年でなければ年を付ける（2026-10-05 代表指摘: 9月に申請した来年3月の有給が
+  //   「3/20　申請: 9/16」と出て、日付が合っていないように見えた。テト帰国など年をまたぐ申請がある）
+  const thisYear = todayJstIso().slice(0, 4)
+  const WEEK = ['日', '月', '火', '水', '木', '金', '土']
+  const fmtDate = (d: string) => {
+    const [y, m, day] = d.split('-')
+    const w = WEEK[new Date(Date.UTC(Number(y), Number(m) - 1, Number(day))).getUTCDay()]
+    return `${y !== thisYear ? `${y}/` : ''}${parseInt(m)}/${parseInt(day)}（${w}）`
+  }
+  const fmtTs = (ts: string) => {
+    const d = new Date(ts)
+    const y = String(d.getFullYear())
+    return `${y !== thisYear ? `${y}/` : ''}${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  }
   // 該当現場の職長名を解決（月別オーバーライドがあれば優先）
   // 申請日 YYYY-MM-DD から ym を抽出して mforeman を引き、なければ sites.foreman をフォールバック
   const resolveForemanName = (siteId: string, dateStr: string): string => {
@@ -397,12 +410,12 @@ export default function RequestsTab({
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-1">
                             <span className="font-bold text-hibi-navy dark:text-white">{req.workerName}</span>
-                            <span className="text-gray-600 dark:text-gray-300 font-medium">{fmtDate(req.date)}</span>
+                            <span className="text-gray-700 dark:text-gray-200 font-medium"><span className="text-xs text-hibi-sub dark:text-gray-400 font-normal mr-1">取る日</span>{fmtDate(req.date)}</span>
                             <span className="text-xs text-gray-400">{getSiteName(req.siteId)}</span>
                           </div>
                           {req.reason && <div className="text-xs text-gray-500 mb-1">理由: {req.reason}</div>}
-                          <div className="text-3xs text-gray-400">
-                            申請: {fmtTs(req.requestedAt)}
+                          <div className="text-2xs text-hibi-sub dark:text-gray-400">
+                            申請した日: {fmtTs(req.requestedAt)}
                             {req.foremanApprovedAt && ` / 職長承認: ${fmtTs(req.foremanApprovedAt)}`}
                             {req.reviewedAt ? ` / 最終承認: ${fmtTs(req.reviewedAt)}` : ''}
                           </div>
@@ -533,7 +546,7 @@ export default function RequestsTab({
                       )}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 break-words">
-                      {dates.map(d => fmtDate(d)).join('・')}
+                      <span className="text-hibi-sub dark:text-gray-400 mr-1">取る日</span>{dates.map(d => fmtDate(d)).join('・')}
                     </div>
                     {first.reason && <div className="text-xs text-gray-500">理由: {first.reason}</div>}
                   </div>
