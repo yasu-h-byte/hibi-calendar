@@ -118,6 +118,30 @@ describe('有給管理簿: システムに記録が無い期・退職した人�
   })
 })
 
+describe('有給管理簿: 退職した人（2026-10-05 本番の4種類の出力を全部読んで追加）', () => {
+  const d3: LeaveLedgerData = {
+    workers: [{ id: 8, name: '退職 太郎', org: 'hibi', visa: 'none', hireDate: '2017-11-01', retired: '2026-03-24' }],
+    plData: { '8': [
+      { fy: '2025', grantDate: '2025-10-01', grantDays: 20, adjustment: 3, buyoutDays: 17, buyoutHistory: [{ at: '2026-03-24T00:00:00Z', days: 17, reason: 'retirement' }] },
+      { fy: '2026', grantDate: '2026-10-01', grantDays: 20 },   // 退職後の日付の付与（残っていた記録）
+    ] } as Record<string, LeaveLedgerRecord[]>,
+    allAtt: {},
+  }
+  test('退職日より後の付与は載せない', () => {
+    const p = buildLeaveLedgerModel(d3, { scope: 'jp', todayIso: TODAY }).people[0]
+    expect(p.periods.map(x => x.grantDate)).toEqual(['2025-10-01'])
+    expect(p.current).toBeNull()
+  })
+  test('日本人でも買取（退職時の精算）がある期は買取日数を出す＝残0日の理由が分かる。買取記録も付く', () => {
+    const wb = generateLeaveLedger(d3, { scope: 'jp', todayIso: TODAY })
+    expect(wb.SheetNames).toEqual(['一覧表', '8_退職 太郎', '買取記録'])
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets['8_退職 太郎'], { header: 1, defval: '' }) as unknown[][]
+    const i = rows.findIndex(r => r[0] === '取得日数')
+    expect(rows[i][1]).toBe('買取日数')
+    expect(rows[i + 1].slice(0, 4)).toEqual([3, 17, 0, 0])   // 取得3（出面に無い分）・買取17・失効0・残0
+  })
+})
+
 describe('有給管理簿の Excel', () => {
   test('先頭に一覧表、1人1枚の個人票、最後に買取記録。日本人だけの出力に買取記録は付けない', () => {
     const wb = generateLeaveLedger(data, { scope: 'hibi', todayIso: TODAY })

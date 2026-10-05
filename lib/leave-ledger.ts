@@ -144,7 +144,9 @@ export function buildLeaveLedgerModel(
     if (retiredDone && (w.retired || '') < keepFrom) continue
     const isJp = isJpVisa(w.visa)
     const records = (data.plData[String(w.id)] || []) as LeaveLedgerRecord[]
+    // 退職日より後の日付の付与は載せない（退職した人に次の期の付与の記録が残っていることがある・2026-10-05 本番の出力で確認）
     const dated = records.filter(r => validDate(r.grantDate) && !r._archived)
+      .filter(r => !(retiredDone && w.retired && (r.grantDate as string) > w.retired))
       .sort((a, b) => (a.grantDate as string).localeCompare(b.grantDate as string))
     const currentRec = selectCurrentPeriodRecord(
       dated as Parameters<typeof selectCurrentPeriodRecord>[0], todayIso,
@@ -372,10 +374,11 @@ function personSheet(p: LedgerPerson, m: LeaveLedgerModel): XLSX.WorkSheet {
     }
     // 下段: 集計
     r = rows.length
-    rows.push([c('取得日数', S.head), c(p.isJp ? '—' : '買取日数', S.head), c('失効日数', S.head), c('残日数', S.head), c('年5日の取得', S.head), c('取得の期限', S.head)])
+    const showBuyout = !p.isJp || pd.buyoutDays > 0   // 日本人は退職時の精算などで買取があるときだけ
+    rows.push([c('取得日数', S.head), c(showBuyout ? '買取日数' : '—', S.head), c('失効日数', S.head), c('残日数', S.head), c('年5日の取得', S.head), c('取得の期限', S.head)])
     rows.push([
       pd.beforeSystem ? c('紙の管理簿', S.na) : c(pd.periodUsed + pd.adjustment, S.num),
-      p.isJp ? c('', S.cell) : c(pd.buyoutDays, S.num),
+      showBuyout ? c(pd.buyoutDays, S.num) : c('', S.cell),
       c(pd.expiredDays, S.num),
       pd.beforeSystem ? c('紙の管理簿', S.na) : c(pd.remaining, S.strong),
       obligationCell(pd, m.todayIso),
@@ -383,7 +386,8 @@ function personSheet(p: LedgerPerson, m: LeaveLedgerModel): XLSX.WorkSheet {
     ])
   }
   rows.push([])
-  rows.push([c(`※ 取得日数は出面の有給の記録から数えています。残日数 ＝ 付与${p.isJp ? '' : ' ＋ 繰越'} − 取得${p.isJp ? '' : ' − 買取'}。`, S.sub)])
+  const anyBuyout = !p.isJp || p.periods.some(x => x.buyoutDays > 0)
+  rows.push([c(`※ 取得日数は出面の有給の記録から数えています。残日数 ＝ 付与${p.isJp ? '' : ' ＋ 繰越'} − 取得${anyBuyout ? ' − 買取' : ''}。`, S.sub)])
   full(rows.length - 1)
   rows.push([c('※ 年5日の取得は、付与日数が10日以上の期が対象です（労働基準法39条7項）。', S.sub)])
   full(rows.length - 1)
@@ -413,8 +417,8 @@ export function renderLeaveLedgerWorkbook(m: LeaveLedgerModel): XLSX.WorkBook {
     used.add(name)
     XLSX.utils.book_append_sheet(wb, personSheet(p, m), name)
   })
-  // 買取は日本人には無い（日本人だけの出力には付けない）
-  if (m.scope !== 'jp') XLSX.utils.book_append_sheet(wb, buyoutSheet(m), '買取記録')
+  // 日本人だけの出力は、買取（退職時の精算など）の記録があるときだけ付ける
+  if (m.scope !== 'jp' || m.buyouts.length > 0) XLSX.utils.book_append_sheet(wb, buyoutSheet(m), '買取記録')
   return wb
 }
 
