@@ -15,6 +15,9 @@ import { SaveButton } from '@/components/ui/SaveButton'
 
 /** 本人確認の1人分（app/api/attendance/confirm の事務所向け GET）。状態はサーバが月締めと同じ判定で決める */
 export interface StaffConfirmInfo {
+  /** 名前（お願いの文面用） */
+  name?: string
+  nameVi?: string
   org: 'hibi' | 'hfu'
   state: 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside'
   /** その人の承認で足りない「現場×日」（waiting の説明用） */

@@ -10,6 +10,7 @@ import { notify } from '@/lib/notify'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
+import ConfirmReminder from './components/ConfirmReminder'
 import { can } from '@/lib/permissions'
 import { postJson } from '@/lib/api-client'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
@@ -1109,6 +1110,13 @@ function MonthlyPageInner() {
             )
           })}
         </div>
+      )}
+
+      {/* 本人確認がまだの人へのお願いの文面（2026-10-05）: 名前入りの文を作り、スタッフのグループへ貼って送る。両社まとめて */}
+      {!loading && data && !staffConfirmsFailed && (
+        <ConfirmReminder ym={ym} people={Object.entries(staffConfirms).map(([id, c]) => ({
+          workerId: Number(id), name: c.name || `ID ${id}`, nameVi: c.nameVi, state: c.state,
+        }))} />
       )}
 
       {/* 2026-06-12 (監査 Sprint2-D): 締め後に支給額が変わった場合の警告バナー。

@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       confirmations: qs.docs.map(x => x.data() as AttConfirmDoc),
     })
     const items = rows.map(r => ({
-      workerId: r.workerId, org: r.org, state: r.state,
+      workerId: r.workerId, name: r.name, nameVi: r.nameVi, org: r.org, state: r.state,
       foremanMissing: r.foremanMissing, finalMissing: r.finalMissing,
       ...(r.confirmation ? {
         status: r.confirmation.status, note: r.confirmation.note, at: r.confirmation.at,
