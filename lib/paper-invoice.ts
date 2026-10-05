@@ -14,6 +14,10 @@
  * - 請求書番号・発行日・税抜小計・消費税・明細（現場・内容・数量・単位・単価・金額）… 任意（入れるほど細かく見比べられる）
  * 記録は独立コレクション `paperInvoices`（1件 = 手作りの請求書1枚）。
  *
+ * ## 一次（山岡建設工業など）へ出した請求書（2026-10-05）
+ * 一次への請求書も紙の控えとしてここに入れる（入口を DEDURA＋ に1本化・代表 2026-10-05）。現場（siteId）は必須、工種は任意。
+ * 見比べは「同じ現場・同じ月の全部の合計 vs 原価・収益で入れた現場の請求額」（comparePrimeSheets）。応援の請求書の一覧（請求・支払）には出さない。
+ *
  * ## 見比べ
  * 同じ会社・同じ月について、システムが作る請求書の下書き（resolveInvoiceDraft・発行済みならその凍結内容）と
  * 税抜小計・消費税・税込合計・人工の合計・残業時間の合計を並べ、差を出す（comparePaperWithSystem）。
@@ -54,6 +58,49 @@ export interface PaperInvoice {
   uploadedAt: string
   uploadedBy: string
   updatedAt?: string
+  /**
+   * 一次（山岡建設工業など）へ出した請求書のとき（2026-10-05）: どの現場の分か（工種サイトでなく親の現場）と工種の書き添え。
+   * 一次への請求書は工種ごとに1つの現場で5〜6枚になることがあるので、同じ現場・同じ月の全部の合計を
+   * DEDURA＋ の現場の請求額（原価・収益で入れたもの・工種サイトの分も足す）と比べる（comparePrimeSheets）
+   */
+  siteId?: string | null
+  siteName?: string | null
+  trade?: string | null
+  /** 入れた人の名前（経営コックピットに出す） */
+  uploadedByName?: string
+}
+
+/** 一次への請求書（同じ現場・同じ月の全部）と DEDURA＋ の現場の請求額の見比べ */
+export interface PrimeSiteComparison {
+  siteId: string
+  siteName: string
+  /** 請求書の枚数 */
+  count: number
+  /** 請求書の税抜の合計（税抜小計が無い枚は 税込 ÷ 1.1） */
+  invoiceExTax: number
+  exTaxEstimated: boolean
+  /** DEDURA＋ の現場の請求額（税抜・0 = 未入力） */
+  billing: number
+  /** 請求書 − 請求額 */
+  diff: number
+  /** match = 1円も違わない / close = 1,000円以内（端数・税の丸め） / diff = それ以上 / noBilling = 請求額が未入力 */
+  result: 'match' | 'close' | 'diff' | 'noBilling'
+}
+
+/** 一次への請求書を現場ごとに足して、DEDURA＋ の請求額と比べる（純粋） */
+export function comparePrimeSheets(
+  sheets: Pick<PaperInvoice, 'subtotal' | 'total'>[], billing: number, site: { siteId: string; siteName: string },
+): PrimeSiteComparison {
+  let est = false
+  const ex = sheets.reduce((s, p) => {
+    if (typeof p.subtotal === 'number') return s + p.subtotal
+    est = true
+    return s + Math.round(p.total / 1.1)
+  }, 0)
+  const b = Math.round(billing)
+  const diff = ex - b
+  const result: PrimeSiteComparison['result'] = b <= 0 ? 'noBilling' : diff === 0 ? 'match' : Math.abs(diff) <= 1_000 ? 'close' : 'diff'
+  return { ...site, count: sheets.length, invoiceExTax: ex, exTaxEstimated: est, billing: b, diff, result }
 }
 
 /** 見比べに使うシステム側の数字（下書き or 発行済みの凍結内容） */

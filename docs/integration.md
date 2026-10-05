@@ -25,7 +25,7 @@
 - Firestore の読み取りは1回の呼び出しで main（30秒キャッシュ）+ その月の att 1件 + `peerInvoices` コレクションへの月次クエリ1件。締まった月は `getAttDataCached`。経営コックピット側も30分キャッシュする
 
 ### 受け取った外注の請求書（2026-10-05）
-`GET /api/integration/subcon-invoices?from=YYYYMM`（ヘッダ `x-integration-key`）。from の月以降の `subconInvoices` を返す。
+`GET /api/integration/subcon-invoices?from=YYYYMM`（ヘッダ `x-integration-key`）。from の月以降の `subconInvoices`（外注の請求書・支払内訳書）と、`paperInvoices` のうち一次へ出した請求書（現場を選んだもの）を `kind`（received / remittance / issued）付きで返す（2026-10-05 入口の1本化）。
 各件に1つ目のファイル（請求書の本体）を取り出す署名つきURL（15分）`file.url` を付ける。添付（2つ目以降）は数（`attachments`）だけ。
 金額は請求書に書いてあるとおり（`total` 税込・`subtotal` 税抜・任意）。経営コックピットは毎朝これを読み、まだ取り込んでいない件のファイルを
 自分の置き場（Supabase Storage）に写して AI で読む（経営コックピット docs/specs/27-dedura.md）。

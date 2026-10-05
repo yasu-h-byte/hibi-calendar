@@ -221,6 +221,8 @@ workSchedule?: {
 | `note` | string? | メモ |
 | `files` | 配列 | `{path,name,contentType,size}` |
 | `uploadedAt` / `uploadedBy` / `updatedAt` | | 登録・修正の記録 |
+| `siteId` / `siteName` / `trade` | string? | 一次（山岡建設工業など）へ出した請求書のとき: どの現場の分か（親の現場）・工種の書き添え（2026-10-05） |
+| `uploadedByName` | string? | 入れた人の名前（経営コックピットに出す） |
 
 ### subconInvoices/{docId}
 受け取った外注の請求書の保管（2026-10-05・`docs/peer-invoice.md`「受け取った外注の請求書」・`lib/subcon-invoice.ts`）。
@@ -236,6 +238,7 @@ workSchedule?: {
 | `note` | string? | メモ |
 | `files` | 配列 | `{path,name,contentType,size}`（PDF・JPEG・PNG・WebP。HEIC は不可） |
 | `uploadedAt` / `uploadedBy` / `uploadedByName` / `updatedAt` | | 登録・修正の記録（`uploadedByName` は画面と経営コックピットに出す名前） |
+| `docType` | string? | `invoice`（無いときも）= 外注の請求書 / `remittance` = 一次から届いた支払内訳書（`total` は振込額・0 のことがある） |
 
 ### peerInvoices/{auto}
 応援の請求書（2026-09-25・`docs/peer-invoice.md`）。「発行」した瞬間の金額・出面明細・宛先・

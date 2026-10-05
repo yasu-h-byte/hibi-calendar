@@ -6,6 +6,7 @@
  * 外注・同業者から紙で届いた請求書（PDF・写真）と合計金額をここに入れ、同じ外注先・同じ月の「出面 × 単価」と並べて差を見る。
  * 入れた請求書は経営コックピットが毎朝読み、AI で明細を読んで帳簿・資金繰りにつなぐ。
  * 画面の型は「紙の請求書の控え」と同じ: ① この月の状況 → ② 1行一覧 → 行を押すと右に見比べの詳細。
+ * 2026-10-05: 山岡建設工業など一次から届く支払内訳書も、種類「支払内訳書」でここに入れる（出面とは比べない）。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
@@ -24,7 +25,7 @@ import { SaveButton } from '@/components/ui/SaveButton'
 import { parsePaperNumber, isBlankNumberInput } from '@/lib/paper-invoice'
 import {
   SUBCON_INVOICE_ALLOWED_TYPES, SUBCON_INVOICE_MAX_FILE_BYTES, SUBCON_INVOICE_MAX_FILES,
-  type SubconInvoice, type SubconExpected, type SubconComparison,
+  docTypeOf, type SubconInvoice, type SubconExpected, type SubconComparison, type SubconDocType,
 } from '@/lib/subcon-invoice'
 
 interface MonthData {
@@ -32,7 +33,7 @@ interface MonthData {
   expected: Record<string, SubconExpected>
   comparisons: Record<string, SubconComparison & { count: number }>
   missing: { companyId: string; companyName: string; workDays: number; cost: number }[]
-  companies: { id: string; name: string }[]
+  companies: { id: string; name: string; kind?: 'subcon' | 'prime' }[]
   storageReady: boolean
 }
 
@@ -106,7 +107,9 @@ export default function SubconInvoicePage() {
 
   const records = data?.records || []
   const cmpOf = (r: SubconInvoice) => data?.comparisons[r.companyId]
-  const differs = records.filter(r => cmpOf(r)?.result === 'diff')
+  const differs = records.filter(r => docTypeOf(r) === 'invoice' && cmpOf(r)?.result === 'diff')
+  const invoiceCount = records.filter(r => docTypeOf(r) === 'invoice').length
+  const remittanceCount = records.length - invoiceCount
   const missing = data?.missing || []
   const open = records.find(r => r.id === openId) || null
   const canAdd = canEdit && !!data?.storageReady
@@ -143,7 +146,7 @@ export default function SubconInvoicePage() {
       <PageHeader
         group="請求・原価"
         title="受け取った請求書"
-        sub="外注・同業者から届いた請求書（紙はスキャンか写真）を入れて、出面 × 単価と見比べます。入れた請求書は経営コックピットが毎朝読み、支払の予定と帳簿の照合に使います"
+        sub="外注・同業者から届いた請求書と、山岡建設工業などから届く支払内訳書（紙はスキャンか写真）を入れます。請求書は出面 × 単価と見比べます。入れたものは経営コックピットが毎朝読み、支払・入金の予定と帳簿の照合に使います"
         actions={
           <>
             <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
@@ -179,8 +182,8 @@ export default function SubconInvoicePage() {
           {/* ① この月の状況 */}
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <TodoCard icon="doc" tone={records.length > 0 ? 'info' : 'ok'} title="入れた請求書"
-              big={records.length > 0 ? `${records.length}件` : 'まだありません'}
-              sub={records.length > 0 ? `${ymLabelOf(ym)}に届いた請求書` : `${ymLabelOf(ym)}に届いた請求書を入れてください`}
+              big={records.length > 0 ? `${invoiceCount}件` : 'まだありません'}
+              sub={records.length > 0 ? `${ymLabelOf(ym)}に届いた請求書${remittanceCount > 0 ? `（ほかに支払内訳書 ${remittanceCount}件）` : ''}` : `${ymLabelOf(ym)}に届いた請求書・支払内訳書を入れてください`}
               action={canAdd ? '入れる' : undefined}
               onClick={canAdd ? () => setModal({ mode: 'add' }) : undefined} />
             <TodoCard icon="clock" tone={missing.length > 0 ? 'warn' : 'ok'} title="まだ届いていない"
@@ -213,15 +216,16 @@ export default function SubconInvoicePage() {
                     className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_140px_140px_200px_150px] gap-2 lg:gap-3.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
                     <span className="min-w-0">
                       <span className="block text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{r.companyName}</span>
+                      {docTypeOf(r) === 'remittance' && <span className="block text-xs text-hibi-sub dark:text-gray-400">支払内訳書</span>}
                       {r.no && <span className="block text-xs text-hibi-sub dark:text-gray-400">{r.no}</span>}
                     </span>
                     <span className="lg:text-right text-[1.0625rem] font-bold tabular-nums text-gray-900 dark:text-white">
-                      <span className="lg:hidden mr-2 text-xs font-normal text-hibi-sub dark:text-gray-400">請求書</span>{yen(r.total)}
+                      <span className="lg:hidden mr-2 text-xs font-normal text-hibi-sub dark:text-gray-400">{docTypeOf(r) === 'remittance' ? '振込額' : '請求書'}</span>{docTypeOf(r) === 'remittance' && !r.total ? '—' : yen(r.total)}
                     </span>
                     <span className="lg:text-right text-[0.9375rem] tabular-nums text-gray-700 dark:text-gray-300">
-                      <span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">出面 × 単価</span>{data.expected[r.companyId] ? yen(data.expected[r.companyId].cost) : '—'}
+                      <span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">出面 × 単価</span>{docTypeOf(r) === 'invoice' && data.expected[r.companyId] ? yen(data.expected[r.companyId].cost) : '—'}
                     </span>
-                    <span>{resultChip(cmpOf(r))}</span>
+                    <span>{docTypeOf(r) === 'remittance' ? <Chip tone="blue">支払内訳書（帳簿と照合は経営コックピット）</Chip> : resultChip(cmpOf(r))}</span>
                     <span className="text-xs text-hibi-sub dark:text-gray-400">{r.uploadedByName || '—'}・{r.files.length}ファイル</span>
                   </div>
                 ))}
@@ -268,7 +272,7 @@ export default function SubconInvoicePage() {
 
       {open && data && (
         <SidePanel label={`${open.companyName} の見比べ`} onClose={() => setOpenId(null)} width="max-w-[760px]">
-          <Detail rec={open} sameCompany={records.filter(r => r.companyId === open.companyId)} exp={data.expected[open.companyId]} cmp={cmpOf(open)}
+          <Detail rec={open} sameCompany={records.filter(r => r.companyId === open.companyId && docTypeOf(r) === docTypeOf(open))} exp={data.expected[open.companyId]} cmp={cmpOf(open)}
             onClose={() => setOpenId(null)} onOpenFile={i => openFile(open, i)}
             onEdit={canEdit ? () => setModal({ mode: 'edit', rec: open }) : undefined}
             onDelete={canDelete ? () => remove(open) : undefined} />
@@ -323,7 +327,11 @@ function Detail({ rec, sameCompany, exp, cmp, onClose, onOpenFile, onEdit, onDel
         <p className="text-xs text-hibi-sub dark:text-gray-400">入れた人: {rec.uploadedByName || '—'}（{rec.uploadedAt?.slice(0, 10)}）</p>
       </section>
 
-      {cmp && (
+      {docTypeOf(rec) === 'remittance' && (
+        <p className="text-sm text-gray-700 dark:text-gray-300">支払内訳書です。月ごとの請求額・差し引き・振込額は、経営コックピットが AI で読んで帳簿の入金と照らします。</p>
+      )}
+
+      {cmp && docTypeOf(rec) === 'invoice' && (
         <section className="space-y-2">
           <h3 className="text-base font-bold text-gray-900 dark:text-white">請求書と出面の見比べ（税抜）</h3>
           <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-sm tabular-nums">
@@ -346,7 +354,7 @@ function Detail({ rec, sameCompany, exp, cmp, onClose, onOpenFile, onEdit, onDel
         </section>
       )}
 
-      <section className="space-y-2">
+      {docTypeOf(rec) === 'invoice' && <section className="space-y-2">
         <h3 className="text-base font-bold text-gray-900 dark:text-white">出面（現場ごと）</h3>
         <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-[0.8125rem]">
           {!exp || exp.sites.length === 0 ? (
@@ -363,7 +371,7 @@ function Detail({ rec, sameCompany, exp, cmp, onClose, onOpenFile, onEdit, onDel
           ))}
         </div>
         <p className="text-xs text-hibi-sub dark:text-gray-400">明細ごとの細かい見比べ（人工・単価）は、経営コックピットが AI で請求書を読んだあとに経営コックピットの「請求書の取り込み」に出ます</p>
-      </section>
+      </section>}
 
       {rec.note && (
         <section className="space-y-1">
@@ -385,9 +393,11 @@ function Detail({ rec, sameCompany, exp, cmp, onClose, onOpenFile, onEdit, onDel
 const toNum = (s: string) => parsePaperNumber(s)
 
 function SubconInvoiceModal({ mode, rec, initialCompanyId, ym, companies, onClose, onDone }: {
-  mode: 'add' | 'edit'; rec?: SubconInvoice; initialCompanyId?: string; ym: string; companies: { id: string; name: string }[]
+  mode: 'add' | 'edit'; rec?: SubconInvoice; initialCompanyId?: string; ym: string; companies: { id: string; name: string; kind?: 'subcon' | 'prime' }[]
   onClose: () => void; onDone: (ym?: string) => void
 }) {
+  const [docType, setDocType] = useState<SubconDocType>(rec ? docTypeOf(rec) : 'invoice')
+  const remit = docType === 'remittance'
   const [companyId, setCompanyId] = useState(rec?.companyId || initialCompanyId || '')
   const [targetYm, setTargetYm] = useState(rec?.ym || ym)
   const [no, setNo] = useState(rec?.no || '')
@@ -402,7 +412,7 @@ function SubconInvoiceModal({ mode, rec, initialCompanyId, ym, companies, onClos
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const snapshot = () => JSON.stringify({ companyId, targetYm, no, issueDate, dueDate, subtotal, tax, total, note })
+  const snapshot = () => JSON.stringify({ docType, companyId, targetYm, no, issueDate, dueDate, subtotal, tax, total, note })
   const [base] = useState(snapshot)
   const dirty = files.length > 0 || snapshot() !== base
 
@@ -419,14 +429,15 @@ function SubconInvoiceModal({ mode, rec, initialCompanyId, ym, companies, onClos
   }
 
   const submit = async () => {
-    if (!companyId) { setErr('請求元の外注先を選んでください'); return null }
-    if (!(toNum(total) > 0)) { setErr('税込合計を入れてください（数字で）'); return null }
+    if (!companyId) { setErr(remit ? '支払元の会社を選んでください' : '請求元の外注先を選んでください'); return null }
+    if (!remit && !(toNum(total) > 0)) { setErr('税込合計を入れてください（数字で）'); return null }
+    if (remit && !isBlankNumberInput(total) && Number.isNaN(toNum(total))) { setErr('振込額の数字が読めません'); return null }
     for (const [label, v] of [['税抜小計', subtotal], ['消費税', tax]] as const) {
       if (!isBlankNumberInput(v) && Number.isNaN(toNum(v))) { setErr(`${label}の数字が読めません`); return null }
     }
     if (mode === 'add' && files.length === 0) { setErr('請求書のファイル（PDF・写真）を選んでください'); return null }
     setErr('')
-    const fields = { companyId, ym: targetYm, total, subtotal, tax, no, issueDate, dueDate, note }
+    const fields = { docType, companyId, ym: targetYm, total, subtotal: remit ? '' : subtotal, tax: remit ? '' : tax, no, issueDate, dueDate: remit ? '' : dueDate, note }
     let uploadedDocId: string | null = null
     try {
       if (mode === 'edit' && rec) {
@@ -472,7 +483,7 @@ function SubconInvoiceModal({ mode, rec, initialCompanyId, ym, companies, onClos
   return (
     <Modal
       open
-      title={mode === 'add' ? '受け取った請求書を入れる' : '金額・日付を直す'}
+      title={mode === 'add' ? '受け取った請求書・支払内訳書を入れる' : '金額・日付を直す'}
       onClose={busy ? () => {} : onClose}
       closeOnEsc={!busy}
       closeOnOverlay={false}
@@ -484,16 +495,25 @@ function SubconInvoiceModal({ mode, rec, initialCompanyId, ym, companies, onClos
       </>}
     >
       <div className="space-y-4">
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="種類">
+          {([['invoice', '外注・同業者からの請求書'], ['remittance', '山岡建設工業などからの支払内訳書']] as const).map(([k, label]) => (
+            <button key={k} type="button" role="radio" aria-checked={docType === k}
+              onClick={() => { setDocType(k); setCompanyId('') }}
+              className={`h-9 px-3 rounded-[9px] border text-[0.8125rem] font-bold ${docType === k ? 'bg-hibi-navy text-white border-hibi-navy' : 'border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-xs text-gray-500">請求元の外注先 <span className="text-red-600">必須</span></span>
+            <span className="text-xs text-gray-500">{remit ? '支払元の会社' : '請求元の外注先'} <span className="text-red-600">必須</span></span>
             <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={inputCls}>
               <option value="">選んでください</option>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.filter(c => remit ? c.kind === 'prime' : c.kind !== 'prime').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-gray-500">対象月（締めの月） <span className="text-red-600">必須</span></span>
+            <span className="text-xs text-gray-500">{remit ? '支払の月（何か月分載っていても1件で）' : '対象月（締めの月）'} <span className="text-red-600">必須</span></span>
             <input type="month" value={ymValue} onChange={e => { const v = e.target.value.replace('-', ''); if (/^\d{6}$/.test(v)) setTargetYm(v) }} className={inputCls} />
           </label>
         </div>
@@ -524,6 +544,12 @@ function SubconInvoiceModal({ mode, rec, initialCompanyId, ym, companies, onClos
           </div>
         )}
 
+        {remit ? (
+          <label className="block sm:w-1/3">
+            <span className="text-xs text-gray-500">振込額（任意）</span>
+            <input inputMode="numeric" value={total} onChange={e => setTotal(e.target.value)} className={`${inputCls} tabular-nums`} />
+          </label>
+        ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <label className="block col-span-2 sm:col-span-1">
             <span className="text-xs text-gray-500">税込合計 <span className="text-red-600">必須</span></span>
@@ -550,13 +576,14 @@ function SubconInvoiceModal({ mode, rec, initialCompanyId, ym, companies, onClos
             <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
           </label>
         </div>
+        )}
 
         <label className="block">
           <span className="text-xs text-gray-500">メモ（いつもと違う点・確認したいことなど）</span>
           <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} className={inputCls} />
         </label>
 
-        <p className="text-xs text-hibi-sub dark:text-gray-400">明細（現場・人工・単価）は入れなくて大丈夫です。経営コックピットが請求書を AI で読みます</p>
+        <p className="text-xs text-hibi-sub dark:text-gray-400">{remit ? '月ごとの請求額・差し引き・振込額は入れなくて大丈夫です。経営コックピットが AI で読みます' : '明細（現場・人工・単価）は入れなくて大丈夫です。経営コックピットが請求書を AI で読みます'}</p>
 
         {err && <div className="text-sm text-red-600">{err}</div>}
       </div>

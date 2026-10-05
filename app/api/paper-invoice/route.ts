@@ -13,23 +13,27 @@
  * POST { action: 'delete', docId }               → ファイルごと削除（invoice.approve）。記録を先に消し、ファイルはそのあと
  *
  * 権限: 見る = invoice.view ／ 登録・修正 = invoice.paper ／ 削除 = invoice.approve（lib/permissions.ts）
+ *
+ * 一次（山岡建設工業など）へ出した請求書（2026-10-05）: 現場（siteId）必須・工種（trade）任意。見比べは現場ごとの合計 vs 現場の請求額（primeComparisons）。
+ * lite=1（請求・支払の一覧の「紙で発行済み」）には一次の分を入れない（応援の請求書の話なので）
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where } from '@/lib/fsdb'
-import { getMainData, getMultiMonthAttData, compute, type MainData } from '@/lib/compute'
+import { getMainData, getMultiMonthAttData, compute, getBillTotal, type MainData } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
 import { safeFileName, isValidIsoDate } from '@/lib/staff-docs'
-import { hasRole } from '@/lib/companies'
+import { hasRole, resolveSiteParties, type CompanyLike } from '@/lib/companies'
+import { isWorkTypeSite, parentAndWorkTypeSiteIds } from '@/lib/site-hierarchy'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 import { resolveInvoiceDraft, listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
 import {
   PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES, PAPER_INVOICE_DOC_ID_RE,
   sanitizePaperLines, comparePaperWithSystem, parsePaperNumber, isBlankNumberInput,
-  paperTotalsError, systemDoubleBillingError, mergePaperInvoices,
-  type PaperInvoice, type PaperInvoiceFile, type SystemInvoiceFigures, type PaperComparison,
+  paperTotalsError, systemDoubleBillingError, mergePaperInvoices, comparePrimeSheets,
+  type PrimeSiteComparison, type PaperInvoice, type PaperInvoiceFile, type SystemInvoiceFigures, type PaperComparison,
 } from '@/lib/paper-invoice'
 import { signedUploadUrl, signedReadUrl, fileMeta, deleteFile, deleteFilesWithPrefix, getStaffDocsBucket } from '@/lib/storage-admin'
 
@@ -37,6 +41,13 @@ export const dynamic = 'force-dynamic'
 
 const COL = 'paperInvoices'
 const HFU_LABEL = 'HFU → 日比建設'
+
+/** 入れた人の名前（経営コックピットに出す） */
+function byName(by: string, main: MainData): string {
+  if (by === 'super-admin') return '代表'
+  const id = by.startsWith('worker:') ? by.slice(7) : ''
+  return (main.workers || []).find(w => String(w.id) === id)?.name || ''
+}
 
 async function actorLabel(request: NextRequest): Promise<string> {
   const a = await getApiAuthUser(request)
@@ -53,11 +64,27 @@ function compact<T extends Record<string, unknown>>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T
 }
 
-/** 請求先として選べる会社: 取引先マスタの「同業（二次）」＋ HFU → 日比建設 */
-function selectableCompanies(main: MainData): { id: string; name: string }[] {
-  const peers = (main.subcons || []).filter(c => hasRole(c as { id: string; name: string; roles?: string[] }, 'peer'))
-    .map(c => ({ id: c.id, name: c.name }))
-  return [...peers, { id: HFU_INVOICE_COMPANY_ID, name: HFU_LABEL }]
+/** 請求先として選べる会社: 取引先マスタの「同業（二次）」＋ HFU → 日比建設 ＋ 一次（山岡建設工業など・kind: 'prime'） */
+function selectableCompanies(main: MainData): { id: string; name: string; kind: 'peer' | 'prime' }[] {
+  const role = (c: unknown, r: 'peer' | 'prime') => hasRole(c as { id: string; name: string; roles?: string[] }, r)
+  const peers = (main.subcons || []).filter(c => role(c, 'peer')).map(c => ({ id: c.id, name: c.name, kind: 'peer' as const }))
+  const primes = (main.subcons || []).filter(c => role(c, 'prime') && !role(c, 'peer')).map(c => ({ id: c.id, name: c.name, kind: 'prime' as const }))
+  return [...peers, { id: HFU_INVOICE_COMPANY_ID, name: HFU_LABEL, kind: 'peer' as const }, ...primes]
+}
+const isPrimeCompany = (main: MainData, companyId: string) => selectableCompanies(main).some(c => c.id === companyId && c.kind === 'prime')
+
+/** 一次への請求書で選べる現場: 工種サイトでない現場のうち、請求先がその会社のもの（無ければ直の現場ぜんぶ） */
+function primeSitesOf(main: MainData, companyId: string): { id: string; name: string }[] {
+  const companies = (main.subcons || []) as unknown as CompanyLike[]
+  const tops = (main.sites || []).filter(s => !isWorkTypeSite(s as { parentId?: string }))
+  const mine = tops.filter(s => resolveSiteParties(s as never, companies).billToId === companyId)
+  const list = mine.length > 0 ? mine : tops.filter(s => resolveSiteParties(s as never, companies).siteType === 'direct')
+  return list.map(s => ({ id: s.id, name: s.name }))
+}
+
+/** 現場の請求額（税抜）。工種サイトに入れた分も足す */
+function siteBilling(main: MainData, siteId: string, ym: string): number {
+  return parentAndWorkTypeSiteIds((main.sites || []) as never[], siteId).reduce((t, id) => t + getBillTotal(main, id, ym), 0)
 }
 
 function snapToList(snap: { forEach: (cb: (d: { id: string; data: () => Record<string, unknown> }) => void) => void }): PaperInvoice[] {
@@ -93,6 +120,19 @@ function parseFields(body: Record<string, unknown>, main: MainData, partial: boo
   if (!partial || body.ym !== undefined) {
     if (typeof body.ym !== 'string' || !/^\d{4}(0[1-9]|1[0-2])$/.test(body.ym)) return { ok: false, error: '対象月が不正です' }
     f.ym = body.ym
+  }
+  // 一次への請求書は現場が必須（工種は任意）。会社を変えないときは今の会社で見る（update）
+  const companyId = (f.companyId ?? (typeof body.currentCompanyId === 'string' ? body.currentCompanyId : '')) as string
+  if (companyId && isPrimeCompany(main, companyId)) {
+    if (!partial || body.siteId !== undefined || f.companyId !== undefined) {
+      const site = primeSitesOf(main, companyId).find(x => x.id === body.siteId)
+      if (!site) return { ok: false, error: 'どの現場の請求書かを選んでください' }
+      f.siteId = site.id
+      f.siteName = site.name
+    }
+    if (body.trade !== undefined) f.trade = optText(body.trade, 40)
+  } else if (f.companyId !== undefined) {
+    f.siteId = undefined; f.siteName = undefined; f.trade = undefined
   }
   if (!partial || body.total !== undefined) {
     const t = optNum(body.total)
@@ -184,12 +224,24 @@ export async function GET(request: NextRequest) {
   const ym = sp.get('ym') || ''
   if (!/^\d{6}$/.test(ym)) return NextResponse.json({ error: 'ym が必要です' }, { status: 400 })
   const records = snapToList(await getDocs(query(collection(db, COL), where('ym', '==', ym))))
-  if (sp.get('lite')) return NextResponse.json({ ym, records })
-
   const main = await getMainData()
-  const companyIds = [...new Set(records.map(r => r.companyId))]
+  const primeIds = new Set(selectableCompanies(main).filter(c => c.kind === 'prime').map(c => c.id))
+  // 請求・支払の一覧の「紙で発行済み」は応援の請求書の話なので、一次への請求書は入れない
+  if (sp.get('lite')) return NextResponse.json({ ym, records: records.filter(r => !primeIds.has(r.companyId)) })
+
+  // 一次への請求書: 同じ会社・同じ現場の全部の合計 vs 現場の請求額（工種ごとに5〜6枚になることがある）
+  const primeComparisons: Record<string, PrimeSiteComparison> = {}
+  for (const r of records.filter(x => primeIds.has(x.companyId) && x.siteId)) {
+    const key = `${r.companyId}_${r.siteId}`
+    if (primeComparisons[key]) continue
+    const sheets = records.filter(x => x.companyId === r.companyId && x.siteId === r.siteId)
+    primeComparisons[key] = comparePrimeSheets(sheets, siteBilling(main, r.siteId!, ym), { siteId: r.siteId!, siteName: r.siteName || r.siteId! })
+  }
+  const primeSites = Object.fromEntries([...primeIds].map(id => [id, primeSitesOf(main, id)]))
+
+  const companyIds = [...new Set(records.filter(r => !primeIds.has(r.companyId)).map(r => r.companyId))]
   const system = await systemFiguresFor(main, ym, companyIds)
-  const comparisons = Object.fromEntries(records.map(r => [r.id, comparePaperWithSystem(r, system[r.companyId])]))
+  const comparisons = Object.fromEntries(records.filter(r => !primeIds.has(r.companyId)).map(r => [r.id, comparePaperWithSystem(r, system[r.companyId])]))
   // 同じ会社に2枚以上あるときは合算でも見比べる（1枚ずつでは必ず「差あり」になるため・2026-10-02 総合点検）
   const groupComparisons: Record<string, PaperComparison & { count: number }> = {}
   for (const id of companyIds) {
@@ -197,7 +249,7 @@ export async function GET(request: NextRequest) {
     if (xs.length >= 2) groupComparisons[id] = { ...comparePaperWithSystem(mergePaperInvoices(xs), system[id]), count: xs.length }
   }
   return NextResponse.json({
-    ym, records, system, comparisons, groupComparisons,
+    ym, records, system, comparisons, groupComparisons, primeComparisons, primeSites,
     companies: selectableCompanies(main),
     storageReady: !!getStaffDocsBucket(),
   })
@@ -292,7 +344,7 @@ export async function POST(request: NextRequest) {
       const why = bad.size > PAPER_INVOICE_MAX_FILE_BYTES ? '25MBを超えています' : '入れられない形式です（PDF・写真だけ）'
       return NextResponse.json({ error: `${bad.name} は${why}。アップロードしたファイルは消しました` }, { status: 400 })
     }
-    const record = compact({ ...parsed.fields, files, uploadedAt: now, uploadedBy: by }) as Omit<PaperInvoice, 'id'>
+    const record = compact({ ...parsed.fields, files, uploadedAt: now, uploadedBy: by, uploadedByName: byName(by, main) || undefined }) as Omit<PaperInvoice, 'id'>
     await setDoc(ref, record)
     await logActivity(by, 'paperInvoice.add', `紙の請求書を登録：${label(record)}（税込 ${record.total.toLocaleString()}円・${files.length}ファイル）`)
     return NextResponse.json({ ok: true, record: { ...record, id: docId } })
@@ -307,12 +359,13 @@ export async function POST(request: NextRequest) {
   const cur = { ...(snap.data() as PaperInvoice), id: docId }
 
   if (action === 'update') {
-    const parsed = parseFields(body, main, true)
+    const parsed = parseFields({ ...body, currentCompanyId: cur.companyId }, main, true)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
     // 空にした任意項目は消す（'' で上書き）。undefined は Firestore に書かない
     const patch: Record<string, unknown> = { updatedAt: now }
-    for (const [k, v] of Object.entries(parsed.fields)) patch[k] = v
-    for (const k of ['no', 'note', 'issueDate', 'subtotal', 'tax'] as const) {
+    // undefined は Firestore に書けないので null（一次から応援の会社へ付け替えたときの現場・工種など）
+    for (const [k, v] of Object.entries(parsed.fields)) patch[k] = v === undefined ? null : v
+    for (const k of ['no', 'note', 'issueDate', 'subtotal', 'tax', 'trade'] as const) {
       if (body[k] !== undefined && parsed.fields[k] === undefined) patch[k] = null
     }
     {

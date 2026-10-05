@@ -20,11 +20,11 @@ import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, 
 import { getMainData, getAttData, getAttDataCached, isClosedMonthYm, compute, getSubconRate, type MainData } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
 import { safeFileName, isValidIsoDate } from '@/lib/staff-docs'
-import { canBorrowFrom, type CompanyLike } from '@/lib/companies'
+import { canBorrowFrom, hasRole, type CompanyLike } from '@/lib/companies'
 import { parsePaperNumber, isBlankNumberInput } from '@/lib/paper-invoice'
 import {
   SUBCON_INVOICE_ALLOWED_TYPES, SUBCON_INVOICE_MAX_FILE_BYTES, SUBCON_INVOICE_MAX_FILES, SUBCON_INVOICE_DOC_ID_RE,
-  compareSubconInvoice, subconTotalsError, missingSubconInvoices,
+  compareSubconInvoice, subconTotalsError, missingSubconInvoices, docTypeOf,
   type SubconInvoice, type SubconInvoiceFile, type SubconExpected, type SubconComparison,
 } from '@/lib/subcon-invoice'
 import { signedUploadUrl, signedReadUrl, fileMeta, deleteFile, deleteFilesWithPrefix, getStaffDocsBucket } from '@/lib/storage-admin'
@@ -50,9 +50,12 @@ function compact<T extends Record<string, unknown>>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T
 }
 
-/** 請求元として選べる会社: 出面の外注として配置できる会社（同業・外注） */
-function selectableCompanies(main: MainData): { id: string; name: string }[] {
-  return (main.subcons || []).filter(c => canBorrowFrom(c as unknown as CompanyLike)).map(c => ({ id: c.id, name: c.name }))
+/** 請求元として選べる会社: 出面の外注として配置できる会社（同業・外注）＋ 支払内訳書を出す一次（山岡建設工業など・kind: 'prime'） */
+function selectableCompanies(main: MainData): { id: string; name: string; kind: 'subcon' | 'prime' }[] {
+  const all = (main.subcons || []) as unknown as CompanyLike[]
+  const subs = all.filter(c => canBorrowFrom(c)).map(c => ({ id: c.id, name: c.name, kind: 'subcon' as const }))
+  const primes = all.filter(c => hasRole(c, 'prime') && !canBorrowFrom(c)).map(c => ({ id: c.id, name: c.name, kind: 'prime' as const }))
+  return [...subs, ...primes]
 }
 
 function snapToList(snap: { forEach: (cb: (d: { id: string; data: () => Record<string, unknown> }) => void) => void }): SubconInvoice[] {
@@ -78,9 +81,11 @@ const optText = (v: unknown, max: number) => {
 function parseFields(body: Record<string, unknown>, main: MainData, partial: boolean):
   { ok: true; fields: Partial<SubconInvoice> } | { ok: false; error: string } {
   const f: Partial<SubconInvoice> = {}
+  const docType = body.docType === 'remittance' ? 'remittance' : body.docType === 'invoice' ? 'invoice' : (typeof body.currentDocType === 'string' ? body.currentDocType : 'invoice')
+  if (!partial || body.docType !== undefined) f.docType = docType as SubconInvoice['docType']
   if (!partial || body.companyId !== undefined) {
     const co = selectableCompanies(main).find(c => c.id === body.companyId)
-    if (!co) return { ok: false, error: '請求元の外注先を選んでください' }
+    if (!co) return { ok: false, error: docType === 'remittance' ? '支払元の会社を選んでください' : '請求元の外注先を選んでください' }
     f.companyId = co.id
     f.companyName = co.name
   }
@@ -90,8 +95,11 @@ function parseFields(body: Record<string, unknown>, main: MainData, partial: boo
   }
   if (!partial || body.total !== undefined) {
     const t = optNum(body.total)
-    if (t === undefined || t === 'invalid' || t <= 0) return { ok: false, error: '税込合計を入れてください' }
-    f.total = t
+    if (t === 'invalid') return { ok: false, error: '金額の数字が読めません' }
+    // 支払内訳書の振込額は任意（何か月分も載っていて1つに決まらないことがある）
+    if (docType === 'remittance') f.total = t ?? 0
+    else if (t === undefined || t <= 0) return { ok: false, error: '税込合計を入れてください' }
+    else f.total = t
   }
   for (const k of ['subtotal', 'tax'] as const) {
     if (body[k] === undefined) continue
@@ -159,16 +167,18 @@ export async function GET(request: NextRequest) {
   const records = snapToList(await getDocs(query(collection(db, COL), where('ym', '==', ym))))
   const main = await getMainData()
   const expected = await expectedFor(main, ym)
+  // 出面と見比べるのは外注の請求書だけ（支払内訳書は経営コックピットが帳簿の入金と照らす）
+  const invoices = records.filter(r => docTypeOf(r) === 'invoice')
   // 同じ外注先の請求書は合算で見比べる（現場ごとに2枚来る会社がある）
   const comparisons: Record<string, SubconComparison & { count: number }> = {}
-  for (const id of new Set(records.map(r => r.companyId))) {
-    const xs = records.filter(r => r.companyId === id)
+  for (const id of new Set(invoices.map(r => r.companyId))) {
+    const xs = invoices.filter(r => r.companyId === id)
     comparisons[id] = { ...compareSubconInvoice(xs, expected[id]), count: xs.length }
   }
   const names = Object.fromEntries((main.subcons || []).map(s => [s.id, s.name]))
   return NextResponse.json({
     ym, records, expected, comparisons,
-    missing: missingSubconInvoices(expected, records, names),
+    missing: missingSubconInvoices(expected, invoices, names),
     companies: selectableCompanies(main),
     storageReady: !!getStaffDocsBucket(),
   })
@@ -256,7 +266,7 @@ export async function POST(request: NextRequest) {
     }
     const record = compact({ ...parsed.fields, files, uploadedAt: now, uploadedBy: actor.by, uploadedByName: actor.name || undefined }) as Omit<SubconInvoice, 'id'>
     await setDoc(ref, record)
-    await logActivity(actor.by, 'subconInvoice.add', `外注の請求書を登録：${label(record)}（税込 ${record.total.toLocaleString()}円・${files.length}ファイル）`)
+    await logActivity(actor.by, 'subconInvoice.add', `${record.docType === 'remittance' ? '支払内訳書' : '外注の請求書'}を登録：${label(record)}（税込 ${record.total.toLocaleString()}円・${files.length}ファイル）`)
     return NextResponse.json({ ok: true, record: { ...record, id: docId } })
   }
 
@@ -269,7 +279,7 @@ export async function POST(request: NextRequest) {
   const cur = { ...(snap.data() as SubconInvoice), id: docId }
 
   if (action === 'update') {
-    const parsed = parseFields(body, main, true)
+    const parsed = parseFields({ ...body, currentDocType: docTypeOf(cur) }, main, true)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
     const patch: Record<string, unknown> = { updatedAt: now }
     for (const [k, v] of Object.entries(parsed.fields)) patch[k] = v
