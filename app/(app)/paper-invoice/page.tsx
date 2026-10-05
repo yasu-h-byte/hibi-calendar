@@ -8,6 +8,7 @@
  * 画面の型: ① 今月の見比べの状況 → ② 1行一覧 → 行を押すと右に見比べの詳細。
  * 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDanger・notify）に置き換え
  * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
+ * 2026-10-05: 一次（山岡建設工業など）へ出した請求書もここに入れる。現場を選び、同じ現場・同じ月の全部の合計を現場の請求額と比べる
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
@@ -26,7 +27,7 @@ import { SaveButton } from '@/components/ui/SaveButton'
 import {
   PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES,
   sanitizePaperLines, parsePaperNumber, isBlankNumberInput,
-  type PaperInvoice, type PaperInvoiceLine, type PaperComparison, type SystemInvoiceFigures,
+  type PaperInvoice, type PaperInvoiceLine, type PaperComparison, type SystemInvoiceFigures, type PrimeSiteComparison,
 } from '@/lib/paper-invoice'
 
 interface MonthData {
@@ -35,7 +36,11 @@ interface MonthData {
   comparisons: Record<string, PaperComparison>
   /** 同じ会社に2枚以上あるときの合算の見比べ（companyId → 見比べ＋枚数・2026-10-02） */
   groupComparisons?: Record<string, PaperComparison & { count: number }>
-  companies: { id: string; name: string }[]
+  /** 一次への請求書: `${companyId}_${siteId}` → 現場ごとの合計の見比べ（2026-10-05） */
+  primeComparisons?: Record<string, PrimeSiteComparison>
+  /** 一次の会社ごとに選べる現場 */
+  primeSites?: Record<string, { id: string; name: string }[]>
+  companies: { id: string; name: string; kind?: 'peer' | 'prime' }[]
   storageReady: boolean
 }
 
@@ -60,6 +65,15 @@ const SOURCE_LABEL: Record<SystemInvoiceFigures['source'], { label: string; tone
   pending: { label: 'システム承認待ち', tone: 'blue' },
   draft: { label: 'システムの下書き', tone: 'gray' },
   none: { label: 'システムに請求なし', tone: 'amber' },
+}
+
+function primeChip(c: PrimeSiteComparison | undefined) {
+  if (!c) return <Chip tone="gray">—</Chip>
+  const n = c.count >= 2 ? `（${c.count}枚の合計）` : ''
+  if (c.result === 'noBilling') return <Chip tone="amber">請求額が未入力</Chip>
+  if (c.result === 'match') return <Chip tone="green">請求額と一致{n}</Chip>
+  if (c.result === 'close') return <Chip tone="green">ほぼ一致 {signedYen(c.diff)}{n}</Chip>
+  return <Chip tone="red">差 {signedYen(c.diff)}{n}</Chip>
 }
 
 function diffChip(cmp: (PaperComparison & { count?: number }) | undefined) {
@@ -117,13 +131,18 @@ export default function PaperInvoicePage() {
   useEffect(() => { setOpenId(null) }, [ym])
 
   const records = data?.records || []
+  const isPrime = (companyId: string) => data?.companies.some(c => c.id === companyId && c.kind === 'prime') ?? false
+  const primeCmpOf = (r: PaperInvoice) => (r.siteId ? data?.primeComparisons?.[`${r.companyId}_${r.siteId}`] : undefined)
   // 同じ会社に2枚以上あるときは合算の見比べを使う（1枚ずつでは必ず「差あり」になる・2026-10-02）
   const cmpOf = (id: string) => {
     const r = data?.records.find(x => x.id === id)
     return (r && data?.groupComparisons?.[r.companyId]) || data?.comparisons[id]
   }
-  const matched = records.filter(r => cmpOf(r.id)?.match)
-  const differs = records.filter(r => { const c = cmpOf(r.id); return c && !c.match })
+  const matched = records.filter(r => isPrime(r.companyId) ? ['match', 'close'].includes(primeCmpOf(r)?.result || '') : cmpOf(r.id)?.match)
+  const differs = records.filter(r => {
+    if (isPrime(r.companyId)) return primeCmpOf(r)?.result === 'diff'
+    const c = cmpOf(r.id); return c && !c.match
+  })
   const open = records.find(r => r.id === openId) || null
 
   const openFile = async (r: PaperInvoice, i: number) => {
@@ -158,7 +177,7 @@ export default function PaperInvoicePage() {
       <PageHeader
         group="請求・原価"
         title="紙の請求書の控え"
-        sub="手作りで出した請求書を入れて、システムの計算と見比べます。応援の請求書はしばらく手作りで発行するので、システムで未発行でも問題ありません"
+        sub="手作りで出した請求書（応援の請求書・山岡建設工業などの一次への請求書）を入れて、システムの計算や現場の請求額と見比べます。応援の請求書はしばらく手作りで発行するので、システムで未発行でも問題ありません"
         actions={
           <>
             <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
@@ -221,6 +240,8 @@ export default function PaperInvoicePage() {
               <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この月に入れた請求書はありません</div>
             ) : records.map(r => {
               const sys = data.system[r.companyId]
+              const prime = isPrime(r.companyId)
+              const pc = primeCmpOf(r)
               return (
                 <div key={r.id} role="button" tabIndex={0}
                   onClick={() => setOpenId(r.id)}
@@ -228,15 +249,18 @@ export default function PaperInvoicePage() {
                   className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_140px_140px_190px_130px] gap-2 lg:gap-3.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
                   <span className="min-w-0">
                     <span className="block text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{r.companyName}</span>
+                    {prime && <span className="block text-xs text-hibi-sub dark:text-gray-400">{r.siteName}{r.trade ? `・${r.trade}` : ''}</span>}
                     {r.no && <span className="block text-xs text-hibi-sub dark:text-gray-400">{r.no}</span>}
                   </span>
                   <span className="lg:text-right text-[1.0625rem] font-bold tabular-nums text-gray-900 dark:text-white">
                     <span className="lg:hidden mr-2 text-xs font-normal text-hibi-sub dark:text-gray-400">紙</span>{yen(r.total)}
                   </span>
                   <span className="lg:text-right text-[0.9375rem] tabular-nums text-gray-700 dark:text-gray-300">
-                    <span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">システム</span>{sys && sys.source !== 'none' ? yen(sys.total) : '—'}
+                    {prime
+                      ? <><span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">現場の請求額（税抜）</span>{pc && pc.billing > 0 ? yen(pc.billing) : '—'}</>
+                      : <><span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">システム</span>{sys && sys.source !== 'none' ? yen(sys.total) : '—'}</>}
                   </span>
-                  <span>{diffChip(cmpOf(r.id))}</span>
+                  <span>{prime ? primeChip(pc) : diffChip(cmpOf(r.id))}</span>
                   <span className="text-xs text-hibi-sub dark:text-gray-400">{r.files.length}ファイル</span>
                 </div>
               )
@@ -256,6 +280,7 @@ export default function PaperInvoicePage() {
           )}
 
           <p className="text-xs text-hibi-sub dark:text-gray-400 leading-relaxed">
+            山岡建設工業などの一次への請求書は、同じ現場・同じ月の全部（工種ごとの何枚でも）を足して、原価・収益で入れた現場の請求額（税抜）と比べます。1,000円以内の差は端数としてほぼ一致にしています。
             システムの数字は、発行済み（または承認待ち）ならその内容、まだなら出面から作る下書きです。
             応援の請求書は残業を人工に換算して含めるので、手作りが「残業 ◯h」の別行なら、人工と残業の欄で差が出ます。
           </p>
@@ -264,17 +289,24 @@ export default function PaperInvoicePage() {
 
       {open && data && (
         <SidePanel label={`${open.companyName} の見比べ`} onClose={() => setOpenId(null)} width="max-w-[760px]">
+          {isPrime(open.companyId) ? (
+            <PrimeDetail rec={open} cmp={primeCmpOf(open)} sheets={records.filter(r => r.companyId === open.companyId && r.siteId === open.siteId)}
+              onClose={() => setOpenId(null)} onOpenFile={i => openFile(open, i)}
+              onEdit={canEdit ? () => setModal({ mode: 'edit', rec: open }) : undefined}
+              onDelete={canDelete ? () => remove(open) : undefined} />
+          ) : (
           <Detail rec={open} sys={data.system[open.companyId]} cmp={cmpOf(open.id)}
             onClose={() => setOpenId(null)} onOpenFile={i => openFile(open, i)}
             onEdit={canEdit ? () => setModal({ mode: 'edit', rec: open }) : undefined}
             onDelete={canDelete ? () => remove(open) : undefined} />
+          )}
         </SidePanel>
       )}
 
       {modal && data && (
         <PaperInvoiceModal
           mode={modal.mode} rec={modal.mode === 'edit' ? modal.rec : undefined}
-          ym={ym} companies={data.companies}
+          ym={ym} companies={data.companies} primeSites={data.primeSites || {}}
           onClose={() => setModal(null)}
           onDone={(newYm) => { setModal(null); if (newYm && newYm !== ym) setYm(newYm); else load() }}
         />
@@ -282,6 +314,82 @@ export default function PaperInvoicePage() {
     </div>
   )
 }
+
+function PrimeDetail({ rec, cmp, sheets, onClose, onOpenFile, onEdit, onDelete }: {
+  rec: PaperInvoice; cmp?: PrimeSiteComparison; sheets: PaperInvoice[]
+  onClose: () => void; onOpenFile: (i: number) => void; onEdit?: () => void; onDelete?: () => void
+}) {
+  return (
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white">{rec.companyName}</h2>
+          <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">
+            {ymLabelOf(rec.ym)} ／ {rec.siteName}{rec.trade && `・${rec.trade}`}{rec.no && ` ／ ${rec.no}`}{rec.issueDate && ` ／ 発行日 ${rec.issueDate}`}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">{primeChip(cmp)}</div>
+        </div>
+        <CloseButton onClick={onClose} />
+      </div>
+
+      <section className="space-y-2">
+        <h3 className="text-base font-bold text-gray-900 dark:text-white">ファイル</h3>
+        <div className="flex flex-wrap gap-2">
+          {rec.files.map((f, i) => (
+            <button key={i} type="button" onClick={() => onOpenFile(i)}
+              className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[0.8125rem] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 max-w-full truncate">
+              {f.name}（{fmtSize(f.size)}）
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-base font-bold text-gray-900 dark:text-white">{rec.siteName}の{ymLabelOf(rec.ym)}（税抜）</h3>
+        <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-sm tabular-nums">
+          {sheets.map(x => (
+            <div key={x.id} className={`flex justify-between gap-3 px-3 py-2 border-t first:border-t-0 border-hibi-line dark:border-gray-700 ${x.id === rec.id ? 'bg-hibi-bg dark:bg-gray-700/40' : ''}`}>
+              <span>{x.trade || '工種の書き添えなし'}{x.no ? `（${x.no}）` : ''}</span>
+              <span>{typeof x.subtotal === 'number' ? yen(x.subtotal) : `${yen(Math.round(x.total / 1.1))}（税込 ÷ 1.1）`}</span>
+            </div>
+          ))}
+          {cmp && (
+            <>
+              <div className="flex justify-between gap-3 px-3 py-2 border-t border-hibi-line dark:border-gray-700 font-bold">
+                <span>請求書の合計（{cmp.count}枚）</span><span>{yen(cmp.invoiceExTax)}</span>
+              </div>
+              <div className="flex justify-between gap-3 px-3 py-2 border-t border-hibi-line dark:border-gray-700">
+                <span>原価・収益で入れた現場の請求額</span><span className="font-bold">{cmp.billing > 0 ? yen(cmp.billing) : '未入力'}</span>
+              </div>
+              {cmp.billing > 0 && (
+                <div className="flex justify-between gap-3 px-3 py-2 border-t border-hibi-line dark:border-gray-700">
+                  <span className="font-bold">差（請求書 − 請求額）</span>
+                  <span className={`font-bold ${cmp.result === 'diff' ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>{signedYen(cmp.diff)}</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <p className="text-xs text-hibi-sub dark:text-gray-400">工種ごとの請求書がまだ全部入っていないうちは、差が出ていて当たり前です。全部入れてから見てください</p>
+      </section>
+
+      {rec.note && (
+        <section className="space-y-1">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">メモ</h3>
+          <p className="text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">{rec.note}</p>
+        </section>
+      )}
+
+      {(onEdit || onDelete) && (
+        <div className="flex gap-2">
+          {onEdit && <button type="button" onClick={onEdit} className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">金額・現場を直す</button>}
+          {onDelete && <button type="button" onClick={onDelete} className="h-10 px-4 rounded-[10px] text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">削除</button>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
   rec: PaperInvoice; sys?: SystemInvoiceFigures; cmp?: PaperComparison
@@ -404,8 +512,9 @@ const toNum = (s: string) => parsePaperNumber(s)
 /** 単位の選択肢。「日」は人工として数えない（isManDayUnit）ので出さない */
 const UNIT_OPTIONS = ['人工', 'h', '式', '人']
 
-function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
-  mode: 'add' | 'edit'; rec?: PaperInvoice; ym: string; companies: { id: string; name: string }[]
+function PaperInvoiceModal({ mode, rec, ym, companies, primeSites, onClose, onDone }: {
+  mode: 'add' | 'edit'; rec?: PaperInvoice; ym: string; companies: { id: string; name: string; kind?: 'peer' | 'prime' }[]
+  primeSites: Record<string, { id: string; name: string }[]>
   onClose: () => void; onDone: (ym?: string) => void
 }) {
   const [companyId, setCompanyId] = useState(rec?.companyId || '')
@@ -416,6 +525,9 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   const [tax, setTax] = useState(rec?.tax != null ? String(rec.tax) : '')
   const [total, setTotal] = useState(rec?.total != null ? String(rec.total) : '')
   const [note, setNote] = useState(rec?.note || '')
+  const [siteId, setSiteId] = useState(rec?.siteId || '')
+  const [trade, setTrade] = useState(rec?.trade || '')
+  const prime = companies.some(c => c.id === companyId && c.kind === 'prime')
   const [lines, setLines] = useState<LineDraft[]>(() => (rec?.lines || []).map((l: PaperInvoiceLine) => ({
     site: l.site, item: l.item, qty: String(l.qty), unit: l.unit, rate: String(l.rate), amount: String(l.amount),
   })))
@@ -425,7 +537,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   const [err, setErr] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   // 開いたときの内容（閉じる前に「保存していない変更があります」を出す比較用）
-  const snapshot = () => JSON.stringify({ companyId, targetYm, no, issueDate, subtotal, tax, total, note, lines })
+  const snapshot = () => JSON.stringify({ companyId, targetYm, no, issueDate, subtotal, tax, total, note, lines, siteId, trade })
   const [base] = useState(snapshot)
   const dirty = files.length > 0 || snapshot() !== base
 
@@ -455,6 +567,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   const submit = async () => {
     // アップロードの前に、サーバ（commit）と同じ決まりで確かめる。落ちる内容ならファイルを送らない
     if (!companyId) { setErr('請求先の会社を選んでください'); return null }
+    if (prime && !siteId) { setErr('どの現場の請求書かを選んでください'); return null }
     if (!(toNum(total) > 0)) { setErr('税込合計を入れてください（数字で）'); return null }
     for (const [label, v] of [['税抜小計', subtotal], ['消費税', tax]] as const) {
       if (!isBlankNumberInput(v) && Number.isNaN(toNum(v))) { setErr(`${label}の数字が読めません`); return null }
@@ -464,7 +577,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
     if (!lineCheck.ok) { setErr(lineCheck.error); return null }
     if (mode === 'add' && files.length === 0) { setErr('請求書のファイル（PDF・写真）を選んでください'); return null }
     setErr('')
-    const fields = { companyId, ym: targetYm, total, subtotal, tax, no, issueDate, note, lines: lineRows }
+    const fields = { companyId, ym: targetYm, total, subtotal, tax, no, issueDate, note, lines: prime ? [] : lineRows, ...(prime ? { siteId, trade } : {}) }
     let uploadedDocId: string | null = null
     try {
       if (mode === 'edit' && rec) {
@@ -526,9 +639,14 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block">
             <span className="text-xs text-gray-500">請求先の会社 <span className="text-red-600">必須</span></span>
-            <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={inputCls}>
+            <select value={companyId} onChange={e => { setCompanyId(e.target.value); setSiteId('') }} className={inputCls}>
               <option value="">選んでください</option>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <optgroup label="応援の請求書（同業者・HFU）">
+                {companies.filter(c => c.kind !== 'prime').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </optgroup>
+              <optgroup label="一次への請求書（山岡建設工業など）">
+                {companies.filter(c => c.kind === 'prime').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </optgroup>
             </select>
           </label>
           <label className="block">
@@ -536,6 +654,23 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
             <input type="month" value={ymValue} onChange={e => { const v = e.target.value.replace('-', ''); if (/^\d{6}$/.test(v)) setTargetYm(v) }} className={inputCls} />
           </label>
         </div>
+
+        {prime && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs text-gray-500">どの現場の請求書か <span className="text-red-600">必須</span></span>
+              <select value={siteId} onChange={e => setSiteId(e.target.value)} className={inputCls}>
+                <option value="">選んでください</option>
+                {(primeSites[companyId] || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs text-gray-500">工種（1つの現場で何枚かに分かれるとき）</span>
+              <input value={trade} onChange={e => setTrade(e.target.value)} placeholder="鉄骨・仮設・地上 など" className={inputCls} />
+            </label>
+            <p className="sm:col-span-2 text-xs text-hibi-sub dark:text-gray-400">同じ現場・同じ月の請求書は、工種ごとに何枚でも1枚ずつ入れてください。全部の合計を現場の請求額と比べます。明細は入れなくて大丈夫です（経営コックピットが AI で読みます）</p>
+          </div>
+        )}
 
         {mode === 'add' && (
           <div>
@@ -586,7 +721,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
           </label>
         </div>
 
-        <div className="space-y-2">
+        {!prime && <div className="space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-gray-900 dark:text-white">明細（任意・請求書に書いてあるとおり）</span>
             {lines.length > 0 && <span className="text-xs text-hibi-sub dark:text-gray-400 tabular-nums">金額の合計 {yen(linesSum)}</span>}
@@ -615,7 +750,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
             className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[0.8125rem] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
             ＋ 明細の行を足す
           </button>
-        </div>
+        </div>}
 
         <label className="block">
           <span className="text-xs text-gray-500">メモ（計算で気をつけたこと・いつもと違う点など）</span>

@@ -16,6 +16,11 @@
  * - 税抜小計・消費税・請求書番号・発行日・支払期日・メモ … 任意
  * 記録は独立コレクション `subconInvoices`（1件 = 受け取った請求書1枚）。
  *
+ * ## 支払内訳書（2026-10-05）
+ * 山岡建設工業など一次から届く支払内訳書（支払通知書・支払明細）も、種類 docType: 'remittance' でここに入れる（入口を DEDURA＋ に1本化）。
+ * 請求元は一次の会社、税込合計の代わりに振込額（任意・total は 0 のことがある）。出面との見比べ・「まだ届いていない」には入れない。
+ * 何か月分載っていても1件で入れる（経営コックピットの AI が月ごとに読み、帳簿の入金と照らす）。
+ *
  * ## 見比べ
  * 同じ外注先・同じ月の「出面 × 単価」（compute の subcons・税抜）と、請求書の税抜（無ければ税込 ÷ 1.1）を比べる。
  * 1万円以内か3%以内は「ほぼ一致」（残業・交通費・端数の範囲。経営コックピットの照合と同じ目安）。
@@ -29,12 +34,17 @@ export interface SubconInvoiceFile {
   size: number
 }
 
+/** invoice = 外注・同業者から届いた請求書 / remittance = 一次から届いた支払内訳書 */
+export type SubconDocType = 'invoice' | 'remittance'
+
 export interface SubconInvoice {
   id: string
+  /** 無い記録（2026-10-05 の最初の版）は invoice */
+  docType?: SubconDocType
   companyId: string     // 取引先マスタの id
   companyName: string
   ym: string            // 対象月（締めの月） YYYYMM
-  total: number         // 税込合計
+  total: number         // 税込合計（支払内訳書は振込額・入れなければ 0）
   // 任意項目は「修正で空にした」とき Firestore に null が入る
   subtotal?: number | null
   tax?: number | null
@@ -79,6 +89,8 @@ export const SUBCON_CLOSE_YEN = 10_000
 export const SUBCON_CLOSE_RATE = 0.03
 
 export const SUBCON_INVOICE_DOC_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+export const docTypeOf = (r: Pick<SubconInvoice, 'docType'>): SubconDocType => (r.docType === 'remittance' ? 'remittance' : 'invoice')
 
 /** 請求書の税抜（入っていれば税抜小計、無ければ税込 ÷ 1.1 を四捨五入） */
 export function invoiceExTax(inv: Pick<SubconInvoice, 'subtotal' | 'total'>): { value: number; estimated: boolean } {

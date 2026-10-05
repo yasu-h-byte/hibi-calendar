@@ -134,3 +134,21 @@ describe('docId の形', () => {
     expect(PAPER_INVOICE_DOC_ID_RE.test('../paper-invoices/x')).toBe(false)
   })
 })
+
+describe('comparePrimeSheets（一次への請求書・現場ごとの合計 2026-10-05）', () => {
+  const site = { siteId: 'sasazuka', siteName: '笹塚' }
+  test('工種ごとの何枚かを足して請求額と比べる', async () => {
+    const { comparePrimeSheets } = await import('@/lib/paper-invoice')
+    const c = comparePrimeSheets([{ subtotal: 1_000_000, total: 1_100_000 }, { subtotal: 2_500_000, total: 2_750_000 }, { total: 550_000 }], 4_000_000, site)
+    expect(c.count).toBe(3)
+    expect(c.invoiceExTax).toBe(4_000_000)
+    expect(c.exTaxEstimated).toBe(true)
+    expect(c.result).toBe('match')
+  })
+  test('1,000円以内はほぼ一致、超えれば差、請求額が無ければ未入力', async () => {
+    const { comparePrimeSheets } = await import('@/lib/paper-invoice')
+    expect(comparePrimeSheets([{ subtotal: 1_000_800, total: 1 }], 1_000_000, site).result).toBe('close')
+    expect(comparePrimeSheets([{ subtotal: 900_000, total: 1 }], 1_000_000, site).result).toBe('diff')
+    expect(comparePrimeSheets([{ subtotal: 900_000, total: 1 }], 0, site).result).toBe('noBilling')
+  })
+})
