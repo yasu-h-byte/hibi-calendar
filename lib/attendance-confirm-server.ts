@@ -28,6 +28,8 @@ export interface ConfirmReadiness {
   finalMissing: number
   /** 全部そろった＝本人確認を出してよい */
   ready: boolean
+  /** 全部そろった日時（ISO・ready のときだけ。日時の無い古い承認だけなら無い）。催促の「そろってから3日」の起点 */
+  readyAt?: string
 }
 
 /** 1か月分の文脈（出面・カレンダー）を持って、人ごとの数え方・承認のそろい具合・古くなったかを出す */
@@ -77,7 +79,8 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
     const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays, opts)
     const foremanMissing = gap.foremanMissing.length
     const finalMissing = gap.finalMissing.length
-    return { noEntries: false, foremanMissing, finalMissing, ready: foremanMissing === 0 && finalMissing === 0 }
+    const ready = foremanMissing === 0 && finalMissing === 0
+    return { noEntries: false, foremanMissing, finalMissing, ready, ...(ready && gap.latestAt ? { readyAt: gap.latestAt } : {}) }
   }
 
   /**
@@ -209,6 +212,12 @@ export interface StaffConfirmRow {
   finalMissing: number
   /** 確認の記録（あれば）。画面のバッジと連絡の中身に使う */
   confirmation: AttConfirmDoc | null
+  /**
+   * スマホに確認（再確認）が出た日（日本時間 YYYY-MM-DD・none／early／stale のときだけ）。催促はこの日から3日たってから
+   * （lib/confirm-reminder.ts・2026-10-05 代表決定）。その人の承認がそろった日。要再確認の人は、前に確認した日の方が
+   * 遅ければその日（出面を直した日時は記録に無いので、それより前には直っていない日を起点にする）。分からなければ無い
+   */
+  since?: string
 }
 
 /** その月の本人確認の一覧（対象者全員・状態つき）。月次集計の画面と月締めが同じものを使う */
@@ -235,10 +244,17 @@ export async function staffConfirmRows(args: {
     const ev = await evalStaffConfirm(c, w, ctx, { ym, todayIso, locked: isMonthLockedInLocks(main.locks, ym, o), fresh: args.fresh })
     // 記録が1件も無い月は対象外（スマホにも出さない）。対象者の選び方と同じだが、入社前・退職後だけの記録はここで落ちる
     if (ev.readiness.noEntries && !c) return null
+    let since: string | undefined
+    if (ev.state === 'none' || ev.state === 'early' || ev.state === 'stale') {
+      const readyDay = ev.readiness.readyAt ? jstDateOf(ev.readiness.readyAt) : ''
+      const confDay = ev.state === 'stale' && c?.at ? jstDateOf(c.at) : ''
+      since = (readyDay > confDay ? readyDay : confDay) || undefined
+    }
     return {
       workerId: w.id, name: w.name, nameVi: w.nameVi || '', org: o, state: ev.state,
       foremanMissing: ev.readiness.foremanMissing, finalMissing: ev.readiness.finalMissing,
       confirmation: c,
+      ...(since ? { since } : {}),
     } satisfies StaffConfirmRow
   }))
   return rows.filter((r): r is StaffConfirmRow => r !== null)

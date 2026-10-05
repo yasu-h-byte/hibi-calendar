@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
     const items = rows.map(r => ({
       workerId: r.workerId, name: r.name, nameVi: r.nameVi, org: r.org, state: r.state,
       foremanMissing: r.foremanMissing, finalMissing: r.finalMissing,
+      ...(r.since ? { since: r.since } : {}),
       ...(r.confirmation ? {
         status: r.confirmation.status, note: r.confirmation.note, at: r.confirmation.at,
         resolvedAt: r.confirmation.resolvedAt, resolvedBy: r.confirmation.resolvedBy, reply: r.confirmation.reply,

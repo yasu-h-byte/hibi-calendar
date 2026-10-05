@@ -18,6 +18,8 @@ export interface StaffConfirmInfo {
   /** 名前（お願いの文面用） */
   name?: string
   nameVi?: string
+  /** スマホに確認が出た日（催促の「3日たってから」の起点） */
+  since?: string
   org: 'hibi' | 'hfu'
   state: 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside'
   /** その人の承認で足りない「現場×日」（waiting の説明用） */
