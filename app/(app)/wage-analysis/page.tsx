@@ -12,11 +12,14 @@
  *    このファイルの JS はログインなしでも取れるので、個人の時給・事情をここに書かないこと（2026-10-02）。
  *
  * 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
+ * 2026-10-05: 残りをそろえた（表の見出しの黒地・全枠線、反映の確認窓とお知らせ、札、補足の文字色）
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { PageHeader, Segment, Chip } from '@/components/ui/PageParts'
+import { PageHeader, Segment, Chip, RowButton } from '@/components/ui/PageParts'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import {
   buildWageAnalysis, modelWage, findInversions, stageIQROutliers,
   STAGES, TOKYO_MIN_WAGE, MODEL_RAISE_RATE,
@@ -98,7 +101,7 @@ export default function WageAnalysisPage() {
     load(password, basis)
   }, [load, basis])
 
-  if (allowed === null) return <div className="p-6 text-gray-500">読み込み中…</div>
+  if (allowed === null) return <div className="p-6 text-hibi-sub dark:text-gray-400">読み込み中…</div>
   if (!allowed) return (
     <div className="max-w-6xl mx-auto space-y-5">
       <PageHeader group="賃金・評価" title="賃金分析" sub="代表だけが見られます" />
@@ -108,8 +111,17 @@ export default function WageAnalysisPage() {
       </section>
     </div>
   )
-  if (err) return <div className="p-6 text-red-600 dark:text-red-400">読み込めませんでした: {err}</div>
-  if (!rows || !plan) return <div className="p-6 text-gray-500">集計中…</div>
+  if (err) return (
+    <div className="max-w-6xl mx-auto space-y-5">
+      <PageHeader group="賃金・評価" title="賃金分析" />
+      <section role="alert" className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
+        <p className="text-sm font-bold text-red-700 dark:text-red-400">読み込めませんでした</p>
+        <p className="text-sm text-hibi-sub dark:text-gray-400 mt-1">{err}</p>
+        <p className="text-sm text-hibi-sub dark:text-gray-400 mt-1">画面を読み込み直してください。続くときは時間をおいてもう一度お試しください。</p>
+      </section>
+    </div>
+  )
+  if (!rows || !plan) return <div className="p-6 text-hibi-sub dark:text-gray-400">集計中…</div>
 
   return (
     <Report
@@ -208,7 +220,7 @@ function Report({ a, plan, onApplied, pw, basis, onBasis }: {
 
       <DataTable a={a} />
 
-      <details className="text-xs text-gray-500">
+      <details className="text-xs text-hibi-sub dark:text-gray-400">
         <summary className="cursor-pointer py-1">東京都最低賃金の推移（計算の前提）</summary>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {TOKYO_MIN_WAGE.map(m => (
@@ -236,22 +248,20 @@ function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; ite
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 border-l-4 ${border}`}>
       <div className="text-xs font-bold text-hibi-sub dark:text-gray-400">{title}</div>
-      <div className="text-sm font-semibold mt-1 leading-relaxed">
+      <div className="text-sm font-bold mt-1 leading-relaxed">
         {items.length
           ? items.map(r => (
             <div key={r.id}>
               {r.name}（{r.years}年 {yen(r.hourly)}）
               {r.context && (
-                <span className="ml-1 text-3xs font-normal px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-                  {r.context.label}
-                </span>
+<span className="ml-1"><Chip tone="gray">{r.context.label}</Chip></span>
               )}
             </div>
           ))
           : <span className="text-gray-400 font-normal">該当なし</span>}
       </div>
       {items.some(r => r.context) && (
-        <div className="text-2xs text-gray-500 mt-2 space-y-1 leading-relaxed">
+        <div className="text-2xs text-hibi-sub dark:text-gray-400 mt-2 space-y-1 leading-relaxed">
           {items.filter(r => r.context).map(r => (
             <p key={r.id}><b>{r.context!.label}</b>：{r.context!.detail}</p>
           ))}
@@ -269,7 +279,7 @@ function CagrChart({ rows }: { rows: WageRow[] }) {
     <div className="space-y-1.5">
       {list.map(r => (
         <div key={r.id} className="flex items-center gap-2 text-xs">
-          <span className="w-40 shrink-0 text-right text-gray-500 truncate">{r.name}</span>
+          <span className="w-40 shrink-0 text-right text-hibi-sub dark:text-gray-400 truncate">{r.name}</span>
           <span className="w-11 shrink-0 text-right text-gray-400">{r.years}年</span>
           <div className="flex-1 relative h-6">
             <div className={`absolute inset-y-1 left-0 rounded ${r.allLow ? 'bg-red-500' : r.allHigh ? 'bg-blue-600' : 'bg-gray-400'}`}
@@ -302,7 +312,7 @@ function Matrix({ rows }: { rows: WageRow[] }) {
         <div className="absolute inset-y-0 left-1/2 w-px bg-gray-200 dark:bg-gray-700" />
         <div className={`absolute inset-y-1 rounded-sm ${v < -20 ? 'bg-red-500' : v > 20 ? 'bg-blue-600' : 'bg-gray-400'}`}
           style={v < 0 ? { right: '50%', width: `${w}%` } : { left: '50%', width: `${w}%` }} />
-        <span className="absolute top-0 text-3xs tabular-nums text-gray-500 whitespace-nowrap"
+        <span className="absolute top-0 text-3xs tabular-nums text-hibi-sub dark:text-gray-400 whitespace-nowrap"
           style={v < 0
             ? { right: `calc(50% + ${w}%)`, paddingRight: 4 }
             : { left: `calc(50% + ${w}%)`, paddingLeft: 4 }}>{signed(v)}</span>
@@ -311,7 +321,7 @@ function Matrix({ rows }: { rows: WageRow[] }) {
   }
   return (
     <div>
-      <div className="flex items-center gap-2 text-2xs text-gray-500 font-semibold mb-1">
+      <div className="flex items-center gap-2 text-2xs text-hibi-sub dark:text-gray-400 font-bold mb-1">
         <span className="w-40 shrink-0" />
         <span className="flex-1 text-center">A 段階内平均</span>
         <span className="flex-1 text-center">B 全体傾向線</span>
@@ -320,7 +330,7 @@ function Matrix({ rows }: { rows: WageRow[] }) {
       <div className="space-y-1">
         {list.map(r => (
           <div key={r.id} className="flex items-center gap-2">
-            <span className="w-40 shrink-0 text-right text-xs text-gray-500 truncate" title={`${r.years}年 ${yen(r.hourly)}`}>{r.name}</span>
+            <span className="w-40 shrink-0 text-right text-xs text-hibi-sub dark:text-gray-400 truncate" title={`${r.years}年 ${yen(r.hourly)}`}>{r.name}</span>
             <Bar v={r.devStage} /><Bar v={r.devTrend} /><Bar v={r.devCohort} />
           </div>
         ))}
@@ -335,12 +345,12 @@ function StageTable({ a }: { a: WageAnalysis }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
         <thead>
-          <tr className="bg-gray-800 text-white">
-            <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-left">段階</th>
-            <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5">在籍</th>
-            <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5">人数</th>
-            <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5">平均時給</th>
-            <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5">前段階からの昇給</th>
+          <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
+            <th className="border-b border-hibi-line dark:border-gray-700 px-2 py-1.5 text-left">段階</th>
+            <th className="border-b border-hibi-line dark:border-gray-700 px-2 py-1.5">在籍</th>
+            <th className="border-b border-hibi-line dark:border-gray-700 px-2 py-1.5">人数</th>
+            <th className="border-b border-hibi-line dark:border-gray-700 px-2 py-1.5">平均時給</th>
+            <th className="border-b border-hibi-line dark:border-gray-700 px-2 py-1.5">前段階からの昇給</th>
           </tr>
         </thead>
         <tbody>
@@ -350,11 +360,11 @@ function StageTable({ a }: { a: WageAnalysis }) {
             const jump = prev !== undefined ? (a.stageAvg[i] / a.stageAvg[prev] - 1) * 100 : null
             return (
               <tr key={s.key}>
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">{s.key}</td>
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-center text-gray-500">{s.years}</td>
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-center">{counts[i]}</td>
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums">{yen(a.stageAvg[i])}</td>
-                <td className={`border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums font-semibold ${jump !== null && jump > 30 ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5">{s.key}</td>
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-center text-hibi-sub dark:text-gray-400">{s.years}</td>
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-center">{counts[i]}</td>
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums">{yen(a.stageAvg[i])}</td>
+                <td className={`border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums font-bold ${jump !== null && jump > 30 ? 'text-blue-600 dark:text-blue-400' : ''}`}>
                   {jump !== null ? `+${jump.toFixed(1)}%（${signed(a.stageAvg[i] - a.stageAvg[prev!])}）` : '—'}
                 </td>
               </tr>
@@ -386,8 +396,6 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
   const schedule = plan.changes
   const { changes, pending, annualCost } = a.revision
   const [busy, setBusy] = useState('')
-  const [confirming, setConfirming] = useState<string | null>(null)
-  const [applyErr, setApplyErr] = useState('')
   const todayIso = a.todayIso
 
   /** その改定で実際に上がる人（すでに予定額以上なら対象外） */
@@ -406,7 +414,18 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
     if (!list.length || !c) return
     // ⚠️ このボタンは時給・日給だけを書く。固定月給（salary）の人は月給も変わるので、
     //   人員マスタで salary / salaryFrom / prevSalary を別途反映すること（2026-09-14 フォン・タンは直接反映済み）
-    setBusy(changeId); setApplyErr('')
+    // 確認は共通の窓で（2026-10-05。旧: その場に手書きの囲みとボタン）
+    const ok = await confirmDialog({
+      title: `「${c.label}」を人員マスタへ反映しますか？（${list.length}名）`,
+      description: [
+        list.map(({ row, to }) => `${row.name}　${yen(row.currentHourly)} → ${yen(to)}（日額 ${yen(row.currentHourly * 7)} → ${yen(to * 7)}）`).join('\n'),
+        `変更は記録に残り、取り消しはできません。適用開始日（${c.effective}）より前の月は改定前の時給で計算されます。`
+          + (c.effective.slice(-2) !== '01' ? '月の途中が実施日なので、実施月は暦日で按分した時給になります。' : ''),
+      ].join('\n'),
+      confirmLabel: '反映する',
+    })
+    if (!ok) return
+    setBusy(changeId)
     try {
       for (const { row, to } of list) {
         const res = await fetch('/api/workers', {
@@ -425,12 +444,19 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
             prevRate: row.currentHourly * 7,
           }),
         })
-        if (!res.ok) throw new Error(`${row.name} の更新に失敗しました（${res.status}）`)
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          // 途中まで反映された分は残る（もう一度押すと残りの人だけ反映する）
+          notify.failed(`${row.name} さんの反映`, j.error || 'サーバが受け付けませんでした', 'もう一度「人員マスタへ反映」を押すと、残りの人だけ反映します')
+          onApplied()
+          return
+        }
       }
-      setConfirming(null)
+      notify.success(`${list.length}名の時給を人員マスタへ反映しました`)
       onApplied()
     } catch (e) {
-      setApplyErr(e instanceof Error ? e.message : '反映に失敗しました')
+      notify.failed('反映', e)
+      onApplied()
     } finally {
       setBusy('')
     }
@@ -439,79 +465,31 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
   if (!changes.length) return null
   const done = pending === 0
   const box = done
-    ? 'border-l-4 border-l-green-500 bg-green-50 dark:bg-green-900/20'
-    : 'border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-900/20'
+    ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
+    : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'
   return (
-    <section className={`rounded-xl p-4 ${box}`}>
-      <div className="text-sm font-semibold mb-2">予定されている賃金改定</div>
+    <section className={`rounded-xl border px-5 py-4 ${box}`}>
+      <div className="text-sm font-bold mb-2">予定されている賃金改定</div>
       <div className="space-y-1.5">
         {changes.map(c => (
           <div key={c.id} className="text-xs leading-relaxed">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="tabular-nums text-gray-500">{c.effective}</span>
-              <span className="font-semibold">{c.label}</span>
-              <span className="text-gray-500">
+              <span className="tabular-nums text-hibi-sub dark:text-gray-400">{c.effective}</span>
+              <span className="font-bold">{c.label}</span>
+              <span className="text-hibi-sub dark:text-gray-400">
                 {c.rate ? `一律 ${(c.rate * 100).toFixed(3)}％・` : ''}{c.count}名
               </span>
-              <span className={`text-2xs px-2 py-0.5 rounded-full ${c.pending === 0
-                ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200'
-                : 'bg-amber-100 text-amber-800 dark:bg-amber-800/40 dark:text-amber-200'}`}>
-                {c.pending === 0 ? '反映済み' : `未反映 ${c.pending}名`}
-              </span>
-              <span className="text-gray-500 tabular-nums">年 +{yen(c.annualCost)}</span>
+              <Chip tone={c.pending === 0 ? 'green' : 'amber'}>{c.pending === 0 ? '反映済み' : `未反映 ${c.pending}名`}</Chip>
+              <span className="text-hibi-sub dark:text-gray-400 tabular-nums">年 +{yen(c.annualCost)}</span>
               {c.pending > 0 && (
                 c.effective <= todayIso ? (
-                  <button
-                    onClick={() => { setConfirming(c.id); setApplyErr('') }}
-                    disabled={busy !== ''}
-                    className="text-2xs px-2 py-0.5 rounded border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition disabled:opacity-50 dark:border-blue-400 dark:text-blue-300"
-                  >
-                    人員マスタへ反映
-                  </button>
+                  <RowButton tone="main" busy={busy === c.id} busyLabel="反映しています" disabled={busy !== ''} onClick={() => apply(c.id)}>人員マスタへ反映</RowButton>
                 ) : (
-                  <span className="text-2xs text-gray-400">実施日になると反映ボタンが出ます</span>
+                  <span className="text-2xs text-hibi-sub dark:text-gray-400">実施日になると反映ボタンが出ます</span>
                 )
               )}
             </div>
-            <div className="text-gray-500 pl-1">{c.reason}</div>
-
-            {confirming === c.id && (
-              <div className="mt-2 ml-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3">
-                <div className="font-semibold mb-1.5">この内容で人員マスタを書き換えます</div>
-                <div className="space-y-0.5 mb-2">
-                  {pendingRows(c.id).map(({ row, to }) => (
-                    <div key={row.id} className="tabular-nums">
-                      {row.name}　{yen(row.currentHourly)} → <b>{yen(to)}</b>
-                      <span className="text-gray-500">（日額 {yen(row.currentHourly * 7)} → {yen(to * 7)}）</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-2xs text-gray-500 mb-2 leading-relaxed">
-                  変更は監査証跡（auditTrail）に記録され、取り消しはできません。
-                  適用開始日（{c.effective}）より前の月は改定前の時給で計算されます。
-                  {c.effective.slice(-2) !== '01' && (
-                    <> 月の途中が実施日なので、<b>実施月は暦日で按分した時給</b>になります。</>
-                  )}
-                </p>
-                {applyErr && <p className="text-2xs text-red-600 mb-2">{applyErr}</p>}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => apply(c.id)}
-                    disabled={busy !== ''}
-                    className="text-xs px-3 py-1 rounded bg-hibi-navy text-white hover:opacity-90 disabled:opacity-50"
-                  >
-                    {busy === c.id ? '反映中…' : '反映する'}
-                  </button>
-                  <button
-                    onClick={() => setConfirming(null)}
-                    disabled={busy !== ''}
-                    className="text-xs px-3 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    やめる
-                  </button>
-                </div>
-              </div>
-            )}
+            <div className="text-hibi-sub dark:text-gray-400 pl-1">{c.reason}</div>
           </div>
         ))}
       </div>
@@ -559,12 +537,12 @@ function MinWageWatch({ a }: { a: WageAnalysis }) {
   if (!under.length && !atRisk.length && !tokuteiNg.length) return null
 
   const tone = under.length || tokuteiNg.length
-    ? 'border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/20'
-    : 'border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-900/20'
+    ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+    : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'
 
   return (
-    <section className={`rounded-lg p-3 ${tone}`}>
-      <div className="text-sm font-semibold">最低賃金の確認</div>
+    <section className={`rounded-xl border px-5 py-4 ${tone}`}>
+      <div className="text-sm font-bold">最低賃金の確認</div>
       <div className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 space-y-1.5 leading-relaxed">
         {under.length > 0 && (
           <p className="text-red-700 dark:text-red-300">
@@ -676,7 +654,7 @@ function CurveChart({ a }: { a: WageAnalysis }) {
         <path d={line(curveAt)} fill="none" stroke="currentColor" strokeWidth={3}
           className="text-emerald-600 dark:text-emerald-400" />
         <text x={ML + PW + 6} y={py(curveAt(YEARS)) + 4}
-          className="fill-emerald-600 dark:fill-emerald-400 text-2xs font-semibold">カーブ</text>
+          className="fill-emerald-600 dark:fill-emerald-400 text-2xs font-bold">カーブ</text>
 
         {/* 整数年の点＋節目の金額 */}
         {Array.from({ length: YEARS + 1 }, (_, i) => i).map(i => (
@@ -685,7 +663,7 @@ function CurveChart({ a }: { a: WageAnalysis }) {
               className="fill-emerald-600 dark:fill-emerald-400" />
             {(i === 0 || i === 3 || i === 5 || i === 10 || i === 15) && (
               <text x={px(i)} y={py(curveAt(i)) - 10} textAnchor="middle"
-                className="fill-emerald-700 dark:fill-emerald-300 text-3xs font-semibold">{yen(curveAt(i))}</text>
+                className="fill-emerald-700 dark:fill-emerald-300 text-3xs font-bold">{yen(curveAt(i))}</text>
             )}
           </g>
         ))}
@@ -740,14 +718,14 @@ function CurveChart({ a }: { a: WageAnalysis }) {
 /** 昇給カーブの年次表。旧7%複利を隣に置いて、どこで差がつくかを見えるようにする。 */
 function CurveTable({ a }: { a: WageAnalysis }) {
   const years = Array.from({ length: 16 }, (_, i) => i)
-  const th = 'border border-gray-300 dark:border-gray-600 px-2 py-1.5'
-  const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
+  const th = 'border-b border-hibi-line dark:border-gray-700 px-2 py-1.5'
+  const td = 'border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
   const max = curveWage(a.curveStart, 15)
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
         <thead>
-          <tr className="bg-gray-800 text-white">
+          <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
             <th className={th}>在籍</th><th className={th}>昇給額</th><th className={th}>時給</th>
             <th className={th}>月額({MONTHLY_HOURS}h)</th><th className={th}>起点比</th>
             <th className={th}>旧7%複利</th>
@@ -760,14 +738,14 @@ function CurveTable({ a }: { a: WageAnalysis }) {
             const old = modelWage(a.curveStart, n)
             const mark = n === 0 || n === 3 || n === 5 || n === 10
             return (
-              <tr key={n} className={mark ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
+              <tr key={n} className={mark ? 'bg-hibi-active dark:bg-blue-900/20' : ''}>
                 <td className={td}>{n}年</td>
                 <td className={td}>{n ? '+' + yen(curveRaiseAt(n - 1)) : '—'}</td>
-                <td className={`${td} font-semibold`}>{yen(v)}</td>
+                <td className={`${td} font-bold`}>{yen(v)}</td>
                 <td className={td}>{yen(v * MONTHLY_HOURS)}</td>
                 <td className={td}>{(v / a.curveStart).toFixed(2)}倍</td>
                 <td className={`${td} text-gray-400`}>{yen(old)}<span className="ml-1 text-3xs">{signed(v - old)}</span></td>
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5">
                   <div className="h-3 rounded bg-blue-600 dark:bg-blue-500" style={{ width: `${(v / max) * 100}%` }} />
                 </td>
               </tr>
@@ -811,7 +789,7 @@ function CurveGap({ a }: { a: WageAnalysis }) {
           : { left: '50%', width: `${w}%` }
         return (
           <div key={r.id} className="flex items-center gap-2 text-xs">
-            <span className="w-40 shrink-0 text-right text-gray-500 truncate">
+            <span className="w-40 shrink-0 text-right text-hibi-sub dark:text-gray-400 truncate">
               {r.name}{r.revisionTarget && <span className="text-amber-600 ml-1" title="2026年10月改定の対象">★</span>}
             </span>
             <span className="w-11 shrink-0 text-right text-gray-400">{r.years}年</span>
@@ -826,7 +804,7 @@ function CurveGap({ a }: { a: WageAnalysis }) {
               )}
               <div className={`absolute inset-y-1 rounded-sm ${over ? 'bg-blue-600' : under ? 'bg-red-500' : 'bg-gray-400'}`}
                 style={pos(r.devCurveRevised, wRev)} />
-              <span className="absolute top-0 text-3xs tabular-nums text-gray-500 whitespace-nowrap"
+              <span className="absolute top-0 text-3xs tabular-nums text-hibi-sub dark:text-gray-400 whitespace-nowrap"
                 style={r.devCurveRevised < 0
                   ? { right: `calc(50% + ${wRev}%)`, paddingRight: 4 }
                   : { left: `calc(50% + ${wRev}%)`, paddingLeft: 4 }}>
@@ -847,9 +825,9 @@ function CurveGap({ a }: { a: WageAnalysis }) {
 /** 賃金改定の明細。事由ごとに表を分け、前後比較と積み残しを示す。 */
 function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
   const schedule = plan.changes
-  const th = 'border border-gray-300 dark:border-gray-600 px-2 py-1.5'
-  const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
-  const tl = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5'
+  const th = 'border-b border-hibi-line dark:border-gray-700 px-2 py-1.5'
+  const td = 'border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
+  const tl = 'border-b border-gray-100 dark:border-gray-700 px-2 py-1.5'
 
   // 改定してもなおカーブに届かない人
   const stillUnder = a.rows.filter(r => r.revisionTarget && r.devCurveRevised < -20)
@@ -873,15 +851,15 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
         const gainOf = (r: WageRow) => change.targets[r.id] - priorOf(r.id, r.currentHourly)
         return (
           <div key={c.id}>
-            <div className="text-xs font-semibold mb-1">
+            <div className="text-xs font-bold mb-1">
               {c.effective}　{c.label}
               {c.rate ? `（一律 ${(c.rate * 100).toFixed(3)}％）` : ''}・{list.length}名
             </div>
-            <p className="text-2xs text-gray-500 mb-1.5 leading-relaxed">{c.reason}</p>
+            <p className="text-2xs text-hibi-sub dark:text-gray-400 mb-1.5 leading-relaxed">{c.reason}</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
-                  <tr className="bg-gray-800 text-white">
+                  <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
                     <th className={`${th} text-left`}>氏名</th><th className={`${th} text-left`}>在留資格</th>
                     <th className={th}>在籍</th><th className={th}>改定前</th><th className={th}>改定後</th>
                     <th className={th}>時給増</th><th className={th}>月額増</th>
@@ -895,10 +873,10 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
                     return (
                       <tr key={r.id}>
                         <td className={tl}>{r.name}</td>
-                        <td className={`${tl} text-gray-500`}>{r.visa}</td>
+                        <td className={`${tl} text-hibi-sub dark:text-gray-400`}>{r.visa}</td>
                         <td className={td}>{r.years}年</td>
-                        <td className={`${td} text-gray-500`}>{yen(before)}</td>
-                        <td className={`${td} font-semibold`}>{yen(after)}</td>
+                        <td className={`${td} text-hibi-sub dark:text-gray-400`}>{yen(before)}</td>
+                        <td className={`${td} font-bold`}>{yen(after)}</td>
                         <td className={td}>+{yen(after - before)}</td>
                         <td className={td}>+{yen((after - before) * MONTHLY_HOURS)}</td>
                         <td className={td}>{yen(after * MONTHLY_HOURS)}</td>
@@ -909,13 +887,13 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
                       </tr>
                     )
                   })}
-                  <tr className="bg-blue-50 dark:bg-blue-900/20 font-semibold">
+                  <tr className="bg-hibi-active dark:bg-blue-900/20 font-bold">
                     <td className={tl} colSpan={3}>合計 {list.length}名</td>
                     <td className={td}>—</td><td className={td}>—</td>
                     <td className={td}>+{yen(sum(gainOf))}</td>
                     <td className={td}>+{yen(sum(r => gainOf(r) * MONTHLY_HOURS))}</td>
                     <td className={td}>{yen(sum(r => change.targets[r.id] * MONTHLY_HOURS))}</td>
-                    <td className={`${td} text-gray-500`}>年 +{yen(c.annualCost)}</td>
+                    <td className={`${td} text-hibi-sub dark:text-gray-400`}>年 +{yen(c.annualCost)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -926,8 +904,8 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
 
       <div className="text-xs space-y-2 leading-relaxed">
         {stillUnder.length > 0 && (
-          <div className="rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50 border-l-4 border-l-gray-400">
-            <div className="font-semibold mb-1">改定後もカーブに届かない人</div>
+          <div className="rounded-xl border border-hibi-line dark:border-gray-700 bg-hibi-bg dark:bg-gray-800/50 px-4 py-3">
+            <div className="font-bold mb-1">改定後もカーブに届かない人</div>
             <p className="text-gray-600 dark:text-gray-300">
               {stillUnder.map(r => `${r.name} ${signed(r.devCurveRevised)}`).join('／')}。
               一律の率での引き上げも、契約どおりの改定も、カーブとの差は縮むが揃いはしない。
@@ -937,8 +915,8 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
           </div>
         )}
         {outsideUnder.length > 0 && (
-          <div className="rounded-lg p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-l-amber-500">
-            <div className="font-semibold mb-1">今回の対象外だが、カーブを下回っている人</div>
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+            <div className="font-bold mb-1">今回の対象外だが、カーブを下回っている人</div>
             <div className="text-gray-600 dark:text-gray-300 space-y-1.5">
               {outsideUnder.map(r => (
                 <p key={r.id}>
@@ -959,16 +937,16 @@ function Reference({ a }: { a: WageAnalysis }) {
   const ng = tokutei.filter(r => r.hourly < a.tokuteiFloor)
   const nearest = [...tokutei].sort((x, y) => x.hourly - y.hourly)[0]
   const minRatePct = (KENSETSU_TOKUTEI.minAnnualRaiseMonthly / MONTHLY_HOURS / a.curveStart) * 100
-  const th = 'border border-gray-300 dark:border-gray-600 px-2 py-1.5'
-  const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
+  const th = 'border-b border-hibi-line dark:border-gray-700 px-2 py-1.5'
+  const td = 'border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-xs font-semibold mb-1">市場水準（月額）</div>
+        <div className="text-xs font-bold mb-1">市場水準（月額）</div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="bg-gray-800 text-white">
+              <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
                 <th className={`${th} text-left`}>区分</th><th className={th}>月額</th>
                 <th className={th}>時給換算(140h)</th><th className={`${th} text-left`}>出典</th>
               </tr>
@@ -976,30 +954,30 @@ function Reference({ a }: { a: WageAnalysis }) {
             <tbody>
               {MARKET_REFERENCE.map(m => (
                 <tr key={m.label}>
-                  <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">{m.label}</td>
+                  <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5">{m.label}</td>
                   <td className={td}>{yen(m.monthly)}</td>
                   <td className={td}>{yen(m.monthly / 140)}</td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-gray-500">{m.note}</td>
+                  <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-hibi-sub dark:text-gray-400">{m.note}</td>
                 </tr>
               ))}
-              <tr className="bg-blue-50 dark:bg-blue-900/20 font-semibold">
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">自社 平均</td>
+              <tr className="bg-hibi-active dark:bg-blue-900/20 font-bold">
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5">自社 平均</td>
                 <td className={td}>{yen(a.overallAvg * 140)}</td>
                 <td className={td}>{yen(a.overallAvg)}</td>
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-gray-500">在籍{a.rows.length}名</td>
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-hibi-sub dark:text-gray-400">在籍{a.rows.length}名</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="rounded-lg border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs leading-relaxed">
-        <div className="font-semibold mb-1">建設分野 特定技能1号の法令要件</div>
+      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-xs leading-relaxed">
+        <div className="font-bold mb-1">建設分野 特定技能1号の法令要件</div>
         <p className="text-gray-600 dark:text-gray-300">出典: {KENSETSU_TOKUTEI.source}</p>
         <ul className="mt-2 space-y-1.5 text-gray-700 dark:text-gray-200">
           <li>
             <b>① 報酬の下限</b>：所定内賃金 ÷ 月所定労働時間 ≧ 地域別最低賃金 × {KENSETSU_TOKUTEI.minWageMultiplier}
-            <span className="block text-gray-500">
+            <span className="block text-hibi-sub dark:text-gray-400">
               東京都 {yen(a.currentMinWage)} × {KENSETSU_TOKUTEI.minWageMultiplier} = <b>{yen(a.tokuteiFloor)}／時</b>。
               {ng.length === 0
                 ? <>特定技能{tokutei.length}名は<b className="text-green-700 dark:text-green-400">全員クリア</b>（最も近いのは {nearest?.name} {yen(nearest?.hourly ?? 0)}・下限比 {((nearest?.hourly ?? 0) / a.tokuteiFloor).toFixed(2)}倍）。</>
@@ -1008,7 +986,7 @@ function Reference({ a }: { a: WageAnalysis }) {
           </li>
           <li>
             <b>② 定期昇給が必須</b>：年間の月額所定内賃金の上昇が {yen(KENSETSU_TOKUTEI.minAnnualRaiseMonthly)} 未満だと定期昇給と認められない
-            <span className="block text-gray-500">
+            <span className="block text-hibi-sub dark:text-gray-400">
               時給換算で年 {yen(KENSETSU_TOKUTEI.minAnnualRaiseMonthly / MONTHLY_HOURS)} 以上。起点 {yen(a.curveStart)} なら
               <b> 年{minRatePct.toFixed(2)}％が下限</b>。昇給スピードを落とす際も、これを下回らせない。
             </span>
@@ -1031,14 +1009,14 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
   const revChanged = a.rows.some(r => r.revisionGain > 0)
   return (
     <div className="space-y-4">
-      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 text-xs leading-relaxed">
+      <div className="bg-hibi-bg dark:bg-gray-800/50 rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3 text-xs leading-relaxed">
         在籍差0.3年超の全 {inv.concordant + inv.discordant} ペア中、逆転は
         <b> {inv.discordant} ペア</b>（順位一致率 {tauPct.toFixed(1)}%・Kendall τ = {inv.tau.toFixed(2)}）。
         {inv.tau >= 0.8
           ? ' τ が 0.8 以上なので、全体としては「長く働くほど高い」が保たれている。'
           : ' τ が 0.8 を下回っており、年功と時給の対応が崩れ始めている。'}
         {revChanged && (
-          <div className="mt-1.5 text-gray-500">
+          <div className="mt-1.5 text-hibi-sub dark:text-gray-400">
             2026年10月改定後は逆転 <b>{invRev.discordant} ペア</b>（τ = {invRev.tau.toFixed(2)}）。
             {invRev.discordant === inv.discordant
               ? '一律の率で上げているため順序は入れ替わらず、既存の逆転は解消も悪化もしない。解消するには個別に額で調整する必要がある。'
@@ -1050,7 +1028,7 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
       </div>
 
       <div>
-        <div className="text-xs font-semibold mb-1">逆転ペア（在籍が長いのに時給が低い）</div>
+        <div className="text-xs font-bold mb-1">逆転ペア（在籍が長いのに時給が低い）</div>
         {inv.pairs.length === 0 ? (
           <p className="text-xs text-gray-400">なし</p>
         ) : (
@@ -1058,14 +1036,14 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
             {inv.pairs.map((p, i) => (
               <div key={i} className="flex items-center gap-2 text-xs">
                 <span className="w-56 shrink-0 text-right text-red-600 dark:text-red-400">
-                  {p.senior.name}{p.senior.context && <span className="text-gray-500" title={p.senior.context.detail}>（{p.senior.context.label}）</span>}
+                  {p.senior.name}{p.senior.context && <span className="text-hibi-sub dark:text-gray-400" title={p.senior.context.detail}>（{p.senior.context.label}）</span>}
                   （{p.senior.years}年 {yen(p.senior.hourly)}）
                 </span>
                 <span className="text-gray-400">＜</span>
                 <span className="w-56 shrink-0 text-blue-600 dark:text-blue-400">
                   {p.junior.name}（{p.junior.years}年 {yen(p.junior.hourly)}）
                 </span>
-                <span className="tabular-nums text-gray-500">差 {yen(p.gap)}</span>
+                <span className="tabular-nums text-hibi-sub dark:text-gray-400">差 {yen(p.gap)}</span>
               </div>
             ))}
           </div>
@@ -1073,19 +1051,19 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
       </div>
 
       <div>
-        <div className="text-xs font-semibold mb-1">段階内の外れ値（IQR法・3名以上の段階のみ）</div>
+        <div className="text-xs font-bold mb-1">段階内の外れ値（IQR法・3名以上の段階のみ）</div>
         {outliers.length === 0 ? (
           <p className="text-xs text-gray-400">なし</p>
         ) : (
           <div className="space-y-1 text-xs">
             {outliers.map(o => (
               <div key={o.stage}>
-                <span className="text-gray-500">{STAGES[o.stage].key}（Q1 {yen(o.q1)}〜Q3 {yen(o.q3)}）: </span>
+                <span className="text-hibi-sub dark:text-gray-400">{STAGES[o.stage].key}（Q1 {yen(o.q1)}〜Q3 {yen(o.q3)}）: </span>
                 {o.high.map(r => (
-                  <span key={r.id} className="text-blue-600 dark:text-blue-400 font-semibold mr-2">↑ {r.name} {yen(r.hourly)}</span>
+                  <span key={r.id} className="text-blue-600 dark:text-blue-400 font-bold mr-2">↑ {r.name} {yen(r.hourly)}</span>
                 ))}
                 {o.low.map(r => (
-                  <span key={r.id} className="text-red-600 dark:text-red-400 font-semibold mr-2">↓ {r.name} {yen(r.hourly)}</span>
+                  <span key={r.id} className="text-red-600 dark:text-red-400 font-bold mr-2">↓ {r.name} {yen(r.hourly)}</span>
                 ))}
               </div>
             ))}
@@ -1098,9 +1076,9 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
 
 function DataTable({ a }: { a: WageAnalysis }) {
   const list = [...a.rows].sort((x, y) => y.hourly - x.hourly)
-  const th = 'border border-gray-300 dark:border-gray-600 px-2 py-1.5'
-  const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
-  const cls = (v: number | null) => v === null ? '' : v < -a.threshold ? 'text-red-600 font-semibold' : v > a.threshold ? 'text-blue-600 dark:text-blue-400 font-semibold' : ''
+  const th = 'border-b border-hibi-line dark:border-gray-700 px-2 py-1.5'
+  const td = 'border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
+  const cls = (v: number | null) => v === null ? '' : v < -a.threshold ? 'text-red-600 font-bold' : v > a.threshold ? 'text-blue-600 dark:text-blue-400 font-bold' : ''
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
       <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white mb-3">データ</h2>
@@ -1120,10 +1098,10 @@ function DataTable({ a }: { a: WageAnalysis }) {
           <tbody>
             {list.map(r => (
               <tr key={r.id}>
-                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">
+                <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5">
                   {r.name}
                   {r.stageException && <span className="text-amber-600 ml-1" title={r.context?.detail ?? '在留資格と制度上の段階が一致しない'}>※</span>}
-                  {r.context && <span className="text-gray-500 ml-1" title={r.context.detail}>（{r.context.label}）</span>}
+                  {r.context && <span className="text-hibi-sub dark:text-gray-400 ml-1" title={r.context.detail}>（{r.context.label}）</span>}
                 </td>
                 <td className={td}>{r.visa}</td>
                 <td className={td}>{STAGES[r.stage].key}</td>

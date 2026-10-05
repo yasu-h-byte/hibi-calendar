@@ -38,6 +38,15 @@ export const RELEASE_NOTES: Announcement[] = [
     publishedAt: '2026-10-05T18:00:00+09:00',
     publishedBy: '日比靖仁',
     roles: [...OFFICE, 'foreman'],
+    id: 'rn_20261005_old_rule_note',
+    title: '月次集計の注意点: 旧契約の人の「支給額が日給×働いた日数を下回る」を外しました（代表の決定）',
+    content:
+      '旧契約（固定月給）の人には「最低保証」の決まりを置いておらず、契約でも約束していないため、この注意は出さないことにしました。支給額は変わりません。'
+      + '旧契約の人のほかの注意点（日曜の出勤・夜勤・所定を超える出勤）と、ほかの人の注意点はそのまま出ます。',
+    category: 'info',
+    publishedAt: '2026-10-05T15:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
   },
   {
     id: 'rn_20261005_confirm_reminder',
