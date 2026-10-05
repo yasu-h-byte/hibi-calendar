@@ -52,7 +52,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
   // 「帳票出力」のメニュー項目は 2026-10-03 に廃止（月次集計・締めのタブだけに。検索からは引ける）
   // ── 請求・原価 ──
-  { label: '請求・支払', icon: 'receipt', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice'] },
+  { label: '請求・支払', icon: 'receipt', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice', '/subcon-invoice'] },
   { label: '原価・収益', icon: 'yen', href: '/cost', section: '請求・原価', cap: 'cost.view' },
   // 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）
   { label: '経営コックピット', icon: 'trend', external: 'https://keieidashboard.vercel.app/genba', section: '請求・原価', cap: 'cockpit.view' },
@@ -127,6 +127,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   // 請求
   { label: '応援の請求書（同業者へ）', where: '請求・支払 → 請求・支払の一覧', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
   { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求・支払 → 紙の請求書の控え', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
+  { label: '受け取った外注の請求書（保管・出面との見比べ）', where: '請求・支払 → 受け取った請求書', href: '/subcon-invoice', cap: 'invoice.view', keywords: 'うけとった 外注 請求書 紙 写真 スキャン 支払 見比べ' },
   { label: 'HFU → 日比建設 の請求書', where: '請求・支払 → 請求書を作る → HFU', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
   { label: '請求書の自社情報・振込先', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: '登録番号 インボイス 口座 振込' },
   // 経営

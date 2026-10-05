@@ -25,6 +25,7 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   { coll: 'calendarSignLog', prefix: 'csignlog', note: '署名の恒久台帳（append-only の正本）' },
   { coll: 'peerInvoices', prefix: 'peerinv', note: '応援・HFU の請求書（発行・申請・取り消しの記録）' },
   { coll: 'paperInvoices', prefix: 'paperinv', note: '紙（手作り）で出した請求書の記録（ファイル本体は Storage）' },
+  { coll: 'subconInvoices', prefix: 'subinv', note: '受け取った外注の請求書の記録（ファイル本体は Storage・2026-10-05）' },
   // 2026-10-02 総合点検で追加
   { coll: 'attConfirm', prefix: 'attconfirm', note: '月末の本人確認（月締めの前提）' },
   { coll: 'staffDocs', prefix: 'staffdocs', note: '書類庫の情報（消えると Storage のファイルにたどり着けない）' },

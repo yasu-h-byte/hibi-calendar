@@ -19,6 +19,7 @@ export const PAGE_CAPS: { path: string; caps: Capability[] | null }[] = [
   { path: '/peer-statement', caps: ['invoice.view'] },
   { path: '/peer-invoice', caps: ['invoice.view'] },
   { path: '/paper-invoice', caps: ['invoice.view'] },
+  { path: '/subcon-invoice', caps: ['invoice.view'] },
   { path: '/cost', caps: ['cost.view'] },
   { path: '/workers', caps: ['workers.view'] },
   { path: '/staff-docs', caps: ['staffDocs.view'] },
