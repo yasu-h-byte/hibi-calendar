@@ -56,7 +56,11 @@ export async function GET(request: NextRequest) {
       const homeLeaves = await getAllActiveHomeLeaves()
       const result = computeMonthly(main, att.d, att.sd, checkYm, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
       const validation = validatePayrolls(result.workers as unknown as PayrollSnapshot[])
-      monthlyAnomalyCount = validation.affectedWorkerIds.length
+      // 「確認した」が付いた注意点は数えない（2026-10-05・lib/pay-note-ack.ts。確認の記録は60秒キャッシュ）
+      const { summarizeOpenIssues } = await import('@/lib/pay-note-ack')
+      const { loadPayNoteAcks } = await import('@/lib/pay-note-ack-server')
+      const acks = validation.total > 0 ? await loadPayNoteAcks(checkYm).catch(() => []) : []
+      monthlyAnomalyCount = summarizeOpenIssues(validation.issues, acks).affectedWorkerIds.length
     } catch (e) {
       console.warn('[sidebar-badges] monthly check failed:', e)
     }

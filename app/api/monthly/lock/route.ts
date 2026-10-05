@@ -5,7 +5,9 @@ import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib
 import { logActivity } from '@/lib/activity'
 import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
-import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
+import { validatePayrolls, type PayrollSnapshot, type PayrollValidationIssue } from '@/lib/payroll-validator'
+import { splitIssuesByAck } from '@/lib/pay-note-ack'
+import { loadPayNoteAcks } from '@/lib/pay-note-ack-server'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 
 /** 週残業しきい値の判定に使う日別カレンダー（監査④・給与Excelと同一基準） */
@@ -38,7 +40,10 @@ function currentYmJst(): string {
 type AttDataT = Awaited<ReturnType<typeof getAttData>>
 
 /** att: POST で1回だけ読んだ出面（2026-10-02 点検: 1回の締めで att_YYYYMM を3回読んでいた） */
-async function checkReadyToLock(ym: string, org: string | undefined, att: AttDataT): Promise<string | null> {
+/** out.warnings: ③ の検算で出た注意点（warning）を呼び出し側へ返す（⑦ 未確認の注意点のチェックで使う。計算は1回だけ） */
+async function checkReadyToLock(
+  ym: string, org: string | undefined, att: AttDataT, out?: { warnings?: PayrollValidationIssue[] },
+): Promise<string | null> {
   // ① 進行中・未来の月
   if (ym >= currentYmJst()) {
     return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月はまだ終わっていないため締められません。月が終わり、入力と職長チェックがすべて完了してから締めてください`
@@ -81,6 +86,7 @@ async function checkReadyToLock(ym: string, org: string | undefined, att: AttDat
     const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
     const targets = result.workers.filter(w => orgKey === 'all' ? true : ((isHfu(w.org) ? 'hfu' : 'hibi') === orgKey))
     const v = validatePayrolls(targets as unknown as PayrollSnapshot[])
+    if (out) out.warnings = v.issues.filter(i => i.severity === 'warning')
     if (v.critical > 0) {
       const names = [...new Set(v.issues.filter(i => i.severity === 'critical').map(i => i.workerName))].slice(0, 8).join('、')
       return `給与計算の自動検算で異常（critical ${v.critical}件: ${names}）が残っているため締められません。月次集計画面で該当スタッフの計算根拠を確認し、出面を修正してから締めてください`
@@ -211,7 +217,7 @@ export async function POST(request: NextRequest) {
     : `workerId=${auth.actor}`
 
   try {
-    const { ym, locked, org, allowUnconfirmed } = await request.json()
+    const { ym, locked, org, allowUnconfirmed, allowUnackedNotes } = await request.json()
     if (!ym) {
       return NextResponse.json({ error: 'ym required' }, { status: 400 })
     }
@@ -221,9 +227,24 @@ export async function POST(request: NextRequest) {
     let attOnce: AttDataT | null = null
     if (locked) {
       attOnce = await getAttData(ym)
-      const notReady = await checkReadyToLock(ym, org, attOnce)
+      const checked: { warnings?: PayrollValidationIssue[] } = {}
+      const notReady = await checkReadyToLock(ym, org, attOnce, checked)
       if (notReady) {
         return NextResponse.json({ error: notReady }, { status: 409 })
+      }
+      // ⑦ 給与チェックの注意点で「確認した」が付いていないもの（2026-10-05 代表決定）。残っていれば一覧を返し、
+      //    承知のうえ（allowUnackedNotes）でだけ締める。確認の記録はキャッシュを使わず読み直す。判定は lib/pay-note-ack.ts
+      const unacked = splitIssuesByAck(checked.warnings || [], await loadPayNoteAcks(ym, { fresh: true })).open
+      if (unacked.length > 0 && !allowUnackedNotes) {
+        return NextResponse.json({
+          error: `給与チェックの注意点で、確認していないものが ${unacked.length}件 あります`,
+          code: 'PAY_NOTES_UNACKED',
+          notes: unacked.map(i => ({ workerId: i.workerId, name: i.workerName, code: i.field, message: i.message })),
+        }, { status: 409 })
+      }
+      if (unacked.length > 0) {
+        await logActivity('admin', 'monthly.lock.unackedNotes',
+          `${ym} 給与チェックの注意点を確認しないまま締め（操作者: ${actorLabel}）: ${unacked.map(i => `${i.workerName}=${i.field}`).join('、')}`)
       }
       // ⑥ 本人確認（ベトナム人スタッフのスマホ）。残っていれば一覧を返し、承知のうえ（allowUnconfirmed）でだけ締める
       const pending = await staffConfirmPending(ym, org, attOnce)

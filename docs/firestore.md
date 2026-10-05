@@ -180,6 +180,13 @@ workSchedule?: {
 ### announcements/{auto}
 お知らせ（ダッシュボード表示用）。
 
+### payNoteAcks/{ym}_{workerId}_{code}
+
+給与チェックの注意点（warning）を「確認した」記録（2026-10-05）。決まりは `lib/pay-note-ack.ts`、読み書きは `/api/monthly/note-ack`
+（読む＝monthly.view・書く＝monthly.close）。`ym`・`workerId`・`code`（注意点の種類）・`message`（確認したときの文面）・
+`note`（メモ・任意）・`by`・`byName`・`at`。**今の文面が `message` と違えば未確認に戻る**（読む側で判定）。取り消しはドキュメントを消す
+（操作ログ `monthly.noteAck` / `monthly.noteAck.cancel` に残る）。文面に時給などが入るので、給与を見られる人にしか返さない。日次バックアップの対象
+
 ### attConfirm/{ym}_{workerId}
 本人の出面確認（前の月・承認がそろってから。2026-09-30・`docs/attendance.md`）。1人1か月1件（上書き）。出面そのものは変えない。
 

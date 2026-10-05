@@ -30,6 +30,8 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   { coll: 'staffDocs', prefix: 'staffdocs', note: '書類庫の情報（消えると Storage のファイルにたどり着けない）' },
   { coll: 'auditTrail', prefix: 'audittrail', note: '給与欄の変更の永続記録（労基法115条の証跡・削除処理を持たない正本）' },
   { coll: 'calendarQuestions', prefix: 'calq', note: '就業カレンダーへの質問・異議' },
+  // 2026-10-05 追加
+  { coll: 'payNoteAcks', prefix: 'paynoteack', note: '給与チェックの注意点を「確認した」記録（誰が・いつ・メモ）' },
 ]
 
 /**
