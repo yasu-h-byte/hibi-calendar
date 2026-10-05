@@ -38,6 +38,8 @@ export const RELEASE_NOTES: Announcement[] = [
     publishedAt: '2026-10-05T18:00:00+09:00',
     publishedBy: '日比靖仁',
     roles: [...OFFICE, 'foreman'],
+  },
+  {
     id: 'rn_20261005_old_rule_note',
     title: '月次集計の注意点: 旧契約の人の「支給額が日給×働いた日数を下回る」を外しました（代表の決定）',
     content:
