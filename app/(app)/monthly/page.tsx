@@ -5,17 +5,18 @@
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
-import { confirmDialog } from '@/lib/confirm-dialog'
+import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
-import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
+import { validatePayrolls, type PayrollSnapshot, type PayrollValidationIssue } from '@/lib/payroll-validator'
+import { summarizeOpenIssues, type PayNoteAck } from '@/lib/pay-note-ack'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import ConfirmReminder from './components/ConfirmReminder'
 import { can } from '@/lib/permissions'
 import { postJson } from '@/lib/api-client'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { Icon, type IconName } from '@/components/ui/Icon'
-import { UnderlineTabs, ToolButton, Segment, SearchBox } from '@/components/ui/PageParts'
+import { UnderlineTabs, ToolButton, Segment, SearchBox, RowButton } from '@/components/ui/PageParts'
 import { CloseCard, OverviewList, needsAttention, type ApprovalStatus } from './components/MonthlyOverview'
 
 // ────────────────────────────────────────
@@ -480,6 +481,75 @@ function MonthlyPageInner() {
     return () => { alive = false }
   }, [password, ym, confirmsVersion])
 
+  // 給与チェックの注意点の「確認した」記録（2026-10-05・lib/pay-note-ack.ts）。未確認だけを帯・件数・締めの前の確認に出す
+  const [noteAcks, setNoteAcks] = useState<PayNoteAck[]>([])
+  const [noteAcksVersion, setNoteAcksVersion] = useState(0)
+  const [ackBusy, setAckBusy] = useState<string | null>(null)
+  useEffect(() => {
+    if (!password || !ym) return
+    let alive = true
+    fetch(`/api/monthly/note-ack?ym=${ym}`, { headers: { 'x-admin-password': password } })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then((j: { acks?: PayNoteAck[] }) => { if (alive) setNoteAcks(j.acks || []) })
+      // 読めなかったときは「確認なし」として全部を未確認で出す（安全側）
+      .catch(() => { if (alive) setNoteAcks([]) })
+    return () => { alive = false }
+  }, [password, ym, noteAcksVersion])
+
+  /** 注意点を確認済みにする（メモは任意）／確認を取り消す */
+  const ackNote = useCallback(async (iss: PayrollValidationIssue) => {
+    const note = await confirmWithReason({
+      title: `${iss.workerName} さんのこの注意点を「確認した」にしますか？`,
+      description: `${iss.message}\n\n確認済みにすると、帯とメニューの件数から外れます（「確認済み」の欄に残ります）。金額や日数が変わると、もう一度ここに出ます。`,
+      confirmLabel: '確認した',
+      reason: { label: 'メモ（任意）', placeholder: '例: 金額が小さいのでこのまま／代表に確認済み', required: false },
+    })
+    if (note === null) return
+    const key = `${iss.workerId}|${iss.field}`
+    setAckBusy(key)
+    try {
+      const res = await fetch('/api/monthly/note-ack', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'ack', ym, workerId: iss.workerId, code: iss.field, message: iss.message, note }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        notify.failed('確認の記録', j?.error || 'サーバが受け付けませんでした')
+        return
+      }
+      setNoteAcksVersion(v => v + 1)
+    } catch (e) {
+      notify.failed('確認の記録', e)
+    } finally {
+      setAckBusy(null)
+    }
+  }, [password, ym])
+  const unackNote = useCallback(async (iss: PayrollValidationIssue) => {
+    if (!(await confirmDialog({
+      title: `${iss.workerName} さんの注意点の確認を取り消しますか？`,
+      description: '取り消すと、未確認として帯と件数に戻ります。',
+      confirmLabel: '確認を取り消す',
+    }))) return
+    const key = `${iss.workerId}|${iss.field}`
+    setAckBusy(key)
+    try {
+      const res = await fetch('/api/monthly/note-ack', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'unack', ym, workerId: iss.workerId, code: iss.field }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        notify.failed('確認の取り消し', j?.error || 'サーバが受け付けませんでした')
+        return
+      }
+      setNoteAcksVersion(v => v + 1)
+    } catch (e) {
+      notify.failed('確認の取り消し', e)
+    } finally {
+      setAckBusy(null)
+    }
+  }, [password, ym])
+
   // ── Lock toggle ──
 
   const handleToggleLock = useCallback(async (org: 'hibi' | 'hfu') => {
@@ -507,11 +577,30 @@ function MonthlyPageInner() {
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({ ym, locked: newLocked, org, ...extra }),
       })
+      // 締めの前の確認（承知のうえでだけ締める）。サーバが順に返すので、1つずつ聞いて旗を足して送り直す:
+      //   PAY_NOTES_UNACKED   給与チェックの注意点で「確認した」が付いていないもの（2026-10-05）
+      //   STAFF_CONFIRM_PENDING 本人確認（ベトナム人スタッフのスマホ）が残っている（2026-09-30）
+      const flags: Record<string, boolean> = {}
       let res = await post()
-      // 2026-09-30: 本人確認（ベトナム人スタッフのスマホ）が残っていれば一覧を見せ、承知のうえでだけ締める
-      if (res.status === 409) {
-        const j = await res.clone().json().catch(() => null) as { code?: string; pending?: { name: string; state: string; note?: string }[] } | null
-        if (j?.code === 'STAFF_CONFIRM_PENDING' && j.pending) {
+      for (let i = 0; i < 2 && res.status === 409; i++) {
+        const j = await res.clone().json().catch(() => null) as {
+          code?: string
+          pending?: { name: string; state: string; note?: string }[]
+          notes?: { name: string; message: string }[]
+        } | null
+        if (j?.code === 'PAY_NOTES_UNACKED' && j.notes && !flags.allowUnackedNotes) {
+          const list = j.notes.slice(0, 8).map(n => `・${n.name}: ${n.message.length > 90 ? `${n.message.slice(0, 90)}…` : n.message}`).join('\n')
+          const more = j.notes.length > 8 ? `\n…他 ${j.notes.length - 8}件` : ''
+          if (!(await confirmDialog({
+            title: `給与チェックの注意点で、確認していないものが ${j.notes.length}件 あります。それでも締めますか？`,
+            description: `${list}${more}\n\n`
+              + '「やめる」で戻り、注意点の「確認した」を押してから締めると記録が残ります。\n'
+              + 'このまま締めると、締めた人と確認していない注意点が記録に残ります。',
+            confirmLabel: 'それでも締める',
+          }))) return
+          flags.allowUnackedNotes = true
+          res = await post(flags)
+        } else if (j?.code === 'STAFF_CONFIRM_PENDING' && j.pending && !flags.allowUnconfirmed) {
           const list = j.pending.slice(0, 15).map(p => `・${p.name}: ${p.state}${p.note ? `「${p.note}」` : ''}`).join('\n')
           const more = j.pending.length > 15 ? `\n…他 ${j.pending.length - 15}名` : ''
           if (!(await confirmDialog({
@@ -521,8 +610,9 @@ function MonthlyPageInner() {
               + '締めると、締めた人と確認が済んでいない人の名前が記録に残ります。',
             confirmLabel: 'それでも締める',
           }))) return
-          res = await post({ allowUnconfirmed: true })
-        }
+          flags.allowUnconfirmed = true
+          res = await post(flags)
+        } else break
       }
       // 2026-06-13: 締め前チェック（月未了・職長未承認）の 409 メッセージを表示
       if (!res.ok) {
@@ -637,8 +727,9 @@ function MonthlyPageInner() {
   //   → ym < '202605'（旧ルール月）は検算対象外にして空結果を返す。
   const validationOnTab = useMemo(() => {
     const targets = ym >= '202605' ? tabFilteredWorkers : []
-    return validatePayrolls(targets as unknown as PayrollSnapshot[])
-  }, [tabFilteredWorkers, ym])
+    // 「確認した」が付いた注意点は外す（acked に分けて持つ・2026-10-05）
+    return summarizeOpenIssues(validatePayrolls(targets as unknown as PayrollSnapshot[]).issues, noteAcks)
+  }, [tabFilteredWorkers, ym, noteAcks])
 
   const filteredWorkers = useMemo(() => {
     if (!showAnomalyOnly) return tabFilteredWorkers
@@ -1081,7 +1172,7 @@ function MonthlyPageInner() {
             const confRows = Object.values(staffConfirms).filter(c => c.org === org)
             const confCount = (st: StaffConfirmInfo['state']) => confRows.filter(c => c.state === st).length
             const auditTargets = ws.filter(w => w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
-            const auditAll = ym >= '202605' ? validatePayrolls(ws as unknown as PayrollSnapshot[]) : null
+            const auditAll = ym >= '202605' ? summarizeOpenIssues(validatePayrolls(ws as unknown as PayrollSnapshot[]).issues, noteAcks) : null
             const diff = data.snapshotDiffs?.find(d => d.org === org)
             const ymLabel = `${Number(ym.slice(4, 6))}月分`
             return (
@@ -1184,7 +1275,7 @@ function MonthlyPageInner() {
                 {' '}を検出しました。該当スタッフの行クリックで「計算根拠」モーダルを開いて詳細を確認してください。
               </div>
               <ul className="mt-2 space-y-1 text-sm">
-                {validationResult.issues.slice(0, 5).map((iss, i) => (
+                {validationResult.issues.slice(0, 20).map((iss, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className={iss.severity === 'critical' ? 'text-red-600' : 'text-yellow-600'}>
                       <Icon name="alert" size={14} className="mt-0.5" />
@@ -1195,17 +1286,54 @@ function MonthlyPageInner() {
                         <span className="text-gray-500"> (想定 {fmtYen(iss.expected)} / 実額 {fmtYen(iss.actual)})</span>
                       )}
                     </span>
+                    {/* 注意点（warning）は、見て問題なければ「確認した」で帯から外せる。異常（critical）は直すまで消えない */}
+                    {iss.severity === 'warning' && canResolveConfirm && (
+                      <span className="shrink-0">
+                        <RowButton tone="ghost" busy={ackBusy === `${iss.workerId}|${iss.field}`} busyLabel="記録しています"
+                          disabled={ackBusy !== null} onClick={() => ackNote(iss)}>確認した</RowButton>
+                      </span>
+                    )}
                   </li>
                 ))}
-                {validationResult.issues.length > 5 && (
+                {validationResult.issues.length > 20 && (
                   <li className="text-xs text-gray-500 dark:text-gray-400 pl-6">
-                    …他 {validationResult.issues.length - 5} 件
+                    …他 {validationResult.issues.length - 20} 件
                   </li>
                 )}
               </ul>
             </div>
           </div>
         </div>
+      )}
+
+      {/* 確認済みの注意点（2026-10-05）: 消さずに灰色で残す。誰が・いつ・メモ。取り消すと未確認に戻る */}
+      {!loading && data && validationResult.acked.length > 0 && (
+        <details className="rounded-xl border border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
+          <summary className="cursor-pointer text-sm font-bold text-gray-700 dark:text-gray-200">
+            確認済みの注意点 {validationResult.acked.length}件
+            <span className="ml-2 text-xs font-normal text-hibi-sub dark:text-gray-400">押すと中身が開きます。金額や日数が変わると、未確認に戻ります</span>
+          </summary>
+          <ul className="mt-2 space-y-2 text-sm">
+            {validationResult.acked.map((iss, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <Icon name="check" size={14} className="mt-1 text-green-600 dark:text-green-400 shrink-0" />
+                <span className="flex-1 min-w-0 text-gray-700 dark:text-gray-300">
+                  <span className="font-semibold">{iss.workerName}</span>: {iss.message}
+                  <span className="block text-xs text-hibi-sub dark:text-gray-400">
+                    確認: {iss.ack.byName || iss.ack.by}・{new Date(iss.ack.at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+                    {iss.ack.note ? `・メモ「${iss.ack.note}」` : ''}
+                  </span>
+                </span>
+                {canResolveConfirm && (
+                  <span className="shrink-0">
+                    <RowButton tone="ghost" busy={ackBusy === `${iss.workerId}|${iss.field}`} busyLabel="取り消しています"
+                      disabled={ackBusy !== null} onClick={() => unackNote(iss)}>確認を取り消す</RowButton>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {/* 2026-06-12 (監査 Sprint2-C): 異常0件でも検算の実施状況を常時表示。
