@@ -200,6 +200,8 @@ export function staffConfirmTargets<W extends ConfirmWorker & { visaType?: strin
 export interface StaffConfirmRow {
   workerId: number
   name: string
+  /** ベトナム語名（お願いの文面に入れる・lib/confirm-reminder.ts） */
+  nameVi: string
   org: 'hibi' | 'hfu'
   state: StaffConfirmState
   /** その人の承認で足りない「現場×日」の数（waiting のときの説明用） */
@@ -234,7 +236,7 @@ export async function staffConfirmRows(args: {
     // 記録が1件も無い月は対象外（スマホにも出さない）。対象者の選び方と同じだが、入社前・退職後だけの記録はここで落ちる
     if (ev.readiness.noEntries && !c) return null
     return {
-      workerId: w.id, name: w.name, org: o, state: ev.state,
+      workerId: w.id, name: w.name, nameVi: w.nameVi || '', org: o, state: ev.state,
       foremanMissing: ev.readiness.foremanMissing, finalMissing: ev.readiness.finalMissing,
       confirmation: c,
     } satisfies StaffConfirmRow
