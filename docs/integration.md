@@ -24,6 +24,12 @@
 - 請求額は「未入力なら 0」。原価・収益管理画面の**見込み請求（人工 × 平均単価）は返さない**（資金繰りに確定額と見込みが混ざらないように）
 - Firestore の読み取りは1回の呼び出しで main（30秒キャッシュ）+ その月の att 1件 + `peerInvoices` コレクションへの月次クエリ1件。締まった月は `getAttDataCached`。経営コックピット側も30分キャッシュする
 
+### 受け取った外注の請求書（2026-10-05）
+`GET /api/integration/subcon-invoices?from=YYYYMM`（ヘッダ `x-integration-key`）。from の月以降の `subconInvoices` を返す。
+各件に1つ目のファイル（請求書の本体）を取り出す署名つきURL（15分）`file.url` を付ける。添付（2つ目以降）は数（`attachments`）だけ。
+金額は請求書に書いてあるとおり（`total` 税込・`subtotal` 税抜・任意）。経営コックピットは毎朝これを読み、まだ取り込んでいない件のファイルを
+自分の置き場（Supabase Storage）に写して AI で読む（経営コックピット docs/specs/27-dedura.md）。
+
 ## 書き込み（1つだけ・2026-09-25 午後）
 `POST /api/integration/subcon-rate`（ヘッダ `x-integration-key`、本文 `{ subconId, siteId, rate, reason? }`）。
 経営コックピットの「請求書の取り込み」で、請求書の単価が DEDURA＋ と違うと1円まで説明できたとき、社長がボタンで押した単価を
@@ -44,4 +50,4 @@
 - 現場と外注（/genba）: 現場別の売上・原価・粗利、外注ごとの「出面の見込み」と「帳簿の計上」の照合
 - `peerInvoices[]`: 同業者へ発行した応援の請求書。`status: 'issued'` の `total`（税込）・`dueDate` を、13週資金繰りの同業者からの入金予定にそのまま使える（見込みの `peerBilling[]` より確度が高い）
 - `hfuInvoices[]`: HFU → 日比建設 の請求書。グループ内の請求なので同業者からの入金予定には**含めない**。日比建設の支払予定・HFU の入金予定として使う
-- 次の段階: 外注の請求書を取り込み、AI で読んで出面・単価と突き合わせる
+- 受け取った外注の請求書: DEDURA＋ の「受け取った請求書」に入れたものを `/api/integration/subcon-invoices` で読み、AI で読んで出面・単価・帳簿と突き合わせる（2026-10-05〜）

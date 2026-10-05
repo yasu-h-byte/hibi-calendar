@@ -48,8 +48,8 @@ export function isNoisyAction(action: string): boolean {
   return action.startsWith('attendance.')
 }
 
-/** 消えない記録（auditTrail）にも残す種類: 請求書・紙の請求書・請求額・単価・現場/取引先/人員マスタ・設定・復元・月締め */
-const DURABLE_PREFIXES = ['peerInvoice.', 'paperInvoice.', 'billing.', 'rates.', 'site.', 'subcon.', 'worker.', 'settings.', 'backup.', 'monthly.', 'integration.']
+/** 消えない記録（auditTrail）にも残す種類: 請求書・紙の請求書・外注の請求書・請求額・単価・現場/取引先/人員マスタ・設定・復元・月締め */
+const DURABLE_PREFIXES = ['peerInvoice.', 'paperInvoice.', 'subconInvoice.', 'billing.', 'rates.', 'site.', 'subcon.', 'worker.', 'settings.', 'backup.', 'monthly.', 'integration.']
 export function isDurableAction(action: string): boolean {
   return DURABLE_PREFIXES.some(p => action.startsWith(p))
 }

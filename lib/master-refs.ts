@@ -51,6 +51,8 @@ export function subconReferenceReasons(args: {
   assign: Record<string, { subcons?: string[]; subconRates?: Record<string, unknown> }>
   peerInvoices: { no?: string; companyId?: string }[]
   paperInvoices: { ym?: string; companyId?: string }[]
+  /** 受け取った外注の請求書（2026-10-05） */
+  subconInvoices?: { ym?: string; companyId?: string }[]
   subconIds: string[]
 }): string[] {
   const { subconId, atts, sites, assign, peerInvoices, paperInvoices, subconIds } = args
@@ -70,6 +72,8 @@ export function subconReferenceReasons(args: {
   if (invs.length > 0) reasons.push(`請求書の宛先になっています: ${invs.map(i => i.no || '（承認待ち・差し戻し）').join('・')}`)
   const papers = paperInvoices.filter(p => p.companyId === subconId)
   if (papers.length > 0) reasons.push(`紙の請求書が入っています: ${[...new Set(papers.map(p => jpYm(p.ym || '')))].join('・')}`)
+  const received = (args.subconInvoices || []).filter(p => p.companyId === subconId)
+  if (received.length > 0) reasons.push(`受け取った請求書が入っています: ${[...new Set(received.map(p => jpYm(p.ym || '')))].join('・')}`)
   return reasons
 }
 
@@ -111,10 +115,10 @@ export async function subconDeleteBlockReason(
   subconId: string,
   main: { sites?: { id: string; name: string; gcId?: string; primeId?: string; ownerId?: string }[]; assign?: Record<string, { subcons?: string[] }>; subcons?: { id: string }[] },
 ): Promise<string | null> {
-  const [atts, peerInvoices, paperInvoices] = await Promise.all([loadAllAttMonths(), loadAll('peerInvoices'), loadAll('paperInvoices')])
+  const [atts, peerInvoices, paperInvoices, subconInvoices] = await Promise.all([loadAllAttMonths(), loadAll('peerInvoices'), loadAll('paperInvoices'), loadAll('subconInvoices')])
   const reasons = subconReferenceReasons({
     subconId, atts, sites: main.sites || [], assign: main.assign || {},
-    peerInvoices: peerInvoices as never, paperInvoices: paperInvoices as never,
+    peerInvoices: peerInvoices as never, paperInvoices: paperInvoices as never, subconInvoices: subconInvoices as never,
     subconIds: (main.subcons || []).map(s => s.id),
   })
   if (reasons.length === 0) return null

@@ -222,6 +222,21 @@ workSchedule?: {
 | `files` | 配列 | `{path,name,contentType,size}` |
 | `uploadedAt` / `uploadedBy` / `updatedAt` | | 登録・修正の記録 |
 
+### subconInvoices/{docId}
+受け取った外注の請求書の保管（2026-10-05・`docs/peer-invoice.md`「受け取った外注の請求書」・`lib/subcon-invoice.ts`）。
+1件 = 受け取った請求書1枚。ファイルは Firebase Storage `subcon-invoices/{docId}/{i}-{name}`（書類庫と同じバケット）。**1つ目が請求書の本体**、2つ目以降は添付。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `companyId` / `companyName` | string | 請求元（取引先マスタの同業・外注） |
+| `ym` | string | 対象月（締めの月） YYYYMM |
+| `total` | number | 税込合計（必須） |
+| `subtotal` / `tax` | number? | 税抜小計・消費税（任意。消したときは null） |
+| `no` / `issueDate` / `dueDate` | string? | 請求書番号・発行日・支払期日（任意） |
+| `note` | string? | メモ |
+| `files` | 配列 | `{path,name,contentType,size}`（PDF・JPEG・PNG・WebP。HEIC は不可） |
+| `uploadedAt` / `uploadedBy` / `uploadedByName` / `updatedAt` | | 登録・修正の記録（`uploadedByName` は画面と経営コックピットに出す名前） |
+
 ### peerInvoices/{auto}
 応援の請求書（2026-09-25・`docs/peer-invoice.md`）。「発行」した瞬間の金額・出面明細・宛先・
 自社情報をまるごと凍結したスナップショット。`demmen/main` には入れない独立コレクション。

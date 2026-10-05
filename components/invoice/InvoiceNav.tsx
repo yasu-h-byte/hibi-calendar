@@ -3,16 +3,18 @@
 import Link from 'next/link'
 
 /**
- * 請求の3画面を行き来する下線タブ（2026-10-03 UI/UX 磨き込み・代表 OK）。
+ * 請求の画面（出した請求書3つ＋受け取った請求書）を行き来する下線タブ（2026-10-03 UI/UX 磨き込み・代表 OK）。
  * 旧: 「請求書・支払」「応援の請求書」「紙で出した請求書」と名前がばらばらで、どれが一覧でどれで作るか分かりにくかった。
  * メニューの項目は「請求・支払」の1つ。開いた画面の上にこのタブを出し、役割が名前で分かるようにする。
  */
-export type InvoiceScreen = 'list' | 'create' | 'paper'
+export type InvoiceScreen = 'list' | 'create' | 'paper' | 'received'
 
 const TABS: { key: InvoiceScreen; label: string; href: string }[] = [
   { key: 'list', label: '請求・支払の一覧', href: '/peer-statement' },
   { key: 'create', label: '請求書を作る', href: '/peer-invoice' },
   { key: 'paper', label: '紙の請求書の控え', href: '/paper-invoice' },
+  // 2026-10-05: 外注から届いた請求書（出した請求書と同じ場所で扱う）
+  { key: 'received', label: '受け取った請求書', href: '/subcon-invoice' },
 ]
 
 export function INVOICE_SCREEN_TITLE(key: InvoiceScreen): string {

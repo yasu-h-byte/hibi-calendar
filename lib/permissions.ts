@@ -92,6 +92,8 @@ export const CAPABILITIES = {
   'invoice.approve':         { group: '毎月', label: '請求書の承認・発行・取り消し', roles: ['approver', 'owner'] },
   // 2026-10-02 代表: 応援の請求書はしばらく手作り。手作りの請求書を入れて、システムの計算と見比べる（lib/paper-invoice.ts）。削除は invoice.approve
   'invoice.paper':           { group: '毎月', label: '紙（手作り）で出した請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },
+  // 2026-10-05 代表: 外注から紙で届く請求書を DEDURA＋ に入れて共有する（今は代表、数か月後から森田さん。lib/subcon-invoice.ts）。削除は invoice.approve
+  'invoice.subcon':          { group: '毎月', label: '受け取った外注の請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },
   // ── 経営 ──
   'cost.view':               { group: '経営', label: '原価・収益を見る（人件費を含む）', roles: PAY_ROLES },
   'cost.edit':               { group: '経営', label: '現場の請求額を入力', roles: ['jimu', 'approver', 'owner'] },
