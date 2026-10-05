@@ -22,6 +22,9 @@ export const FINAL_APPROVAL_REQUIRED_FROM_YM = '202609'
 
 type Approval = { foreman?: unknown; final?: unknown } | null
 
+/** 承認の記録の日時（{ by, at }。古い記録などで無ければ ''） */
+const atOf = (v: unknown): string => (v && typeof v === 'object' && typeof (v as { at?: unknown }).at === 'string' ? (v as { at: string }).at : '')
+
 const AP_TTL_MS = 2 * 60 * 1000
 // 読み取り中の Promise もそのまま持つ（2026-10-02 点検: 値だけを持っていたため、同時に何人分も判定すると
 //   同じ承認ドキュメントを人数ぶん重ねて読んでいた）
@@ -52,6 +55,11 @@ export interface ApprovalGap {
   foremanMissing: FamilyDay[]
   /** 最終承認（事業責任者）が無い「現場（親）×日」 */
   finalMissing: FamilyDay[]
+  /**
+   * 見つかった承認のうち、いちばん新しい日時（ISO）。足りない承認が無いときは「全部そろった日時」になる
+   * （本人確認の催促を「そろってから3日」で出すのに使う・2026-10-05）。日時の無い古い記録だけなら undefined
+   */
+  latestAt?: string
 }
 
 /**
@@ -69,12 +77,18 @@ export async function approvalGap(
   const results = await Promise.all([...uniq.values()].map(async fd => {
     const ids = [fd.familyId, ...children(fd.familyId)]
     const aps = await Promise.all(ids.map(id => approvalOfKey(`${id}_${ym}_${fd.day}`, !!opts?.fresh)))
-    return { fd, foreman: aps.some(a => !!a?.foreman), final: aps.some(a => !!a?.final) }
+    // 親・子のどちらにも承認があるときは、早い方（＝その日がそろった時刻）を採る
+    const first = (list: string[]) => list.filter(Boolean).sort()[0] || ''
+    const foremanAt = first(aps.map(a => atOf(a?.foreman)))
+    const finalAt = first(aps.map(a => atOf(a?.final)))
+    return { fd, foreman: aps.some(a => !!a?.foreman), final: aps.some(a => !!a?.final), at: foremanAt > finalAt ? foremanAt : finalAt }
   }))
+  const latestAt = results.map(r => r.at).filter(Boolean).sort().pop()
   const byOrder = (a: FamilyDay, b: FamilyDay) => a.familyId.localeCompare(b.familyId) || a.day - b.day
   return {
     foremanMissing: results.filter(r => !r.foreman).map(r => r.fd).sort(byOrder),
     finalMissing: results.filter(r => !r.final).map(r => r.fd).sort(byOrder),
+    ...(latestAt ? { latestAt } : {}),
   }
 }
 

@@ -1,44 +1,45 @@
 import { describe, test, expect } from 'vitest'
-import { buildConfirmReminderText, isReminderUrgent, reminderTargets, type ReminderPerson } from '@/lib/confirm-reminder'
+import { buildConfirmReminderText, reminderDueDate, reminderTargets, reminderWaiting, type ReminderPerson } from '@/lib/confirm-reminder'
 
-// 出面の本人確認をお願いする文面（2026-10-05）。名前は架空
+// 出面の本人確認の催促（2026-10-05）。確認が出てから3日たっても押していない人だけ。名前は架空
+const TODAY = '2026-10-05'
 const people: ReminderPerson[] = [
-  { workerId: 205, name: 'ビン', nameVi: 'NGUYEN VAN BINH', state: 'stale' },
-  { workerId: 101, name: 'アン', nameVi: 'TRAN VAN AN', state: 'none' },
-  { workerId: 102, name: 'クオン', state: 'early' },
+  { workerId: 205, name: 'ビン', nameVi: 'NGUYEN VAN BINH', state: 'stale', since: '2026-10-01' },
+  { workerId: 101, name: 'アン', nameVi: 'TRAN VAN AN', state: 'none', since: '2026-10-02' },   // ちょうど3日目
+  { workerId: 102, name: 'クオン', state: 'early' },                                            // 起点が分からない → 待たせない
+  { workerId: 107, name: 'タム', nameVi: 'HO VAN TAM', state: 'none', since: '2026-10-03' },    // まだ2日
   { workerId: 103, name: 'ズン', nameVi: 'LE VAN DUNG', state: 'waiting' },
   { workerId: 104, name: 'ハイ', nameVi: 'PHAM VAN HAI', state: 'issue' },
   { workerId: 105, name: 'ロン', nameVi: 'DO VAN LONG', state: 'ok' },
   { workerId: 106, name: 'ミン', nameVi: 'VU VAN MINH', state: 'outside' },
 ]
 
-describe('本人確認のお願いの文面', () => {
-  test('入れるのはスマホに確認が出ている人だけ（まだ・承認前に押しただけ・要再確認）。会社で分けず番号順', () => {
-    expect(reminderTargets(people).map(p => p.workerId)).toEqual([101, 102, 205])
+describe('本人確認の催促', () => {
+  test('催促は確認が出た日から3日（暦日）たってから。10/2 に出たら 10/5 から', () => {
+    expect(reminderDueDate({ workerId: 1, name: 'x', state: 'none', since: '2026-10-02' })).toBe('2026-10-05')
+    expect(reminderDueDate({ workerId: 1, name: 'x', state: 'none', since: '2026-09-29' })).toBe('2026-10-02')
+    expect(reminderDueDate({ workerId: 1, name: 'x', state: 'none' })).toBe('')
   })
-  test('名前を1人ずつ入れる。承認待ち・連絡あり・確認ずみ・期間外の人は入れない', () => {
-    const t = buildConfirmReminderText({ ym: '202609', people, urgent: false })
+  test('催促する人: 3日たった人と起点が分からない人。番号順・会社で分けない', () => {
+    expect(reminderTargets(people, TODAY).map(p => p.workerId)).toEqual([101, 102, 205])
+    expect(reminderTargets(people, '2026-10-04').map(p => p.workerId)).toEqual([102, 205])
+  })
+  test('3日たっていない人は「確認待ち」（文面に入れない）。承認待ち・連絡あり・確認ずみ・期間外はどちらにも入らない', () => {
+    expect(reminderWaiting(people, TODAY).map(p => p.workerId)).toEqual([107])
+    expect(reminderWaiting(people, '2026-10-06')).toEqual([])
+  })
+  test('文面: 催促する人の名前を1人ずつ。それ以外の人は入れない', () => {
+    const t = buildConfirmReminderText({ ym: '202609', people, todayIso: TODAY })
     expect(t).toContain('・TRAN VAN AN（アン）')
     expect(t).toContain('・クオン')
     expect(t).toContain('・NGUYEN VAN BINH（ビン） ※')
-    for (const n of ['ズン', 'ハイ', 'ロン', 'ミン']) expect(t).not.toContain(n)
+    for (const n of ['タム', 'ズン', 'ハイ', 'ロン', 'ミン']) expect(t).not.toContain(n)
     expect(t).toContain('tháng 9')
     expect(t).toContain('9月分')
-    expect(t).not.toContain('至急')
-  })
-  test('急ぎの文は「至急」「今日中に」', () => {
-    const t = buildConfirmReminderText({ ym: '202609', people, urgent: true })
-    expect(t).toContain('至急')
+    expect(t).toContain('3日')
     expect(t).toContain('今日中に')
-    expect(t).toContain('ngay hôm nay')
   })
-  test('対象がいなければ空', () => {
-    expect(buildConfirmReminderText({ ym: '202609', people: people.filter(p => p.state === 'ok'), urgent: true })).toBe('')
-  })
-  test('翌月5日から急ぎ（12月分は翌年1月5日から）', () => {
-    expect(isReminderUrgent('202609', '2026-10-04')).toBe(false)
-    expect(isReminderUrgent('202609', '2026-10-05')).toBe(true)
-    expect(isReminderUrgent('202612', '2026-12-31')).toBe(false)
-    expect(isReminderUrgent('202612', '2027-01-05')).toBe(true)
+  test('催促する人がいなければ空（3日以内の人だけのとき）', () => {
+    expect(buildConfirmReminderText({ ym: '202609', people: people.filter(p => p.workerId === 107), todayIso: TODAY })).toBe('')
   })
 })

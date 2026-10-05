@@ -1112,10 +1112,10 @@ function MonthlyPageInner() {
         </div>
       )}
 
-      {/* 本人確認がまだの人へのお願いの文面（2026-10-05）: 名前入りの文を作り、スタッフのグループへ貼って送る。両社まとめて */}
+      {/* 本人確認の催促（2026-10-05）: 確認が出て3日たっても押していない人がいると警告と、名前入りの文面を作るボタン。両社まとめて */}
       {!loading && data && !staffConfirmsFailed && (
         <ConfirmReminder ym={ym} people={Object.entries(staffConfirms).map(([id, c]) => ({
-          workerId: Number(id), name: c.name || `ID ${id}`, nameVi: c.nameVi, state: c.state,
+          workerId: Number(id), name: c.name || `ID ${id}`, nameVi: c.nameVi, state: c.state, since: c.since,
         }))} />
       )}
 
