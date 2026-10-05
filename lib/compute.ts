@@ -90,6 +90,15 @@ export function jpSundayPremiumApplies(ym: string): boolean {
  */
 export const JP_WEEK_OVER40_NOTE_FROM_YM: string | null = null
 
+/**
+ * 旧契約（useOldRules・固定月給）の人の「支給額が日給×働いた日数を下回る」の注意点を出し始める月（'YYYYMM'）。
+ * 2026-10-05 代表決定「旧契約のメンバーには最低保証（日数分は払う）の決まりを置いていない。契約でも約束していない
+ * ので、この注意は不要」→ null（出さない）。支給額はもともと変えていない（注意点だけ）。
+ * 旧契約の人に最低保証を置くことになったら、ここに開始月を入れるとその月分から注意点が戻る。
+ * 日本人月給制の月途中の入社・退職の注意点（同じ code）と、旧契約の「日曜・夜勤・所定超え」の注意点はそのまま出す。
+ */
+export const OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM: string | null = null
+
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
 // ────────────────────────────────────────
@@ -2541,14 +2550,18 @@ export function computeMonthly(
       const workedDays = wm.actualWorkDays + wm.plUsed + wm.examDays
 
       // ① 支給額（残業・手当を除く）が「日給×働いた日数」を下回る（旧ルールの暦日按分・欠勤控除、日本人月給制の日割り）
-      if (isOldRule && wm._oldRuleDayRate && wm.salaryNetPay !== undefined) {
-        const floor = ceilYen(wm._oldRuleDayRate * workedDays) + (wm.additionalAllowance || 0)  // 旧ルールの additionalAllowance は休業補償
-        const core = wm.salaryNetPay - (wm.otAllowance || 0) - (wm.breakShortenAllowance || 0)
-          - (wm.siteAllowance || 0) - (wm.driveAllowance || 0)
-        if (core < floor - 1) {
-          note(wm, 'belowWorkedDays',
-            `支給額（残業・手当を除く ${core.toLocaleString()}円）が「日給 ${Math.round(wm._oldRuleDayRate).toLocaleString()}円 × 働いた日数（${workedLabel}）＋休業補償 ＝ ${floor.toLocaleString()}円」を ${(floor - core).toLocaleString()}円 下回っています（月途中の入社・退職・帰国の暦日按分、または欠勤控除が大きいため）。代表に確認してください`,
-            floor - core)
+      //    旧ルールの分は 2026-10-05 代表決定で出さない（OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM = null。最低保証の決まりが無い）
+      if (isOldRule) {
+        const noteOn = !!OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM && ym >= OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM
+        if (noteOn && wm._oldRuleDayRate && wm.salaryNetPay !== undefined) {
+          const floor = ceilYen(wm._oldRuleDayRate * workedDays) + (wm.additionalAllowance || 0)  // 旧ルールの additionalAllowance は休業補償
+          const core = wm.salaryNetPay - (wm.otAllowance || 0) - (wm.breakShortenAllowance || 0)
+            - (wm.siteAllowance || 0) - (wm.driveAllowance || 0)
+          if (core < floor - 1) {
+            note(wm, 'belowWorkedDays',
+              `支給額（残業・手当を除く ${core.toLocaleString()}円）が「日給 ${Math.round(wm._oldRuleDayRate).toLocaleString()}円 × 働いた日数（${workedLabel}）＋休業補償 ＝ ${floor.toLocaleString()}円」を ${(floor - core).toLocaleString()}円 下回っています（月途中の入社・退職・帰国の暦日按分、または欠勤控除が大きいため）。代表に確認してください`,
+              floor - core)
+          }
         }
       } else if (isJpMonthly && wm.salaryNetPay !== undefined && wm.basePay !== undefined && (wm.salary ?? 0) > 0 && wm.basePay < (wm.salary ?? 0)) {
         // 月途中の入社・退職（基本給が月給より少ない月）だけ。1日あたりは欠勤控除と同じ 月給÷20.83日
