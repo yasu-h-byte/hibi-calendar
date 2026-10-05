@@ -12,6 +12,7 @@
  *    このファイルの JS はログインなしでも取れるので、個人の時給・事情をここに書かないこと（2026-10-02）。
  *
  * 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
+ * 2026-10-05: グラフの棒の色（高い＝紺・低い＝赤・ほか＝薄い灰）・文字の大きさ（12px→13px）・「低い／高い」のカード・画面の幅（max-w-7xl）もそろえた
  * 2026-10-05: 残りをそろえた（表の見出しの黒地・全枠線、反映の確認窓とお知らせ、札、補足の文字色）
  */
 
@@ -103,7 +104,7 @@ export default function WageAnalysisPage() {
 
   if (allowed === null) return <div className="p-6 text-hibi-sub dark:text-gray-400">読み込み中…</div>
   if (!allowed) return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="max-w-7xl mx-auto space-y-5">
       <PageHeader group="賃金・評価" title="賃金分析" sub="代表だけが見られます" />
       <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
         <p className="text-sm font-bold text-gray-900 dark:text-white">この画面は代表だけが見られます</p>
@@ -112,7 +113,7 @@ export default function WageAnalysisPage() {
     </div>
   )
   if (err) return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="max-w-7xl mx-auto space-y-5">
       <PageHeader group="賃金・評価" title="賃金分析" />
       <section role="alert" className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
         <p className="text-sm font-bold text-red-700 dark:text-red-400">読み込めませんでした</p>
@@ -147,7 +148,7 @@ function Report({ a, plan, onApplied, pw, basis, onBasis }: {
   const avgReal = withCagr.length ? withCagr.reduce((s, r) => s + (r.realGain ?? 0), 0) / withCagr.length : 0
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="max-w-7xl mx-auto space-y-5">
       <PageHeader
         group="賃金・評価"
         title={<span className="inline-flex items-center gap-2 flex-wrap">賃金分析<Chip tone="red">代表のみ</Chip></span>}
@@ -160,7 +161,7 @@ function Report({ a, plan, onApplied, pw, basis, onBasis }: {
           <span className="text-sm font-bold text-gray-900 dark:text-white">集計の基準</span>
           <Segment value={basis} onChange={onBasis} items={[['revised', '改定後（2026年10月以降）'], ['current', '現在の時給']]} />
         </div>
-        <p className="text-xs text-hibi-sub dark:text-gray-400 mt-2 leading-relaxed">
+        <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 mt-2 leading-relaxed">
           {basis === 'revised'
             ? <><b>契約済み・予定の改定をすべて反映した時給</b>（{plan.changes.map(c => `${Number(c.effective.slice(5, 7))}/${Number(c.effective.slice(8, 10))} ${c.label}`).join('、')}）で、
               ①〜⑨とデータ表のすべてを計算しています。人員マスタには適用開始日つきで登録済みで、給与計算は各開始日から自動で切り替わります。</>
@@ -220,7 +221,7 @@ function Report({ a, plan, onApplied, pw, basis, onBasis }: {
 
       <DataTable a={a} />
 
-      <details className="text-xs text-hibi-sub dark:text-gray-400">
+      <details className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">
         <summary className="cursor-pointer py-1">東京都最低賃金の推移（計算の前提）</summary>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {TOKYO_MIN_WAGE.map(m => (
@@ -237,17 +238,19 @@ function Card({ title, note, children }: { title: string; note?: string; childre
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
       <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white mb-1">{title}</h2>
-      {note && <p className="text-xs text-hibi-sub dark:text-gray-400 mb-3 leading-relaxed">{note}</p>}
+      {note && <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 mb-3 leading-relaxed">{note}</p>}
       {children}
     </section>
   )
 }
 
 function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; items: WageRow[] }) {
-  const border = tone === 'low' ? 'border-l-red-500' : 'border-l-blue-500'
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 border-l-4 ${border}`}>
-      <div className="text-xs font-bold text-hibi-sub dark:text-gray-400">{title}</div>
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4">
+      <div className="flex items-center gap-2">
+        <Chip tone={tone === 'low' ? 'red' : 'blue'}>{tone === 'low' ? '低い' : '高い'}</Chip>
+        <span className="text-[0.8125rem] font-bold text-hibi-sub dark:text-gray-400">{title}</span>
+      </div>
       <div className="text-sm font-bold mt-1 leading-relaxed">
         {items.length
           ? items.map(r => (
@@ -258,7 +261,7 @@ function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; ite
               )}
             </div>
           ))
-          : <span className="text-gray-400 font-normal">該当なし</span>}
+          : <span className="text-hibi-sub dark:text-gray-400 font-normal">該当なし</span>}
       </div>
       {items.some(r => r.context) && (
         <div className="text-2xs text-hibi-sub dark:text-gray-400 mt-2 space-y-1 leading-relaxed">
@@ -278,11 +281,11 @@ function CagrChart({ rows }: { rows: WageRow[] }) {
   return (
     <div className="space-y-1.5">
       {list.map(r => (
-        <div key={r.id} className="flex items-center gap-2 text-xs">
+        <div key={r.id} className="flex items-center gap-2 text-[0.8125rem]">
           <span className="w-40 shrink-0 text-right text-hibi-sub dark:text-gray-400 truncate">{r.name}</span>
           <span className="w-11 shrink-0 text-right text-gray-400">{r.years}年</span>
           <div className="flex-1 relative h-6">
-            <div className={`absolute inset-y-1 left-0 rounded ${r.allLow ? 'bg-red-500' : r.allHigh ? 'bg-blue-600' : 'bg-gray-400'}`}
+            <div className={`absolute inset-y-1 left-0 rounded ${r.allLow ? 'bg-red-600 dark:bg-red-500' : r.allHigh ? 'bg-hibi-navy dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-500'}`}
               style={{ width: `${(r.cagr! / max) * 100}%` }} />
             <div className="absolute inset-y-[9px] left-0 rounded-sm bg-gray-600/70 dark:bg-gray-300/50"
               style={{ width: `${((r.minWageCagr ?? 0) / max) * 100}%` }} />
@@ -310,7 +313,7 @@ function Matrix({ rows }: { rows: WageRow[] }) {
     return (
       <div className="flex-1 relative h-5">
         <div className="absolute inset-y-0 left-1/2 w-px bg-gray-200 dark:bg-gray-700" />
-        <div className={`absolute inset-y-1 rounded-sm ${v < -20 ? 'bg-red-500' : v > 20 ? 'bg-blue-600' : 'bg-gray-400'}`}
+        <div className={`absolute inset-y-1 rounded-sm ${v < -20 ? 'bg-red-600 dark:bg-red-500' : v > 20 ? 'bg-hibi-navy dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-500'}`}
           style={v < 0 ? { right: '50%', width: `${w}%` } : { left: '50%', width: `${w}%` }} />
         <span className="absolute top-0 text-3xs tabular-nums text-hibi-sub dark:text-gray-400 whitespace-nowrap"
           style={v < 0
@@ -330,7 +333,7 @@ function Matrix({ rows }: { rows: WageRow[] }) {
       <div className="space-y-1">
         {list.map(r => (
           <div key={r.id} className="flex items-center gap-2">
-            <span className="w-40 shrink-0 text-right text-xs text-hibi-sub dark:text-gray-400 truncate" title={`${r.years}年 ${yen(r.hourly)}`}>{r.name}</span>
+            <span className="w-40 shrink-0 text-right text-[0.8125rem] text-hibi-sub dark:text-gray-400 truncate" title={`${r.years}年 ${yen(r.hourly)}`}>{r.name}</span>
             <Bar v={r.devStage} /><Bar v={r.devTrend} /><Bar v={r.devCohort} />
           </div>
         ))}
@@ -343,7 +346,7 @@ function StageTable({ a }: { a: WageAnalysis }) {
   const counts = [0, 1, 2, 3, 4].map(i => a.rows.filter(r => r.stage === i).length)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs border-collapse">
+      <table className="w-full text-[0.8125rem] border-collapse">
         <thead>
           <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
             <th className="border-b border-hibi-line dark:border-gray-700 px-2 py-1.5 text-left">段階</th>
@@ -364,7 +367,7 @@ function StageTable({ a }: { a: WageAnalysis }) {
                 <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-center text-hibi-sub dark:text-gray-400">{s.years}</td>
                 <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-center">{counts[i]}</td>
                 <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums">{yen(a.stageAvg[i])}</td>
-                <td className={`border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums font-bold ${jump !== null && jump > 30 ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                <td className={`border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums font-bold ${jump !== null && jump > 30 ? 'text-hibi-navy dark:text-blue-300' : ''}`}>
                   {jump !== null ? `+${jump.toFixed(1)}%（${signed(a.stageAvg[i] - a.stageAvg[prev!])}）` : '—'}
                 </td>
               </tr>
@@ -469,10 +472,10 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
     : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'
   return (
     <section className={`rounded-xl border px-5 py-4 ${box}`}>
-      <div className="text-sm font-bold mb-2">予定されている賃金改定</div>
+      <div className="text-[0.9375rem] font-bold mb-2">予定されている賃金改定</div>
       <div className="space-y-1.5">
         {changes.map(c => (
-          <div key={c.id} className="text-xs leading-relaxed">
+          <div key={c.id} className="text-sm leading-relaxed">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="tabular-nums text-hibi-sub dark:text-gray-400">{c.effective}</span>
               <span className="font-bold">{c.label}</span>
@@ -493,7 +496,7 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 pt-2 border-t border-gray-300/60 dark:border-gray-600/60 leading-relaxed">
+      <p className="text-[0.8125rem] text-gray-600 dark:text-gray-300 mt-2 pt-2 border-t border-gray-300/60 dark:border-gray-600/60 leading-relaxed">
         {done
           ? 'すべて人員マスタに反映済み（適用開始日つき。給与計算は各開始日から自動で切り替わります）。'
           : a.basis === 'revised'
@@ -543,7 +546,7 @@ function MinWageWatch({ a }: { a: WageAnalysis }) {
   return (
     <section className={`rounded-xl border px-5 py-4 ${tone}`}>
       <div className="text-sm font-bold">最低賃金の確認</div>
-      <div className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 space-y-1.5 leading-relaxed">
+      <div className="text-[0.8125rem] text-gray-600 dark:text-gray-300 mt-1.5 space-y-1.5 leading-relaxed">
         {under.length > 0 && (
           <p className="text-red-700 dark:text-red-300">
             <b>現行の最低賃金 {yen(mw)} を下回っています（法令違反）</b>：
@@ -671,7 +674,7 @@ function CurveChart({ a }: { a: WageAnalysis }) {
         {/* 在籍者を重ねる。カーブのどちら側にいるかが一目で分かる */}
         {a.rows.filter(r => r.years <= YEARS).map(r => (
           <circle key={r.id} cx={px(r.years)} cy={py(r.hourly)} r={4.5}
-            className={r.devCurve < -20 ? 'fill-red-500' : r.devCurve > 20 ? 'fill-blue-600 dark:fill-blue-400' : 'fill-gray-400'}
+            className={r.devCurve < -20 ? 'fill-red-600 dark:fill-red-400' : r.devCurve > 20 ? 'fill-hibi-navy dark:fill-blue-300' : 'fill-gray-400'}
             stroke="white" strokeWidth={1.2}>
             <title>{`${r.name}（${r.years}年 ${yen(r.hourly)}・カーブとの差 ${signed(r.devCurve)}）`}</title>
           </circle>
@@ -723,7 +726,7 @@ function CurveTable({ a }: { a: WageAnalysis }) {
   const max = curveWage(a.curveStart, 15)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs border-collapse">
+      <table className="w-full text-[0.8125rem] border-collapse">
         <thead>
           <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
             <th className={th}>在籍</th><th className={th}>昇給額</th><th className={th}>時給</th>
@@ -746,7 +749,7 @@ function CurveTable({ a }: { a: WageAnalysis }) {
                 <td className={td}>{(v / a.curveStart).toFixed(2)}倍</td>
                 <td className={`${td} text-gray-400`}>{yen(old)}<span className="ml-1 text-3xs">{signed(v - old)}</span></td>
                 <td className="border-b border-gray-100 dark:border-gray-700 px-2 py-1.5">
-                  <div className="h-3 rounded bg-blue-600 dark:bg-blue-500" style={{ width: `${(v / max) * 100}%` }} />
+                  <div className="h-3 rounded bg-hibi-navy dark:bg-blue-400" style={{ width: `${(v / max) * 100}%` }} />
                 </td>
               </tr>
             )
@@ -788,7 +791,7 @@ function CurveGap({ a }: { a: WageAnalysis }) {
           ? { right: '50%', width: `${w}%` }
           : { left: '50%', width: `${w}%` }
         return (
-          <div key={r.id} className="flex items-center gap-2 text-xs">
+          <div key={r.id} className="flex items-center gap-2 text-[0.8125rem]">
             <span className="w-40 shrink-0 text-right text-hibi-sub dark:text-gray-400 truncate">
               {r.name}{r.revisionTarget && <span className="text-amber-600 ml-1" title="2026年10月改定の対象">★</span>}
             </span>
@@ -802,7 +805,7 @@ function CurveGap({ a }: { a: WageAnalysis }) {
                 <div className="absolute inset-y-0 rounded-sm bg-gray-300 dark:bg-gray-600"
                   style={pos(devBefore(r), wNow)} />
               )}
-              <div className={`absolute inset-y-1 rounded-sm ${over ? 'bg-blue-600' : under ? 'bg-red-500' : 'bg-gray-400'}`}
+              <div className={`absolute inset-y-1 rounded-sm ${over ? 'bg-hibi-navy dark:bg-blue-400' : under ? 'bg-red-600 dark:bg-red-500' : 'bg-gray-300 dark:bg-gray-500'}`}
                 style={pos(r.devCurveRevised, wRev)} />
               <span className="absolute top-0 text-3xs tabular-nums text-hibi-sub dark:text-gray-400 whitespace-nowrap"
                 style={r.devCurveRevised < 0
@@ -851,13 +854,13 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
         const gainOf = (r: WageRow) => change.targets[r.id] - priorOf(r.id, r.currentHourly)
         return (
           <div key={c.id}>
-            <div className="text-xs font-bold mb-1">
+            <div className="text-[0.8125rem] font-bold mb-1">
               {c.effective}　{c.label}
               {c.rate ? `（一律 ${(c.rate * 100).toFixed(3)}％）` : ''}・{list.length}名
             </div>
             <p className="text-2xs text-hibi-sub dark:text-gray-400 mb-1.5 leading-relaxed">{c.reason}</p>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
+              <table className="w-full text-[0.8125rem] border-collapse">
                 <thead>
                   <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
                     <th className={`${th} text-left`}>氏名</th><th className={`${th} text-left`}>在留資格</th>
@@ -902,7 +905,7 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
         )
       })}
 
-      <div className="text-xs space-y-2 leading-relaxed">
+      <div className="text-[0.8125rem] space-y-2 leading-relaxed">
         {stillUnder.length > 0 && (
           <div className="rounded-xl border border-hibi-line dark:border-gray-700 bg-hibi-bg dark:bg-gray-800/50 px-4 py-3">
             <div className="font-bold mb-1">改定後もカーブに届かない人</div>
@@ -942,9 +945,9 @@ function Reference({ a }: { a: WageAnalysis }) {
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-xs font-bold mb-1">市場水準（月額）</div>
+        <div className="text-[0.8125rem] font-bold mb-1">市場水準（月額）</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
+          <table className="w-full text-[0.8125rem] border-collapse">
             <thead>
               <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300">
                 <th className={`${th} text-left`}>区分</th><th className={th}>月額</th>
@@ -971,7 +974,7 @@ function Reference({ a }: { a: WageAnalysis }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-xs leading-relaxed">
+      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-[0.8125rem] leading-relaxed">
         <div className="font-bold mb-1">建設分野 特定技能1号の法令要件</div>
         <p className="text-gray-600 dark:text-gray-300">出典: {KENSETSU_TOKUTEI.source}</p>
         <ul className="mt-2 space-y-1.5 text-gray-700 dark:text-gray-200">
@@ -1009,7 +1012,7 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
   const revChanged = a.rows.some(r => r.revisionGain > 0)
   return (
     <div className="space-y-4">
-      <div className="bg-hibi-bg dark:bg-gray-800/50 rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3 text-xs leading-relaxed">
+      <div className="bg-hibi-bg dark:bg-gray-800/50 rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3 text-[0.8125rem] leading-relaxed">
         在籍差0.3年超の全 {inv.concordant + inv.discordant} ペア中、逆転は
         <b> {inv.discordant} ペア</b>（順位一致率 {tauPct.toFixed(1)}%・Kendall τ = {inv.tau.toFixed(2)}）。
         {inv.tau >= 0.8
@@ -1028,19 +1031,19 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
       </div>
 
       <div>
-        <div className="text-xs font-bold mb-1">逆転ペア（在籍が長いのに時給が低い）</div>
+        <div className="text-[0.8125rem] font-bold mb-1">逆転ペア（在籍が長いのに時給が低い）</div>
         {inv.pairs.length === 0 ? (
-          <p className="text-xs text-gray-400">なし</p>
+          <p className="text-[0.8125rem] text-gray-400">なし</p>
         ) : (
           <div className="space-y-1">
             {inv.pairs.map((p, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
+              <div key={i} className="flex items-center gap-2 text-[0.8125rem]">
                 <span className="w-56 shrink-0 text-right text-red-600 dark:text-red-400">
                   {p.senior.name}{p.senior.context && <span className="text-hibi-sub dark:text-gray-400" title={p.senior.context.detail}>（{p.senior.context.label}）</span>}
                   （{p.senior.years}年 {yen(p.senior.hourly)}）
                 </span>
                 <span className="text-gray-400">＜</span>
-                <span className="w-56 shrink-0 text-blue-600 dark:text-blue-400">
+                <span className="w-56 shrink-0 text-hibi-navy dark:text-blue-300">
                   {p.junior.name}（{p.junior.years}年 {yen(p.junior.hourly)}）
                 </span>
                 <span className="tabular-nums text-hibi-sub dark:text-gray-400">差 {yen(p.gap)}</span>
@@ -1051,16 +1054,16 @@ function AnomalyCheck({ a }: { a: WageAnalysis }) {
       </div>
 
       <div>
-        <div className="text-xs font-bold mb-1">段階内の外れ値（IQR法・3名以上の段階のみ）</div>
+        <div className="text-[0.8125rem] font-bold mb-1">段階内の外れ値（IQR法・3名以上の段階のみ）</div>
         {outliers.length === 0 ? (
-          <p className="text-xs text-gray-400">なし</p>
+          <p className="text-[0.8125rem] text-gray-400">なし</p>
         ) : (
-          <div className="space-y-1 text-xs">
+          <div className="space-y-1 text-[0.8125rem]">
             {outliers.map(o => (
               <div key={o.stage}>
                 <span className="text-hibi-sub dark:text-gray-400">{STAGES[o.stage].key}（Q1 {yen(o.q1)}〜Q3 {yen(o.q3)}）: </span>
                 {o.high.map(r => (
-                  <span key={r.id} className="text-blue-600 dark:text-blue-400 font-bold mr-2">↑ {r.name} {yen(r.hourly)}</span>
+                  <span key={r.id} className="text-hibi-navy dark:text-blue-300 font-bold mr-2">↑ {r.name} {yen(r.hourly)}</span>
                 ))}
                 {o.low.map(r => (
                   <span key={r.id} className="text-red-600 dark:text-red-400 font-bold mr-2">↓ {r.name} {yen(r.hourly)}</span>
@@ -1078,12 +1081,12 @@ function DataTable({ a }: { a: WageAnalysis }) {
   const list = [...a.rows].sort((x, y) => y.hourly - x.hourly)
   const th = 'border-b border-hibi-line dark:border-gray-700 px-2 py-1.5'
   const td = 'border-b border-gray-100 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
-  const cls = (v: number | null) => v === null ? '' : v < -a.threshold ? 'text-red-600 font-bold' : v > a.threshold ? 'text-blue-600 dark:text-blue-400 font-bold' : ''
+  const cls = (v: number | null) => v === null ? '' : v < -a.threshold ? 'text-red-600 dark:text-red-400 font-bold' : v > a.threshold ? 'text-hibi-navy dark:text-blue-300 font-bold' : ''
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
       <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white mb-3">データ</h2>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+        <table className="w-full text-[0.8125rem] border-collapse">
           <thead>
             <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300 font-bold">
               <th className={`${th} text-left`}>氏名</th>
