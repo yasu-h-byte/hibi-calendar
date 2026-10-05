@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { confirmDanger } from '@/lib/confirm-dialog'
+import { confirmDanger, confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { AttendanceEntry, AttendanceStatus, isTimeBasedMobile, isTimeBasedEntry } from '@/types'
 import CalendarApprovalModal, { type PendingCalendarData } from '@/components/attendance/CalendarApprovalModal'
@@ -694,6 +694,29 @@ export default function StaffAttendancePage() {
     return `${parseInt(m)}/${parseInt(d)}`
   }
 
+  // 自分の現場（★＝配置されている現場）でない現場に登録する前に、確かめる（2026-10-05 代表依頼・現場の選び間違いを防ぐ）。
+  //   応援などで正しく選んだ人は「はい」を1回押すだけ。未配置の人（★ が1つも無い）と、今日すでに登録済みの修正では聞かない
+  const offRoster = !!data && !data.unassigned
+    && (data.availableSites || []).some(s => s.primary)
+    && !(data.availableSites || []).find(s => s.id === data.site.id)?.primary
+  const confirmSiteIfOffRoster = async (isPast: boolean): Promise<boolean> => {
+    if (!data || !offRoster) return true
+    if (!isPast && data.currentEntry) return true
+    const mine = (data.availableSites || []).filter(s => s.primary).map(s => s.name).join('・')
+    return confirmDialog({
+      title: `げんばは「${data.site.name}」で あっていますか？`,
+      description: `あなたの げんば（★）は「${mine}」です。ちがう げんばを えらんでいます。`,
+      confirmLabel: `はい、${data.site.name} です`,
+      cancelLabel: 'えらびなおす',
+      vi: {
+        title: `Công trường "${data.site.name}" có đúng không?`,
+        description: `Công trường của bạn (★) là "${mine}". Bạn đang chọn công trường khác.`,
+        confirmLabel: 'Đúng',
+        cancelLabel: 'Chọn lại',
+      },
+    })
+  }
+
   const submitEntry = async (
     choice: string,
     ot: number = 0,
@@ -702,6 +725,7 @@ export default function StaffAttendancePage() {
     day?: number
   ) => {
     if (!data || saving) return
+    if (!(await confirmSiteIfOffRoster(!!year))) return
     const where: ActionMsg['where'] = year ? 'past' : 'today'
     setSaving(true)
     setActionMsg(null)
@@ -746,6 +770,7 @@ export default function StaffAttendancePage() {
     overrideBreak3?: boolean,
   ) => {
     if (!data || saving) return
+    if (!(await confirmSiteIfOffRoster(!!year))) return
     const where: ActionMsg['where'] = year ? 'past' : 'today'
     setSaving(true)
     setActionMsg(null)
@@ -837,6 +862,7 @@ export default function StaffAttendancePage() {
 
   const handleRestSubmit = async (): Promise<boolean> => {
     if (!data || saving) return false
+    if (!(await confirmSiteIfOffRoster(restDate !== todayDateStr()))) return false
     setSaving(true)
     setActionMsg(null)
     // 対象日: モーダルで選択した日（未指定・不正なら今日にフォールバック）
@@ -1004,6 +1030,13 @@ export default function StaffAttendancePage() {
               </option>
             ))}
           </select>
+          {/* ★ のない現場を選んでいるとき（2026-10-05）。登録のときにも確かめる */}
+          {offRoster && (
+            <p role="status" className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 text-xs font-bold leading-relaxed">
+              ★ の ない げんばを えらんでいます。あっていますか？
+              <span className="block font-normal">Bạn đang chọn công trường không có ★. Có đúng không?</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -1274,6 +1307,8 @@ export default function StaffAttendancePage() {
               className="w-full bg-hibi-amber text-hibi-charcoal rounded-xl py-4 text-lg font-extrabold shadow-[0_4px_12px_rgba(245,166,35,0.4)] active:bg-hibi-amberDark transition disabled:opacity-50"
             >
               出勤登録 / Xác nhận đi làm
+              {/* どの現場に入るかをボタンの中に出す（2026-10-05・現場の選び間違いを防ぐ） */}
+              <span className="block text-sm font-bold mt-0.5 truncate px-3">げんば / Công trường: {data.site.name}</span>
             </button>
 
             {/* Rest / Leave buttons */}

@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261005_staff_site_guard',
+    title: 'スタッフのスマホ: 現場の選び間違いを防ぐ確認を足しました',
+    content:
+      '自分の現場（★）でない現場に出勤・休みを登録しようとすると、「げんばは ◯◯ で あっていますか？」と確かめます（応援のときは「はい」を押せば登録できます）。'
+      + '出勤登録のボタンの中にも現場名が出ます。2つ以上の現場に配置されている人は、いちばん最近に出勤を入れた現場が最初に出ます。'
+      + '★ は人員配置で決まります。現場が変わるときは、人員配置を先に直してください。',
+    category: 'new',
+    publishedAt: '2026-10-05T18:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: [...OFFICE, 'foreman'],
+  },
+  {
     id: 'rn_20261005_confirm_reminder',
     title: '出面の本人確認がまだの人へ、お願いの文面をボタン1つで作れます（月次集計）',
     content:

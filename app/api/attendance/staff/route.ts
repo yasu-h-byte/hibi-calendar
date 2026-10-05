@@ -19,6 +19,7 @@ import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween, currentYmJst } from '@/lib/date-utils'
 import { getAttData, parseDKey } from '@/lib/compute'
 import { sitesOfWorkerForMonth } from '@/lib/roster'
+import { defaultStaffSiteId } from '@/lib/staff-default-site'
 import { isWorkDayOf } from '@/lib/attendance-missing'
 
 export async function GET(request: NextRequest) {
@@ -77,7 +78,9 @@ export async function GET(request: NextRequest) {
     const allActiveSites = (mainRaw.sites || []).filter(s2 => !s2.archived && !s2.parentId)
 
     // Build availableSites: all active sites, with primary flag for assigned ones
-    const assignedIds = new Set(assignedSites.map(s => s.id))
+    //   工種サイトだけに配置されている人も、親現場を「自分の現場」（★）にする（2026-10-05。★ のない現場は登録前に確認を出すため）
+    const sitesForParent = (mainRaw.sites || []) as import('@/lib/site-hierarchy').HierarchySite[]
+    const assignedIds = new Set(assignedSites.flatMap(s => [s.id, calendarSiteIdOf(sitesForParent, s.id)]))
     const availableSites = allActiveSites.map(s => ({
       id: s.id,
       name: s.name,
@@ -89,17 +92,6 @@ export async function GET(request: NextRequest) {
       if (!a.primary && b.primary) return 1
       return a.name.localeCompare(b.name, 'ja')
     })
-
-    // 工種サイトの id が来ても親現場として扱う（古いブックマーク・以前の選択の残り）
-    const rawSitesH = (mainRaw.sites || []) as import('@/lib/site-hierarchy').HierarchySite[]
-    const siteIdRaw = siteIdParam || (assignedSites.length > 0 ? assignedSites[0].id : allActiveSites[0]?.id)
-    const siteId = siteIdRaw ? calendarSiteIdOf(rawSitesH, siteIdRaw) : siteIdRaw
-    // 同じ現場（親＋工種）のどこかに入っていれば、その現場の入力とみなす
-    const family = siteId ? workTypeFamilyIds(rawSitesH, siteId) : []
-    const site = availableSites.find(s => s.id === siteId) || availableSites[0]
-    if (!site) {
-      return NextResponse.json({ error: '選べる現場がありません。会社に連絡してください / Không có công trường để chọn. Vui lòng liên hệ công ty' }, { status: 404 })
-    }
 
     // 2026-08-27 修正（休暇届総点検）: Vercel は UTC のため、JST 0〜9時に「今日」が
     //   前日になり、欠勤届の初期日付が前日を指して確定済み出勤を上書きし得た
@@ -118,6 +110,27 @@ export async function GET(request: NextRequest) {
       getAttendanceDoc(ym),
       prevYmStr !== ym ? getAttendanceDoc(prevYmStr) : Promise.resolve(null),
     ])
+
+    // 工種サイトの id が来ても親現場として扱う（古いブックマーク・以前の選択の残り）
+    const rawSitesH = (mainRaw.sites || []) as import('@/lib/site-hierarchy').HierarchySite[]
+    // 最初に出す現場（本人が選んでいないとき）: 配置が2つ以上ある人は、いちばん最近に出勤を入れた配置現場
+    //   （lib/staff-default-site.ts・2026-10-05。旧: 現場マスタの並びで先の現場が毎日出ていた）
+    const assignedParentIds = [...new Set(assignedSites.map(s => calendarSiteIdOf(rawSitesH, s.id)))]
+    const defaultSiteId = defaultStaffSiteId({
+      assigned: assignedParentIds,
+      familyOf: sid => workTypeFamilyIds(rawSitesH, sid),
+      months: [{ ym, d: attData }, ...(attPrevPre ? [{ ym: prevYmStr, d: attPrevPre }] : [])],
+      workerId: worker.id,
+      today: { ym, day: d },
+    })
+    const siteIdRaw = siteIdParam || defaultSiteId || allActiveSites[0]?.id
+    const siteId = siteIdRaw ? calendarSiteIdOf(rawSitesH, siteIdRaw) : siteIdRaw
+    // 同じ現場（親＋工種）のどこかに入っていれば、その現場の入力とみなす
+    const family = siteId ? workTypeFamilyIds(rawSitesH, siteId) : []
+    const site = availableSites.find(s => s.id === siteId) || availableSites[0]
+    if (!site) {
+      return NextResponse.json({ error: '選べる現場がありません。会社に連絡してください / Không có công trường để chọn. Vui lòng liên hệ công ty' }, { status: 404 })
+    }
 
     // Today's entry
     const todaySite = familyEntrySiteId(attData, family, worker.id, ym, d) || siteId
