@@ -30,6 +30,13 @@ export const LEDGER_SCOPE_LABEL: Record<LedgerScope, string> = {
   all: '全社', hibi: '日比建設', hfu: 'HFU', jp: '日本人スタッフ', vn: 'ベトナム人スタッフ',
 }
 
+/**
+ * 出面の有給の記録がそろっている最初の日。これより前に始まった期は、取得した日がシステムに無い（紙の管理簿にしかない）ので、
+ * 「取得なし・年5日 未達」と決めつけず「紙の管理簿を参照」と出す（2026-10-05 本番の出力で確認: 2024年11月付与の期が
+ * 取得0日・未達（5日不足）と出ていた）。システムの出面は実質 2025年の秋から（lib/leave-carry.ts の注記と同じ事情）
+ */
+export const LEDGER_ATT_FROM = '2025-09-01'
+
 /** 年5日の取得義務の対象になる付与日数（労基法39条7項） */
 const OBLIGATION_MIN_GRANT = 10
 const OBLIGATION_DAYS = 5
@@ -65,6 +72,10 @@ export interface LedgerPeriod {
   current: boolean
   /** 有効期限が過ぎた・時効の処理済み */
   expired: boolean
+  /** システム導入前に始まった期（取得した日・残・年5日はシステムからは出せない＝紙の管理簿） */
+  beforeSystem: boolean
+  /** この期の途中で退職した（年5日の「あと◯日」を出さない） */
+  retiredDuring: boolean
   /** 年5日の取得（付与10日以上の期だけ applies） */
   obligation: { applies: boolean; taken: number; met: boolean; shortfall: number; deadline: string }
 }
@@ -98,6 +109,7 @@ const isJpVisa = (v?: string) => !v || v === 'none'
 export function visaLabel(v: string): string {
   if (isJpVisa(v)) return '日本人'
   const m: Record<string, string> = {
+    jisshu: '技能実習', tokutei: '特定技能',
     jisshu1: '技能実習1号', jisshu2: '技能実習2号', jisshu3: '技能実習3号', tokutei1: '特定技能1号', tokutei2: '特定技能2号',
   }
   return m[v] || v
@@ -156,6 +168,8 @@ export function buildLeaveLedgerModel(
         taken, periodUsed: b.periodUsed, buyoutDays: b.buyoutDays, expiredDays: r.expiredDays ?? 0,
         remaining: b.remaining, current: r === currentRec,
         expired: !!r.expiredAt || isLeaveExpiredAsOf(grantDate, todayIso),
+        beforeSystem: grantDate < LEDGER_ATT_FROM,
+        retiredDuring: retiredDone && !!w.retired && w.retired <= b.periodLastDay,
         obligation: { applies, taken: b.periodUsed, met: applies && shortfall === 0, shortfall, deadline: b.periodLastDay },
       }
     })
@@ -236,8 +250,10 @@ function sheetOf(rows: (Cell | null)[][], widths: number[], merges: XLSX.Range[]
 /** 年5日の取得の欄。期が終わっていて足りなければ「未達」、まだ途中なら「あと◯日」 */
 const obligationCell = (p: LedgerPeriod | null, todayIso: string): Cell => {
   if (!p) return c('—', S.na)
+  if (p.beforeSystem) return c('紙の管理簿', S.na)
   if (!p.obligation.applies) return c('対象外', S.na)
   if (p.obligation.met) return c('達成', S.ok)
+  if (p.retiredDuring) return c('退職', S.na)
   return p.obligation.deadline < todayIso
     ? c(`未達（${p.obligation.shortfall}日不足）`, S.ng)
     : c(`あと${p.obligation.shortfall}日`, S.ng)
@@ -328,13 +344,17 @@ function personSheet(p: LedgerPerson, m: LeaveLedgerModel): XLSX.WorkSheet {
     span(r, 4, 5)
     // 取得した日
     r = rows.length
-    rows.push([c(`取得した日（${pd.taken.length}日）　◆＝会社の時季指定　（予）＝承認済みの予定`, S.label),
+    rows.push([c(pd.beforeSystem ? '取得した日' : `取得した日（${pd.taken.length}日）　◆＝会社の時季指定　（予）＝承認済みの予定`, S.label),
       blank(S.label), blank(S.label), blank(S.label), blank(S.label), blank(S.label)]); full(r)
-    if (pd.taken.length === 0) {
+    if (pd.beforeSystem) {
+      r = rows.length
+      rows.push([c('この期はシステムを使い始める前に始まったため、取得した日は紙の管理簿を見てください', S.na),
+        blank(S.na), blank(S.na), blank(S.na), blank(S.na), blank(S.na)]); full(r)
+    } else if (pd.taken.length === 0) {
       r = rows.length
       rows.push([c('取得なし', S.na), blank(S.na), blank(S.na), blank(S.na), blank(S.na), blank(S.na)]); full(r)
     }
-    for (let i = 0; i < pd.taken.length; i += DAYS_PER_ROW) {
+    for (let i = 0; i < pd.taken.length && !pd.beforeSystem; i += DAYS_PER_ROW) {
       const chunk = pd.taken.slice(i, i + DAYS_PER_ROW)
       rows.push(Array.from({ length: COLS }, (_, k) => {
         const t = chunk[k]
@@ -354,10 +374,10 @@ function personSheet(p: LedgerPerson, m: LeaveLedgerModel): XLSX.WorkSheet {
     r = rows.length
     rows.push([c('取得日数', S.head), c(p.isJp ? '—' : '買取日数', S.head), c('失効日数', S.head), c('残日数', S.head), c('年5日の取得', S.head), c('取得の期限', S.head)])
     rows.push([
-      c(pd.periodUsed + pd.adjustment, S.num),
+      pd.beforeSystem ? c('紙の管理簿', S.na) : c(pd.periodUsed + pd.adjustment, S.num),
       p.isJp ? c('', S.cell) : c(pd.buyoutDays, S.num),
       c(pd.expiredDays, S.num),
-      c(pd.remaining, S.strong),
+      pd.beforeSystem ? c('紙の管理簿', S.na) : c(pd.remaining, S.strong),
       obligationCell(pd, m.todayIso),
       pd.obligation.applies ? c(fmt(pd.obligation.deadline)) : c('', S.cell),
     ])

@@ -88,6 +88,36 @@ describe('有給管理簿の中身（法定の3項目: 基準日・日数・時�
   })
 })
 
+describe('有給管理簿: システムに記録が無い期・退職した人（2026-10-05 本番の出力で確認して追加）', () => {
+  const d2: LeaveLedgerData = {
+    workers: [
+      { id: 107, name: 'ケン', org: 'hibi', visa: 'jisshu3', hireDate: '2023-05-14' },
+      { id: 108, name: 'クアン', org: 'hibi', visa: 'jisshu', hireDate: '2023-05-14', retired: '2026-02-28' },
+    ],
+    plData: {
+      '107': [{ fy: '2024', grantDate: '2024-11-01', grantDays: 11 }, { fy: '2025', grantDate: '2025-11-14', grantDays: 12 }],
+      '108': [{ fy: '2025', grantDate: '2025-11-01', grantDays: 12 }],
+    } as Record<string, LeaveLedgerRecord[]>,
+    allAtt: {},
+  }
+  const wb = generateLeaveLedger(d2, { scope: 'vn', todayIso: TODAY })
+  const text = (name: string) => (XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1 }) as unknown[][]).flat().join('|')
+  test('システム導入前に始まった期は「取得なし・未達」と出さず、紙の管理簿を見るように出す', () => {
+    const m = buildLeaveLedgerModel(d2, { scope: 'vn', todayIso: TODAY })
+    expect(m.people[0].periods.map(p => p.beforeSystem)).toEqual([true, false])
+    const t = text('107_ケン')
+    expect(t).toContain('紙の管理簿を見てください')
+    expect(t).not.toContain('未達')
+  })
+  test('期の途中で退職した人に「あと◯日」を出さない。在留資格の古い書き方（jisshu）も日本語で出す', () => {
+    const t = text('108_クアン')
+    expect(t).toContain('技能実習')
+    expect(t).not.toContain('jisshu')
+    expect(t).not.toContain('あと5日')
+    expect(t).toContain('退職')
+  })
+})
+
 describe('有給管理簿の Excel', () => {
   test('先頭に一覧表、1人1枚の個人票、最後に買取記録。日本人だけの出力に買取記録は付けない', () => {
     const wb = generateLeaveLedger(data, { scope: 'hibi', todayIso: TODAY })
