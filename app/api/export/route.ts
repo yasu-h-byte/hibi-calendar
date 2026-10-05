@@ -8,7 +8,6 @@ import {
   ATTENDANCE_ORG_LABEL,
   generateSubconConfirmation,
   generateBukakeReport,
-  generateLeaveLedger,
   generateMonthlyExcel,
   generatePerSiteAttendance,
   generatePlannedShiftExcel,
@@ -22,7 +21,8 @@ import { isMonthLockedInLocks } from '@/lib/locks'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { db } from '@/lib/firebase'
 import { collection, getDocs, query, where } from '@/lib/fsdb'
-import { currentYearJst } from '@/lib/date-utils'
+import { currentYearJst, todayJstIso } from '@/lib/date-utils'
+import { generateLeaveLedger, leaveLedgerToBuffer, leaveLedgerFilename, parseLedgerScope, parseLedgerRange } from '@/lib/leave-ledger'
 
 export async function GET(request: NextRequest) {
   // 2026-09-26: 帳票（給与・出面・有給・同意台帳）は事務所の人だけ（lib/permissions.ts monthly.view）。
@@ -210,7 +210,7 @@ export async function GET(request: NextRequest) {
 
       case 'pl': {
         // 2026-08-04 帳票整理: 旧 generatePLLedger（2シート・サマリー版）を廃止し、
-        // /api/leave/export-ledger と同じ generateLeaveLedger（4シート・買取/時季指定付き）に統一。
+        // /api/leave/export-ledger と同じ generateLeaveLedger（lib/leave-ledger.ts・一覧表＋1人1枚の個人票）に統一。
         // 同じ法定帳簿（年次有給休暇管理簿）の二重実装で修正ドリフトが起きかけていたため。
         const nowY = currentYearJst()
         const allAttPl: Record<string, import('@/types').AttendanceEntry> = {}
@@ -221,8 +221,9 @@ export async function GET(request: NextRequest) {
             if (att.d) Object.assign(allAttPl, att.d)
           }
         }
-        const plOrgRaw = request.nextUrl.searchParams.get('org')
-        const plOrg = plOrgRaw === 'hibi' || plOrgRaw === 'hfu' ? plOrgRaw : 'all'
+        // 出し分け（2026-10-05）: scope = hibi / hfu / jp / vn（旧 ?org= も受ける）・range = all で全期間
+        const plScope = parseLedgerScope(request.nextUrl.searchParams.get('scope') || request.nextUrl.searchParams.get('org'))
+        const plRange = parseLedgerRange(request.nextUrl.searchParams.get('range'))
         const ledgerWorkers = main.workers
           .filter(w => w.job !== 'yakuin' && w.job !== 'jimu')
           .map(w => ({
@@ -233,15 +234,15 @@ export async function GET(request: NextRequest) {
             hireDate: w.hireDate,
             retired: w.retired || '',
           }))
+        const plToday = todayJstIso()
         const wb = generateLeaveLedger({
           workers: ledgerWorkers,
           plData: main.plData as Parameters<typeof generateLeaveLedger>[0]['plData'],
           allAtt: allAttPl,
-          org: plOrg,
-        })
-        const orgLabel = plOrg === 'hfu' ? '_HFU' : plOrg === 'hibi' ? '_日比建設' : ''
-        buffer = workbookToBuffer(wb)
-        filename = `有給管理台帳${orgLabel}.xlsx`
+        }, { scope: plScope, range: plRange, todayIso: plToday })
+        // 罫線・色を残して書き出す（workbookToBuffer は装飾を落とす）
+        buffer = leaveLedgerToBuffer(wb)
+        filename = leaveLedgerFilename(plScope, plRange, plToday)
         break
       }
 

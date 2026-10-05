@@ -1,9 +1,9 @@
 import { describe, test, expect } from 'vitest'
-import * as XLSX from 'xlsx'
 import {
   computeLeaveBalanceFromAtt, computeRecordBalance, selectEndedPeriodRecord, grantPeriodEndExclusive,
 } from '@/lib/leave-compute'
-import { generateLeaveLedger, type LeaveLedgerRecord } from '@/lib/export'
+import type { LeaveLedgerRecord } from '@/lib/export'
+import { buildLeaveLedgerModel } from '@/lib/leave-ledger'
 import type { AttendanceEntry } from '@/types'
 
 /**
@@ -71,33 +71,30 @@ describe('残数は申請の検証・前の期（賞与）・管理簿で同じ'
     expect(computeLeaveBalanceFromAtt(7, rec7, att, '2026-09-30', { isJp: true }).periodOver).toBe(false)
   })
 
-  test('管理簿 Excel の残日数・取得日数は同じ本体の値（取得日数は出面の P だけ）', () => {
-    const wb = generateLeaveLedger({
+  test('管理簿の残日数・取得日数は同じ本体の値（取得日数は出面の P だけ）', () => {
+    const m = buildLeaveLedgerModel({
       workers: [
         { id: 5, name: '前倒し', org: 'hibi', visa: 'none', hireDate: '2020-04-01' },
         { id: 6, name: '外国人', org: 'hibi', visa: 'tokutei1', hireDate: '2019-05-01' },
       ],
       plData: { '5': rec5, '6': rec6 } as Record<string, LeaveLedgerRecord[]>,
       allAtt: att,
-    })
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets['管理簿'], { header: 1 }) as unknown[][]
-    const header = rows[3] as string[]
-    const col = (name: string) => header.findIndex(h => String(h).startsWith(name))
-    const find = (id: number, fy: string) => rows.find(r => r[0] === id && String(r[col('FY')]) === fy)!
+    }, { range: 'all', todayIso: '2026-10-05' })
+    const find = (id: number, year: string) => m.people.find(p => p.id === id)!.periods.find(p => p.grantDate.startsWith(year))!
     const r5old = find(5, '2025')
-    expect(r5old[col('繰越日数')]).toBe(0)
-    expect(r5old[col('取得日数')]).toBe(1)
-    expect(r5old[col('残日数')]).toBe(9)
+    expect(r5old.carryOver).toBe(0)
+    expect(r5old.periodUsed).toBe(1)
+    expect(r5old.remaining).toBe(9)
     const r5new = find(5, '2026')
-    expect(r5new[col('取得日数')]).toBe(2)
-    expect(r5new[col('残日数')]).toBe(9)
+    expect(r5new.periodUsed).toBe(2)
+    expect(r5new.remaining).toBe(9)
     const r6old = find(6, '2025')
-    expect(r6old[col('取得日数')]).toBe(1)   // 出面の P だけ（調整1・買取1 は別の列）
-    expect(r6old[col('調整')]).toBe(1)
-    expect(r6old[col('買取日数')]).toBe(1)
-    expect(r6old[col('残日数')]).toBe(9)
+    expect(r6old.periodUsed).toBe(1)   // 出面の P だけ（調整1・買取1 は別の欄）
+    expect(r6old.adjustment).toBe(1)
+    expect(r6old.buyoutDays).toBe(1)
+    expect(r6old.remaining).toBe(9)
     const r6new = find(6, '2026')
-    expect(r6new[col('取得日数')]).toBe(2)   // 来年1月の承認済み有給
-    expect(r6new[col('残日数')]).toBe(20)
+    expect(r6new.periodUsed).toBe(2)   // 来年1月の承認済み有給
+    expect(r6new.remaining).toBe(20)
   })
 })

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap, callerCan } from '@/lib/auth'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
-import { generateLeaveLedger, workbookToBuffer, LeaveLedgerWorker, LeaveLedgerRecord } from '@/lib/export'
+import type { LeaveLedgerWorker, LeaveLedgerRecord } from '@/lib/export'
+import { generateLeaveLedger, leaveLedgerToBuffer, leaveLedgerFilename, parseLedgerScope, parseLedgerRange } from '@/lib/leave-ledger'
 import { AttendanceEntry } from '@/types'
 import { currentYearJst, todayJstIso } from '@/lib/date-utils'
 
@@ -47,17 +48,15 @@ export async function GET(request: NextRequest) {
       ...r, buyoutHistory: r.buyoutHistory?.map(h => ({ ...h, amount: undefined })),
     }))]))
 
-    // 会社別フィルタ（2026-08-04 追加）。会社ごとに社労士が異なるため別々に出せるようにする。
-    // 省略時は従来どおり全社（/leave 画面のボタンは全社出力）
-    const orgParam = request.nextUrl.searchParams.get('org')
-    const org = orgParam === 'hibi' || orgParam === 'hfu' ? orgParam : 'all'
-
-    const wb = generateLeaveLedger({ workers, plData, allAtt, org })
-    const buffer = workbookToBuffer(wb)
-
-    const dateStr = todayJstIso().replace(/-/g, '')
-    const orgLabel = org === 'hibi' ? '_日比建設' : org === 'hfu' ? '_HFU' : ''
-    const filename = `有給管理簿${orgLabel}_${dateStr}.xlsx`
+    // 出し分け（2026-10-05）: scope = hibi / hfu（会社ごと）・jp（日本人）・vn（ベトナム人など外国人）・省略時は全社。
+    //   range = all で全期間（既定は今の期と前の期）。旧 ?org=hibi|hfu も受ける
+    const sp = request.nextUrl.searchParams
+    const scope = parseLedgerScope(sp.get('scope') || sp.get('org'))
+    const range = parseLedgerRange(sp.get('range'))
+    const todayIso = todayJstIso()
+    const wb = generateLeaveLedger({ workers, plData, allAtt }, { scope, range, todayIso })
+    const buffer = leaveLedgerToBuffer(wb)
+    const filename = leaveLedgerFilename(scope, range, todayIso)
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

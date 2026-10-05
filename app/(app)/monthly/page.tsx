@@ -180,7 +180,7 @@ const EXPORT_CARDS: ExportCard[] = [
   {
     icon: 'umbrella',
     title: '有給管理台帳',
-    description: '年次有給休暇管理簿（管理簿・取得日一覧・買取記録・時季指定記録の4シート）。会社別に出力可能。労基署対応用。',
+    description: '年次有給休暇管理簿（一覧表＋1人1枚の個人票）。会社別に出力。日本人だけ・ベトナム人だけ・全期間は「休暇管理 → 管理簿（Excel）」から。',
     format: 'Excel出力',
     type: 'pl',
     needsYm: false,
