@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  computeMonthly, compute, calcTobiEquiv, createDispatchChecker, isDispatched, PAY_NOTES_FROM_YM, JP_WEEK_OVER40_NOTE_FROM_YM, type MainData,
+  computeMonthly, compute, calcTobiEquiv, createDispatchChecker, isDispatched, PAY_NOTES_FROM_YM, JP_WEEK_OVER40_NOTE_FROM_YM, OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM, type MainData,
 } from '@/lib/compute'
 import { validatePayrolls, buildAuditChecks, type PayrollSnapshot, type PayrollAuditWorker } from '@/lib/payroll-validator'
 import type { AttendanceEntry } from '@/types'
@@ -31,13 +31,14 @@ const VN = { id: 201, name: '新契約D', org: 'hibi', visa: 'jisshu3', job: 'to
 
 describe('旧ルール固定月給: 欠勤控除は基本給を超えない（支給額をマイナスにしない）', () => {
   const YM = '202610'  // 全社所定27日（日曜以外）
-  it('所定27・出勤2 → 旧は −10,000円。控除は基本給が上限で支給0円、注意点が付く', () => {
+  it('所定27・出勤2 → 旧は −10,000円。控除は基本給が上限で支給0円（注意点は出さない・2026-10-05 代表決定）', () => {
     const att: Record<string, AttendanceEntry> = { [`s_104_${YM}_1`]: E, [`s_104_${YM}_2`]: E }
     const w = computeMonthly(mk([OLD], { workDays: { [YM]: 27 } }), att, {}, YM, 27, undefined, 20, {}).workers[0]
     expect(w.absence).toBe(25)
     expect(w.absentDeduction).toBe(240000)   // 25日×10,000=250,000 ではなく基本給まで
     expect(w.salaryNetPay).toBe(0)
-    expect(w.payNotes?.map(n => n.code)).toContain('belowWorkedDays')
+    expect(w.payNotes?.map(n => n.code) || []).not.toContain('belowWorkedDays')
+    expect(OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM).toBeNull()   // 旧契約に最低保証を置くことになったら開始月を入れ、このテストを「出す」側に直す
   })
   it('補償日があるときは「基本給 − 補償日控除」が上限（内訳合計＝支給額を保つ）', () => {
     const att: Record<string, AttendanceEntry> = { [`s_104_${YM}_1`]: E, [`s_104_${YM}_2`]: { w: 0.6 } as AttendanceEntry }
@@ -150,14 +151,13 @@ describe('給与チェックの注意点（payNotes・支給額は変えない�
     const y = computeMonthly(mk([{ ...JP_MONTHLY, job: 'yakuin' }]), att, {}, YM, 0, undefined, 20, {}).workers[0]
     expect(y.payNotes).toBeUndefined()
   })
-  it('旧ルール: 月途中の入社の暦日按分が「日給×出勤日数」を下回る → 注意点（支給額は変えない）', () => {
+  it('旧ルール: 月途中の入社の暦日按分が「日給×出勤日数」を下回っても注意点は出さない（2026-10-05 代表決定）。所定超えの注意点は出す', () => {
     const YM = '202610'
     const att: Record<string, AttendanceEntry> = {}
     for (let d = 26; d <= 31; d++) att[`s_104_${YM}_${d}`] = E
     const w = computeMonthly(mk([{ ...OLD, hireDate: '2026-10-26' }], { workDays: { [YM]: 27 } }), att, {}, YM, 27, undefined, 20, {}).workers[0]
     expect(w.basePay).toBe(Math.ceil(240000 * 6 / 31))
-    const n = w.payNotes?.find(x => x.code === 'belowWorkedDays')
-    expect(n?.amount).toBe(6 * 10000 - (w.basePay || 0))
+    expect(w.payNotes?.some(x => x.code === 'belowWorkedDays')).toBeFalsy()
     expect(w.payNotes?.some(x => x.code === 'oldRuleExtraWork')).toBe(true)   // 所定 round(27×6/31)=5日 を超える出勤
   })
   it('旧ルール: 日曜出勤・夜勤は支給額に入らない → 注意点', () => {

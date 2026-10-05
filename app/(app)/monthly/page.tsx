@@ -1543,7 +1543,7 @@ function MonthlyPageInner() {
                         {(w.restMismatchDays?.length || 0) > 0 && (
                           <span
                             className="ml-1.5 text-3xs px-1.5 py-0.5 rounded-full font-bold align-middle bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                            title={`${(w.restMismatchDays || []).join('・')}日は「自分の都合の休み」ですが、同じ日に同じ現場でほかの人が現場休み（0.6補）です。人数調整で休ませたのなら、出面を「0.6補」に直してください。このままだと欠勤として最低保証から引かれます。`}
+                            title={`${(w.restMismatchDays || []).join('・')}日は「自分の都合の休み」ですが、同じ日に同じ現場でほかの人が現場休み（0.6補）です。人数調整で休ませたのなら、出面を「0.6補」に直してください。このままだと${w.useOldRules ? '欠勤として控除されます' : '欠勤として最低保証から引かれます'}。`}
                           >
                             休みの区別？ {(w.restMismatchDays || []).join('・')}日
                           </span>

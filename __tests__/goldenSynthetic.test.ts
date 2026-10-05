@@ -179,10 +179,10 @@ describe('合成ゴールデン（9月分・10月分・架空の人）', () => {
     // 案A: 本人の欠勤（カレンダーの仕事の日の「欠」）が保証から引かれる
     expect(w(sep, 201).personalAbsenceDays).toBe(1)
     expect(w(oct, 201).guaranteeDays).toBe(20)
-    // 旧ルール: 10月は全社所定27日、10/26 入社は所定を日割り。注意点が付く
+    // 旧ルール: 10月は全社所定27日、10/26 入社は所定を日割り
     expect(w(oct, 104).workerPrescribedDays).toBe(27)
     expect(w(oct, 209).workerPrescribedDays).toBe(Math.round(27 * 6 / 31))
-    expect((w(oct, 209).payNotes as Array<{ code: string }>).map(n => n.code)).toContain('belowWorkedDays')
+    expect(((w(oct, 209).payNotes || []) as Array<{ code: string }>).map(n => n.code)).not.toContain('belowWorkedDays')   // 2026-10-05 代表決定: 旧契約には出さない
     // 帰国（9月1〜10日）: 在籍日数の日割り
     expect(w(sep, 104).hkDays).toBe(10)
     // 休憩短縮（旧ルール7時間契約）

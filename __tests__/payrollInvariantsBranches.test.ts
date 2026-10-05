@@ -90,15 +90,15 @@ describe('旧ルール（固定月給・所定日数）の既知の破れ（賃�
   const mk = (w: typeof OLD) => ({ ...main(), workers: [w], workDays: { [YM10]: 27 } }) as unknown as MainData
   it.todo('月途中の入社の暦日按分（月給×在籍日÷暦日）が「日給×出勤日数」を下回る → 決まりが決まったら (i) をここで固定する')
   it.todo('所定27日の月は欠勤1日の控除（日給）が基本給の1日分（月給÷27）を超える → 決まりが決まったら固定する')
-  it('破れている間は注意点 belowWorkedDays が付き、支給額はマイナスにならない', () => {
+  it('支給額はマイナスにならない。注意点 belowWorkedDays は出さない（2026-10-05 代表決定: 旧契約に最低保証の決まりは無い）', () => {
     const att: Record<string, AttendanceEntry> = {}
     for (let d = 26; d <= 31; d++) att[`s_104_${YM10}_${d}`] = E
     const hire = computeMonthly(mk({ ...OLD, hireDate: '2026-10-26' }), att, {}, YM10, 27, undefined, 20, {}).workers[0]
     expect(hire.salaryNetPay).toBeLessThan(6 * 10000)
-    expect(hire.payNotes?.some(n => n.code === 'belowWorkedDays')).toBe(true)
+    expect(hire.payNotes?.some(n => n.code === 'belowWorkedDays')).toBeFalsy()
     const few: Record<string, AttendanceEntry> = { [`s_104_${YM10}_1`]: E, [`s_104_${YM10}_2`]: E }
     const w = computeMonthly(mk(OLD), few, {}, YM10, 27, undefined, 20, {}).workers[0]
     expect(w.salaryNetPay).toBeGreaterThanOrEqual(0)
-    expect(w.payNotes?.some(n => n.code === 'belowWorkedDays')).toBe(true)
+    expect(w.payNotes?.some(n => n.code === 'belowWorkedDays')).toBeFalsy()
   })
 })
