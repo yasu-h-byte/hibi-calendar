@@ -290,11 +290,11 @@ function CagrChart({ rows }: { rows: WageRow[] }) {
             <div className="absolute inset-y-[9px] left-0 rounded-sm bg-gray-600/70 dark:bg-gray-300/50"
               style={{ width: `${((r.minWageCagr ?? 0) / max) * 100}%` }} />
           </div>
-          <span className="w-32 shrink-0 tabular-nums text-gray-600 dark:text-gray-300">
+          <span className="w-44 shrink-0 whitespace-nowrap tabular-nums text-gray-700 dark:text-gray-300">
             {r.cagr!.toFixed(2)}%
-            <span className="text-gray-400"> 実質+{(r.realGain ?? 0).toFixed(1)}pt</span>
+            <span className="text-hibi-sub dark:text-gray-400"> 実質+{(r.realGain ?? 0).toFixed(1)}pt</span>
           </span>
-          <span className="w-24 shrink-0 text-right tabular-nums text-gray-400">
+          <span className="w-32 shrink-0 whitespace-nowrap text-right tabular-nums text-hibi-sub dark:text-gray-400">
             {yen(r.startWage)}→{yen(r.hourly)}
           </span>
         </div>
