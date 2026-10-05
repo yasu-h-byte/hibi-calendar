@@ -7,6 +7,7 @@
 // 保守操作（繰越再計算・正規化・時効処理・手動付与の入口）は components/leave/MaintenanceButton に集約済み。
 
 import { useEffect, useState, useCallback } from 'react'
+import LedgerExportButton from './components/LedgerExportButton'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import MaintenanceButton from '@/components/leave/MaintenanceButton'
 import { PLWorker, OrgFilter, LeaveTab, HomeLeave, PendingGrant, PendingGrantForm, LeaveRequest, SiteOption, MforemanMap } from './types'
@@ -173,23 +174,7 @@ export default function LeavePage() {
             onChanged={fetchData}
             onOpenGrantModal={() => setShowGrantModal(true)}
           />
-          <ToolButton icon="download" title="労基法施行規則24条の7準拠の有給管理簿をExcelで出力" onClick={async () => {
-            const res = await fetch('/api/leave/export-ledger', {
-              headers: { 'x-admin-password': password },
-            })
-            if (!res.ok) {
-              const err = await res.json().catch(() => null)
-              notify.error('管理簿を出力できませんでした', err?.error || '時間をおいてもう一度お試しください。')
-              return
-            }
-            const blob = await res.blob()
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `有給管理簿_${todayJstIso().replace(/-/g, '')}.xlsx`
-            a.click()
-            URL.revokeObjectURL(url)
-          }}>管理簿（Excel）</ToolButton>
+          <LedgerExportButton password={password} />
         </>}
       />
 
