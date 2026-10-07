@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261007_jp_bonus',
+    title: '日本人の賞与: 精勤賞与は前の期の日額で計算し、確定を取り消せるようになりました',
+    content:
+      '賃金制度 → 賞与で、精勤賞与（有給の買取）は買い取る期の最後の日の日額（10/1 改定前の日額）で計算します。'
+      + '処遇固定の人は、賞与の点数を等級の2段下で数えます（4G なら 2G 相当）。'
+      + '確定を押し間違えたときは、支給の履歴の「この確定を取り消す」で、記録とその賞与で付けた有給の買取記録をまとめて戻せます。',
+    category: 'new',
+    publishedAt: '2026-10-07T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['approver', 'owner'],
+  },
+  {
     id: 'rn_20261005_pay_note_ack',
     title: '月次集計の黄色い注意点を「確認した」で帯から外せるようになりました',
     content:

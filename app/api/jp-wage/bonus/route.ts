@@ -8,20 +8,44 @@
  * 試算だけだと「誰にいくら払ったか」が残らず、翌年の参考にできないため、
  * 確定した配分を jpBonuses に凍結して保存する。
  *
- * - GET  … 過去の支給記録＋直近改定の評語（初期値に使う）
- * - POST … 配分を確定して保存
+ * - GET    … 過去の支給記録＋直近改定の評語（初期値に使う）
+ * - POST   … 配分を確定して保存
+ * - DELETE … 確定の取り消し（2026-10-07。押し間違えたときに、記録と有給の買取記録をまとめて戻す）
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
-import { getWorkers, isAlreadyRetired } from '@/lib/workers'
-import { allocateBonus, nextRevisionDate, lastRevisionDate, FIVE_DAY_RESERVE, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '@/lib/fsdb'
+import { getWorkers, isAlreadyRetired, effectiveRateForYm } from '@/lib/workers'
+import { allocateBonus, nextRevisionDate, lastRevisionDate, FIVE_DAY_RESERVE, FIXED_BONUS_STEP_DOWN, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
+import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
 import { todayJstIso } from '@/lib/date-utils'
 import { getEndedPeriodBalance } from '@/lib/leave-balance'
 import { logActivity } from '@/lib/activity'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * 処遇固定の人（移行表の fixed・梶原さん）は賞与の点数を FIXED_BONUS_STEP_DOWN 段下げて数える
+ * （2026-10-07 代表決定「4G の半分くらい」）。GET（画面の試算）と POST（確定）で同じ関数を使う。
+ */
+const FIXED_IDS = new Set(MIGRATION_2026.filter(m => m.fixed).map(m => m.id))
+function bonusStepDownOf(workerId: number): number {
+  return FIXED_IDS.has(workerId) ? FIXED_BONUS_STEP_DOWN : 0
+}
+
+/**
+ * 精勤賞与（有給の買取）の日額 = **買い取る期の最後の日に払っていた日額**（2026-10-07 代表決定）。
+ * 9/30 に終わった期の買取なら、10/1 改定前の日額（prevRate）。改定後の日額では買い取らない。
+ * 終わった期が無い人は買取 0日なので、表示用に今の日額を返す。
+ */
+function buyoutDailyRate(
+  w: { rate?: number; rateFrom?: string; prevRate?: number },
+  periodLastDay: string,
+): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(periodLastDay)) return w.rate || 0
+  return effectiveRateForYm(w, periodLastDay.slice(0, 7))
+}
 
 /**
  * 1人分の賞与の内訳（2026-08-31 拡張）。
@@ -33,6 +57,8 @@ interface BonusLine {
   grade: string
   hyogo: Hyogo
   points: number
+  /** 処遇固定のため点数を何段下げて数えたか（0 / 省略 = 下げていない） */
+  stepDown?: number
   /** ① 利益分配賞与（点数配分の額。代表が個別に上書きすることがある） */
   amount: number
   /** ② 精勤賞与（有給の買取） */
@@ -132,7 +158,9 @@ export async function GET(request: NextRequest) {
       workerId: w.id,
       name: w.name,
       grade: w.jpGrade || '',
-      rate: w.rate || 0,
+      // 精勤賞与の日額（買い取る期の最後の日の日額・2026-10-07）
+      rate: buyoutDailyRate(w, leavePeriodEnd),
+      stepDown: bonusStepDownOf(w.id),
       nonSmoker: w.nonSmoker === true,
       children: w.children || [],
       dispatchTo: w.dispatchTo || '',
@@ -173,6 +201,7 @@ export async function POST(request: NextRequest) {
     workerId: w.id,
     grade: w.jpGrade as JpGrade,
     hyogo: hyogoMap[String(w.id)] || 'A',
+    stepDown: bonusStepDownOf(w.id),
   }))
   const { unit, totalPoints, allocations } = allocateBonus(pool, members)
 
@@ -190,6 +219,7 @@ export async function POST(request: NextRequest) {
       workerId: a.workerId,
       name: w?.name || '',
       grade: a.grade, hyogo: a.hyogo, points: a.points,
+      ...(a.stepDown ? { stepDown: a.stepDown } : {}),
       amount: profit,
       attendanceDays: num(sent?.attendanceDays),
       attendanceRate: num(sent?.attendanceRate),
@@ -214,7 +244,12 @@ export async function POST(request: NextRequest) {
     const errs: string[] = []
     for (const line of lines) {
       const days = line.attendanceDays || 0
-      if (days <= 0) continue
+      if (days <= 0) {
+        // 買い取らない人の精勤賞与は 0 円（画面から金額だけ来ても載せない）
+        line.attendanceAmount = 0
+        line.totalAmount = line.amount + (line.nonSmokerAmount || 0) + (line.childAmount || 0)
+        continue
+      }
       const bal = await getEndedPeriodBalance(line.workerId, paidOn)
       if (!bal) { errs.push(`${line.name}: 支給日 ${paidOn} の時点で終わっている有給の期がありません（期の途中では買い取れません）`); continue }
       if (bal.yearEndBuyoutRecorded) { errs.push(`${line.name}: この期（付与日 ${bal.grantDate}〜${bal.periodLastDay}）の期末買取は記録済みです`); continue }
@@ -223,6 +258,12 @@ export async function POST(request: NextRequest) {
         errs.push(`${line.name}: 買取 ${days}日 は上限 ${cap}日 を超えています（期 ${bal.grantDate}〜${bal.periodLastDay}・残 ${bal.remaining}日${bal.grantDate >= '2026-10-01' ? '・年5日分を除く' : ''}）`)
       }
       buyoutTargets.set(line.workerId, bal)
+      // 日額と金額はサーバで決め直す（画面の値を信じない・買い取る期の最後の日の日額）
+      const w = targets.find(x => x.id === line.workerId)
+      const rate = w ? buyoutDailyRate(w, bal.periodLastDay) : 0
+      line.attendanceRate = rate
+      line.attendanceAmount = days * rate
+      line.totalAmount = line.amount + line.attendanceAmount + (line.nonSmokerAmount || 0) + (line.childAmount || 0)
     }
     if (errs.length > 0) {
       return NextResponse.json({ error: '精勤賞与（有給買取）の日数に問題があります', details: errs }, { status: 400 })
@@ -301,4 +342,67 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, record: { id, ...record }, buyoutResults })
+}
+
+/**
+ * 確定の取り消し（2026-10-07 追加）。
+ *
+ * 年次改定には「確定を取り消す」があるのに賞与には無く、押し間違えると記録が残り、
+ * 精勤賞与から自動で付けた有給の買取記録も1人ずつ休暇管理で取り消すしかなかった。
+ * ここで「この賞与（bonusId）が付けた買取記録」だけを外し、賞与の記録を消す。
+ * 手で付けた買取（bonusId なし）や、別の賞与が付けた記録には触れない。
+ * 消した内容は auditTrail に残す（日次バックアップにも jpBonuses は入っている）。
+ */
+export async function DELETE(request: NextRequest) {
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }
+  const id = request.nextUrl.searchParams.get('id') || ''
+  if (!id) return NextResponse.json({ error: '取り消す賞与の id が必要です' }, { status: 400 })
+  const ref = doc(db, 'jpBonuses', id)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return NextResponse.json({ error: 'この賞与の記録が見つかりません（取り消し済みかもしれません）' }, { status: 404 })
+  const record = snap.data() as Omit<BonusRecord, 'id'>
+  const auth = await getApiAuthUser(request)
+  const actorStr = auth.authorized ? String(auth.actor) : 'unknown'
+
+  // ① 有給の買取記録を外す（先に外す。途中で失敗しても賞与の記録が残るので、もう一度押せばやり直せる）
+  const mainRef = doc(db, 'demmen', 'main')
+  const mainSnap = await getDoc(mainRef)
+  const plData = (mainSnap.exists() ? (mainSnap.data().plData || {}) : {}) as Record<string, Record<string, unknown>[]>
+  type BuyoutEntry = { at: string; by: string; days: number; amount?: number; reason?: string; bonusId?: string }
+  const removed: Array<{ workerId: number; name: string; days: number }> = []
+  for (const line of record.allocations || []) {
+    const wRecords = plData[String(line.workerId)]
+    if (!Array.isArray(wRecords)) continue
+    let changed = false
+    let days = 0
+    for (const rec of wRecords) {
+      const history = (rec.buyoutHistory as BuyoutEntry[] | undefined) ?? []
+      const keep = history.filter(h => h.bonusId !== id)
+      if (keep.length === history.length) continue
+      days += history.filter(h => h.bonusId === id).reduce((s, h) => s + (h.days || 0), 0)
+      rec.buyoutHistory = keep
+      rec.buyoutDays = keep.reduce((s, h) => s + h.days, 0)
+      rec.lastEditedAt = new Date().toISOString()
+      rec.lastEditedBy = actorStr
+      changed = true
+    }
+    if (!changed) continue
+    // 1人分だけ書き換える（POST の記録と同じ dot-notation）
+    await updateDoc(mainRef, { [`plData.${String(line.workerId)}`]: wRecords })
+    await logActivity('admin', 'leave.buyout',
+      `workerId=${line.workerId} 賞与「${record.label}」の取り消しで期末買取 ${days}日 を外した（操作者: ${actorStr}）`)
+    removed.push({ workerId: line.workerId, name: line.name, days })
+  }
+
+  // ② 賞与の記録を消す（中身は auditTrail に残す）
+  try {
+    await setDoc(doc(db, 'auditTrail', `jpwage-bonus-cancel-${id}-${Date.now()}`), {
+      type: 'jpWage.bonus.cancel', bonusId: id, record, removedBuyouts: removed,
+      actor: actorStr, at: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('[jp-wage/bonus] 取り消しの auditTrail 書込失敗:', e)
+  }
+  await deleteDoc(ref)
+  return NextResponse.json({ ok: true, removedBuyouts: removed })
 }

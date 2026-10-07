@@ -329,10 +329,22 @@ const BONUS_SHIFT: Record<Hyogo, number> = {
   SS: 2, S: 1, A: 0, B: -1, C: -2,
 }
 
-/** 等級×評語 → 賞与点数。土工は3G相当。 */
-export function bonusPoints(grade: JpGrade, hyogo: Hyogo): number {
+/**
+ * 処遇固定の人は、賞与の点数を等級の**2段下**で数える（2026-10-07 代表決定）。
+ *
+ * 処遇固定（梶原さん）は日額が等級の上限＋移籍調整給で、役割に比べて日額がすでに高い。
+ * 代表の意図は「4G の半分くらい」。ラダーは2段でちょうど半分（4G・A 280点 → 140点＝2G相当）。
+ * 1段下（200点・約7割）にしたいときはこの定数を 1 にする。評語のシフトはこの上に乗る。
+ */
+export const FIXED_BONUS_STEP_DOWN = 2
+
+/**
+ * 等級×評語 → 賞与点数。土工は3G相当。
+ * stepDown … ラダーを何段下げて数えるか（処遇固定の人 = FIXED_BONUS_STEP_DOWN）
+ */
+export function bonusPoints(grade: JpGrade, hyogo: Hyogo, stepDown = 0): number {
   const baseIdx = grade === 'doko' ? BONUS_BASE_INDEX['3G'] : BONUS_BASE_INDEX[grade]
-  const idx = Math.max(0, Math.min(BONUS_LADDER.length - 1, baseIdx + BONUS_SHIFT[hyogo]))
+  const idx = Math.max(0, Math.min(BONUS_LADDER.length - 1, baseIdx + BONUS_SHIFT[hyogo] - stepDown))
   return BONUS_LADDER[idx]
 }
 
@@ -340,6 +352,8 @@ export interface BonusMember {
   workerId: number
   grade: JpGrade
   hyogo: Hyogo
+  /** 賞与の点数を何段下げて数えるか（処遇固定の人 = FIXED_BONUS_STEP_DOWN） */
+  stepDown?: number
 }
 
 export interface BonusAllocation extends BonusMember {
@@ -362,7 +376,7 @@ export interface BonusAllocation extends BonusMember {
  * 役員はこの配分の外（呼び出し側で除外する）。
  */
 export function allocateBonus(pool: number, members: BonusMember[]): { unit: number; totalPoints: number; allocations: BonusAllocation[] } {
-  const withPoints = members.map(m => ({ ...m, points: bonusPoints(m.grade, m.hyogo) }))
+  const withPoints = members.map(m => ({ ...m, points: bonusPoints(m.grade, m.hyogo, m.stepDown || 0) }))
   const totalPoints = withPoints.reduce((s, m) => s + m.points, 0)
   const unit = totalPoints > 0 ? pool / totalPoints : 0
   const allocations: BonusAllocation[] = withPoints.map(m => ({
