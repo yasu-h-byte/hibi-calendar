@@ -7,15 +7,17 @@
  * 原資を入れると、いまの在籍者でいくらになるかを試算できる。
  * 2026-10-03: ブラウザ標準の confirm を共通部品（confirmDialog）に置き換え
  * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
+ * 2026-10-07: 処遇固定の人は点数を1段下で数える・精勤賞与の日額は前の期の最後の日の日額・確定の取り消し
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { confirmDialog } from '@/lib/confirm-dialog'
+import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { SaveButton } from '@/components/ui/SaveButton'
 import {
   bonusPoints, allocateBonus, GRADE_LABELS, GRADES_IN_ORDER,
   childAllowance, attendanceBonusDays, attendanceBonusAmount,
-  NON_SMOKER_ALLOWANCE, FIVE_DAY_RESERVE,
+  NON_SMOKER_ALLOWANCE, FIVE_DAY_RESERVE, FIXED_BONUS_STEP_DOWN,
   type JpGrade, type Hyogo, type BonusMember,
 } from '@/lib/jp-wage'
 import { isAlreadyRetired } from '@/lib/workers'
@@ -25,6 +27,7 @@ interface BonusRecord {
   totalPoints: number; unit: number; total: number; grandTotal?: number
   allocations: Array<{
     workerId: number; name: string; grade: string; hyogo: Hyogo; points: number; amount: number
+    stepDown?: number
     attendanceDays?: number; attendanceRate?: number; attendanceAmount?: number
     nonSmokerAmount?: number; childCount?: number; childAmount?: number
     totalAmount?: number; payMethod?: 'transfer' | 'cash'; paidBy?: string
@@ -36,7 +39,10 @@ interface MemberInfo {
   workerId: number
   name: string
   grade: string
+  /** 精勤賞与の日額 = 買い取る期の最後の日の日額（9/30 に終わった期なら 10/1 改定前の日額） */
   rate: number
+  /** 処遇固定のため賞与の点数を何段下げて数えるか（API が決める） */
+  stepDown?: number
   nonSmoker: boolean
   children: string[]
   dispatchTo: string
@@ -84,7 +90,8 @@ export default function BonusTable() {
       // 評語は年次改定で決めたものを初期値にする（賞与と昇給で別の評価を付けない）
       const bj = br.ok ? await br.json() : { records: [], hyogo: {}, members: [] }
       setRecords(bj.records || [])
-      setInfo(Object.fromEntries(((bj.members || []) as MemberInfo[]).map(m => [m.workerId, m])))
+      const infoById: Record<number, MemberInfo> = Object.fromEntries(((bj.members || []) as MemberInfo[]).map(m => [m.workerId, m]))
+      setInfo(infoById)
       if (wr.ok) {
         const j = await wr.json()
         // 退職「予定」（退職日が未来）の人は対象に残す。API（GET/POST）と同じ判定（2026-10-02 総合点検。旧: !w.retired）
@@ -95,6 +102,8 @@ export default function BonusTable() {
             workerId: Number(w.id), name: String(w.name),
             grade: String(w.jpGrade) as JpGrade,
             hyogo: (bj.hyogo?.[String(w.id)] as Hyogo) || 'A',
+            // 処遇固定の人は点数を下げて数える（確定する API と同じ値を API から受け取る）
+            stepDown: infoById[Number(w.id)]?.stepDown || 0,
           })))
       }
     } catch { /* 試算が出せなくても表は見られる */ }
@@ -140,6 +149,7 @@ export default function BonusTable() {
     const profit = o.profit !== undefined ? o.profit : a.amount
     return {
       workerId: a.workerId, name: m.name, grade: a.grade, hyogo: a.hyogo, points: a.points,
+      stepDown: a.stepDown || 0,
       amount: profit,
       attendanceDays: days, attendanceRate: rate, attendanceAmount,
       nonSmokerAmount,
@@ -197,9 +207,35 @@ export default function BonusTable() {
       }
       setMsg(m)
       setLabel('')
-      await load(pw)
+      await load(pw, paidOn)
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : '保存に失敗しました' }
+    } finally { setBusy(false) }
+  }
+
+  /** 確定の取り消し（押し間違えたとき）。賞与の記録と、この賞与が付けた有給の買取記録をまとめて外す */
+  const cancelRecord = async (r: BonusRecord) => {
+    if (!(await confirmDanger({
+      title: `「${r.label}」の確定を取り消しますか？`,
+      description: `支給日 ${r.paidOn}・${r.allocations.length}名分の記録を消します。\n`
+        + `この賞与の精勤賞与で付けた有給の買取記録も外れ、休暇管理の「前の期の残り」に日数が戻ります。\n`
+        + `手で記録した買取には触れません。消した内容は監査の記録に残ります。`,
+      confirmLabel: '取り消す',
+    }))) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/jp-wage/bonus?id=${encodeURIComponent(r.id)}`, {
+        method: 'DELETE', headers: { 'x-admin-password': pw },
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { notify.failed('取り消し', j.error); return }
+      const removed = (j.removedBuyouts || []) as Array<{ name: string; days: number }>
+      notify.success(`「${r.label}」の確定を取り消しました`,
+        removed.length > 0 ? `有給の買取記録を外した人: ${removed.map(b => `${b.name}（${b.days}日）`).join('・')}` : undefined,
+        { sticky: removed.length > 0 })
+      await load(pw, paidOn)
+    } catch (e) {
+      notify.failed('取り消し', e)
     } finally { setBusy(false) }
   }
 
@@ -255,6 +291,8 @@ export default function BonusTable() {
           評語は「等級を上下にずらす」のと同じ（SS＝2段上 / S＝1段上 / B＝1段下 / C＝2段下）。
           分布の目安は左右対称で、第5節のペアのルール（S を1人なら B を1人、SS を1人なら C を1人）と同じ思想。
           土工は3G相当（旧配分表で班長と同額だった扱いを踏襲）。
+          処遇固定の人は等級の{FIXED_BONUS_STEP_DOWN}段下で数える（4G・A なら {bonusPoints('4G', 'A')}点 → {bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN)}点。2026-10 代表決定）。
+          出向中の人も原資の配分に入れ、支払いは出向先を通す。
         </p>
       </div>
 
@@ -307,7 +345,7 @@ export default function BonusTable() {
                     <th className={`${th} text-right`}>点</th>
                     <th className={`${th} text-right`}>① 利益分配</th>
                     <th className={`${th} text-right`}>残日数</th>
-                    <th className={`${th} text-right`}>単価</th>
+                    <th className={`${th} text-right`} title="買い取る期の最後の日に払っていた日額（10/1改定前）">日額（期末）</th>
                     <th className={`${th} text-right`}>② 精勤賞与</th>
                     <th className={`${th} text-right`}>③ 禁煙</th>
                     <th className={`${th} text-right`}>④ 子ども</th>
@@ -333,7 +371,10 @@ export default function BonusTable() {
                           {HY.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
                       </td>
-                      <td className={`${td} text-gray-500`}>{l.points}</td>
+                      <td className={`${td} text-gray-500`}>
+                        {l.points}
+                        {l.stepDown > 0 && <span className="block text-3xs text-gray-400">処遇固定・{l.stepDown}段下</span>}
+                      </td>
                       <td className={td}>
                         <input
                           type="text" inputMode="numeric" disabled={busy}
@@ -426,7 +467,7 @@ export default function BonusTable() {
               />
               <span className="text-2xs text-gray-500">
                 評語の初期値は年次改定で決めたもの。千円切り上げのぶん、利益分配の合計は原資をわずかに超えます。
-                役員・事務は対象外。精勤賞与の残日数は今日時点の有給残です。
+                役員・事務は対象外。精勤賞与は、支給日の時点で終わっている有給の期の残りを、その期の最後の日の日額で買い取ります。
               </span>
             </div>
           </>
@@ -472,6 +513,12 @@ export default function BonusTable() {
                     1点あたり {r.unit.toFixed(2)}円（合計 {r.totalPoints}点）
                     {r.grandTotal !== undefined && <> ／ 手当込みの支給総額 <b>{yen(r.grandTotal)}</b>（出向先支給を除く）</>}
                   </p>
+                  <button
+                    type="button" disabled={busy} onClick={() => cancelRecord(r)}
+                    className="mt-2 text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                  >
+                    この確定を取り消す（押し間違えたとき）
+                  </button>
                 </div>
               </details>
             ))}

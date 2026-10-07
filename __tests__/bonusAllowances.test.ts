@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   childAllowance, isChildEligible, attendanceBonusDays, attendanceBonusAmount,
   NON_SMOKER_ALLOWANCE, CHILD_ALLOWANCE_BY_ORDER,
+  bonusPoints, allocateBonus, FIXED_BONUS_STEP_DOWN,
 } from '@/lib/jp-wage'
 
 /**
@@ -77,5 +78,37 @@ describe('精勤賞与（有給の買取）', () => {
 
   it('端数の日数は切り捨て', () => {
     expect(attendanceBonusDays(12.7)).toBe(12)
+  })
+})
+
+/**
+ * 処遇固定の人の賞与の点数（2026-10-07 代表決定「1グループ下で固定」）。
+ */
+describe('処遇固定の人の賞与の点数', () => {
+  it('1段下で数える（4G・A 280点 → 200点＝3G・A と同じ）', () => {
+    expect(FIXED_BONUS_STEP_DOWN).toBe(1)
+    expect(bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN)).toBe(200)
+    expect(bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN)).toBe(bonusPoints('3G', 'A'))
+  })
+
+  it('評語のシフトはその上に乗る（4G・S を1段下 = 280点）', () => {
+    expect(bonusPoints('4G', 'S', FIXED_BONUS_STEP_DOWN)).toBe(280)
+  })
+
+  it('下げない人は従来どおり', () => {
+    expect(bonusPoints('4G', 'A')).toBe(280)
+    expect(bonusPoints('4G', 'A', 0)).toBe(280)
+  })
+
+  it('配分では下げた点数で原資を分ける（合計点が減り、他の人の単価が上がる）', () => {
+    const r = allocateBonus(1_000_000, [
+      { workerId: 1, grade: '4G', hyogo: 'A' },
+      { workerId: 2, grade: '4G', hyogo: 'A', stepDown: 2 },
+    ])
+    expect(r.totalPoints).toBe(420)
+    expect(r.allocations[0].points).toBe(280)
+    expect(r.allocations[1].points).toBe(140)
+    // 下げた人はちょうど半分（千円切り上げ前）
+    expect(r.allocations[1].points * r.unit * 2).toBeCloseTo(r.allocations[0].points * r.unit)
   })
 })
