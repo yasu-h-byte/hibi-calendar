@@ -179,9 +179,51 @@ export interface IntegrationWorkersResult {
   fromYm: string
   months: number
   assumptions: typeof PROJECTION_ASSUMPTIONS & { welfareRates: typeof DEFAULT_WELFARE_RATES }
-  /** これから採る人の目安（等級ごとの初任の日額・ベトナム人の初任の時給） */
-  starting: { jpDailyByGrade: Record<string, number>; vnHourly: number }
+  /**
+   * これから採る人の目安。入社した年を0年目として、年ごとの月の基本給（円・残業や手当なし）。
+   * 日本人は等級ごと（1号から入り、毎年10月に評語A＋年齢調整。年齢は jpHireAge 歳で入る前提）、ベトナム人は初任の時給から逓減カーブ。
+   * 経営コックピットが「◯期に◯Gを◯人採る」の人件費に使う（給料の決まりを経営コックピットに書かないため）
+   */
+  starting: {
+    jpDailyByGrade: Record<string, number>
+    vnHourly: number
+    jpHireAge: number
+    jpMonthlyByYear: Record<string, number[]>
+    vnMonthlyByYear: number[]
+  }
   workers: IntegrationWorker[]
+}
+
+/** 新しく採る人の、入社からの年ごとの月の基本給（純粋な計算） */
+export function startingTables(todayIso: string, years: number): IntegrationWorkersResult['starting'] {
+  const grades: JpGrade[] = ['1G', '2G', '3G', '4G', '5G', '6G', 'doko']
+  const jpHireAge = 25
+  const jpMonthlyByYear = Object.fromEntries(
+    grades.map((g) => {
+      let step = 1
+      const out: number[] = []
+      for (let y = 0; y < years; y++) {
+        if (y > 0) step = Math.min(MAX_STEP, step + Math.max(0, HYOGO_PITCH[PROJECTION_ASSUMPTIONS.jpHyogo] + ageAdjustment(jpHireAge + y, g)))
+        out.push(Math.round((dailyForStep(g, step) * PROJECTION_ASSUMPTIONS.jpPaidDaysPerYear) / 12))
+      }
+      return [g, out]
+    }),
+  )
+  // 実際の入社時給は最賃を10円に切り上げた額のあたり（2026-08 実勢 1,270円）
+  const vnHourly = Math.ceil(minWageAt(todayIso) / 10) * 10
+  const vnMonthlyByYear: number[] = []
+  let h = vnHourly
+  for (let y = 0; y < years; y++) {
+    if (y > 0) h += Math.round(curveRaiseAt(y - 1) * PROJECTION_ASSUMPTIONS.vnRaiseMultiplier)
+    vnMonthlyByYear.push(Math.round(h * PROJECTION_ASSUMPTIONS.vnMonthlyHours))
+  }
+  return {
+    jpDailyByGrade: Object.fromEntries(grades.map((g) => [g, dailyForStep(g, 1)])),
+    vnHourly,
+    jpHireAge,
+    jpMonthlyByYear,
+    vnMonthlyByYear,
+  }
 }
 
 /** 台帳と帰国・締めの記録から、返す形を組み立てる（純粋な計算） */
@@ -235,11 +277,7 @@ export function buildWorkersResult(input: {
     fromYm: input.fromYm,
     months: input.months,
     assumptions: { ...PROJECTION_ASSUMPTIONS, welfareRates: DEFAULT_WELFARE_RATES },
-    starting: {
-      jpDailyByGrade: Object.fromEntries((['1G', '2G', '3G', '4G', '5G', '6G', 'doko'] as JpGrade[]).map((g) => [g, dailyForStep(g, 1)])),
-      // 実際の入社時給は最賃を10円に切り上げた額のあたり（2026-08 実勢 1,270円）
-      vnHourly: Math.ceil(minWageAt(input.todayIso) / 10) * 10,
-    },
+    starting: startingTables(input.todayIso, Math.ceil(input.months / 12)),
     workers,
   }
 }

@@ -85,4 +85,13 @@ describe('期ごとの合計と返す形', () => {
     expect(r.workers[0]).toMatchObject({ company: 'hfu', nationality: 'vn', field: true, lastClosed: { totalCost: 250000 } })
     expect(r.starting.vnHourly).toBe(1280)
   })
+  test('新しく採る人の年ごとの月給: 1G は1号から毎年上がり、ベトナム人は初任の時給 × 140時間から逓減カーブ', () => {
+    const r = buildWorkersResult({ workers: [], homeLeaves: [], lastClosed: new Map(), fromYm: '2026-10', months: 72, todayIso: '2026-10-07' })
+    const jp = r.starting.jpMonthlyByYear['1G']
+    expect(jp).toHaveLength(6)
+    expect(jp[0]).toBe(Math.round((dailyForStep('1G', 1) * 310) / 12))
+    expect(jp[1]).toBeGreaterThan(jp[0])
+    expect(r.starting.vnMonthlyByYear[0]).toBe(1280 * 140)
+    expect(r.starting.vnMonthlyByYear[1]).toBe((1280 + curveRaiseAt(0)) * 140)
+  })
 })
