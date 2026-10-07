@@ -82,19 +82,17 @@ describe('精勤賞与（有給の買取）', () => {
 })
 
 /**
- * 処遇固定の人の賞与の点数（2026-10-07 代表決定「4G の半分くらい」）。
- * ラダーを2段下げるとちょうど半分になる。
+ * 処遇固定の人の賞与の点数（2026-10-07 代表決定「1グループ下で固定」）。
  */
 describe('処遇固定の人の賞与の点数', () => {
-  it('2段下で数える（4G・A 280点 → 140点＝2G・A と同じ）', () => {
-    expect(FIXED_BONUS_STEP_DOWN).toBe(2)
-    expect(bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN)).toBe(140)
-    expect(bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN)).toBe(bonusPoints('2G', 'A'))
-    expect(bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN) * 2).toBe(bonusPoints('4G', 'A'))
+  it('1段下で数える（4G・A 280点 → 200点＝3G・A と同じ）', () => {
+    expect(FIXED_BONUS_STEP_DOWN).toBe(1)
+    expect(bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN)).toBe(200)
+    expect(bonusPoints('4G', 'A', FIXED_BONUS_STEP_DOWN)).toBe(bonusPoints('3G', 'A'))
   })
 
-  it('評語のシフトはその上に乗る（4G・S を2段下 = 200点）', () => {
-    expect(bonusPoints('4G', 'S', 2)).toBe(200)
+  it('評語のシフトはその上に乗る（4G・S を1段下 = 280点）', () => {
+    expect(bonusPoints('4G', 'S', FIXED_BONUS_STEP_DOWN)).toBe(280)
   })
 
   it('下げない人は従来どおり', () => {
