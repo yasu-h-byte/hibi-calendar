@@ -805,12 +805,15 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   //   欠勤日数・欠勤控除（完全月給の欠勤控除は 202608〜。列が無く内訳の合計と支給額が合わなかった）。
   //   過去月のExcelの列構成を変えないよう、欠勤控除の適用開始月からだけ列を出す
   const withJpDetail = ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM
+  // 有給精算（日本人の日給月給・2026-10〜・lib/leave-settle.ts）。使った人がいる月だけ列を出す
+  const withLeaveSettle = workers.some(w => (w.leaveSettleAllowance || 0) > 0)
   const japaneseHeaders = ['名前',
     ...(withJpDetail ? ['従業員番号'] : []),
     '現場', '雇用形態', '日額/月給', '出勤日数',
     ...(withJpDetail ? ['補償日'] : []),
     '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当',
     ...(withJpLegalHoliday ? ['法定休日手当'] : []),
+    ...(withLeaveSettle ? ['有給精算日数', '有給精算手当'] : []),
     ...(withAllowance ? ['遠方日当', '運転手当'] : []),
     ...(withJpDetail ? ['欠勤日数', '欠勤控除'] : []),
     '支給額合計']
@@ -1098,6 +1101,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.dailyOtHours || w.otHours || 0,
         w.basePay || 0, w.paidLeaveAllowance || 0, w.otAllowance || 0,
         ...(withJpLegalHoliday ? [w.legalHolidayAllowance || 0] : []),
+        ...(withLeaveSettle ? [w.leaveSettleDays || 0, w.leaveSettleAllowance || 0] : []),
         ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
         ...(withJpDetail ? [w.absence || 0, w.absentDeduction || 0] : []),
         w.salaryNetPay || 0,
@@ -1113,6 +1117,10 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       ws.reduce((s, w) => s + (w.paidLeaveAllowance || 0), 0),
       ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
       ...(withJpLegalHoliday ? [ws.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0)] : []),
+      ...(withLeaveSettle ? [
+        ws.reduce((s, w) => s + (w.leaveSettleDays || 0), 0),
+        ws.reduce((s, w) => s + (w.leaveSettleAllowance || 0), 0),
+      ] : []),
       ...(withAllowance ? [
         ws.reduce((s, w) => s + (w.siteAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.driveAllowance || 0), 0),
@@ -1133,6 +1141,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       const mismatches = ws.filter(w => {
         const parts = (w.basePay || 0) + (w.paidLeaveAllowance || 0) + (w.otAllowance || 0)
           + (withJpLegalHoliday ? (w.legalHolidayAllowance || 0) : 0)
+          + (w.leaveSettleAllowance || 0)
           + (w.siteAllowance || 0) + (w.driveAllowance || 0) - (w.absentDeduction || 0)
         return parts !== (w.salaryNetPay || 0)
       })
@@ -1140,6 +1149,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       rows.push([mismatches.length === 0
         ? '✓ 自動検算: 全員 内訳合計（基本給＋有給手当＋残業手当＋法定休日手当＋手当 − 欠勤控除）＝ 支給額合計'
         : `⚠ 自動検算: ${mismatches.map(w => w.name).join('・')} の内訳合計が支給額合計と一致しません`])
+      if (withLeaveSettle) {
+        rows.push(['※ 「有給精算手当」は、有給の残りを本人の申請で給料に回した分（日額 × 有給精算日数・日本人の日給月給のみ）。休みの日に有給を取ったものではないため「有給日数」には含めない（年次有給休暇管理簿では買取として記録）。'])
+      }
       rows.push(['※ 「補償日」は現場都合休（出面の 0.6）の日数。日給月給は出勤日数に 0.6日 として含め、基本給（日額×人工）に日額の60%で入る。夜勤は 1.5人工（出勤日数には1日）。「欠勤控除」は完全月給者のみ（2026年8月分〜。出面の「欠」＋出勤日の不足分 × 月給÷20.83日）。'])
     }
     const sheet = XLSX.utils.aoa_to_sheet(rows)
@@ -1149,7 +1161,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       if (i > 2 && r.length === 1 && typeof r[0] === 'string') merges.push({ s: { r: i, c: 0 }, e: { r: i, c: japaneseHeaders.length - 1 } })
     })
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, ...(withJpDetail ? [9] : []), 16, 10, 12, 8, ...(withJpDetail ? [8] : []), 8, 10, 12, 12, 12, ...(withJpLegalHoliday ? [11] : []), ...(withAllowance ? [10, 10] : []), ...(withJpDetail ? [8, 12] : []), 14])
+    setColWidths(sheet, [14, ...(withJpDetail ? [9] : []), 16, 10, 12, 8, ...(withJpDetail ? [8] : []), 8, 10, 12, 12, 12, ...(withJpLegalHoliday ? [11] : []), ...(withLeaveSettle ? [10, 12] : []), ...(withAllowance ? [10, 10] : []), ...(withJpDetail ? [8, 12] : []), 14])
     return sheet
   }
 

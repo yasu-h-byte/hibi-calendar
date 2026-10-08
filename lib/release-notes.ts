@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261008_leave_settle',
+    title: '有給: 日給月給の人は、有給の残りを給料に回せるようになりました（有給精算）',
+    content:
+      '日本人の日給月給の人は、仕事の少ない月にマイページの「有給精算」から、有給の残りを日数で申請できます（1日＝日額1日分。10月分の給与から）。'
+      + '年5日の有給の分は先に残し、出勤・有給などと合わせて月24日までです。付与から半年たって年5日に届いていない人は使えません。'
+      + '承認は休暇管理の「申請」タブ（またはマイページの承認欄）から。月次集計とExcelには「有給精算手当」の列が出ます。',
+    category: 'new',
+    publishedAt: '2026-10-08T18:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261008_tool_subsidy',
     title: '道具代: ベトナム人の電動インパクトは会社が半額負担になりました',
     content:

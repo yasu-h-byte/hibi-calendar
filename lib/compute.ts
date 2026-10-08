@@ -31,6 +31,7 @@ const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
 import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM, JP_AVG_MONTHLY_WORK_DAYS } from './constants'
 import { currentYmJst, todayJstDate } from '@/lib/date-utils'
+import { LEAVE_SETTLE_FROM_YM, LEAVE_SETTLE_MONTH_CAP_DAYS, LEAVE_SETTLE_LABEL, isLeaveSettleEligible, settledDaysForYm } from './leave-settle'
 
 /**
  * 現場都合休（0.6補償）を「最低20日保証」の枠の中では100%支給にする適用開始月（2026-09-15 代表決定）。
@@ -1245,7 +1246,7 @@ export function stepPeriod(mode: string, y: number, m: number, dir: number): { y
  * 過去の締め済み月の見え方を変えないため、PAY_NOTES_FROM_YM（2026年9月分）より前の月には付けない。
  */
 export interface PayNote {
-  code: 'belowWorkedDays' | 'jpWeekOver40' | 'crossSiteCalendar' | 'midMonthRateOt' | 'blankDays' | 'oldRuleExtraWork' | 'jpMonthlyOffDayWork'
+  code: 'belowWorkedDays' | 'jpWeekOver40' | 'crossSiteCalendar' | 'midMonthRateOt' | 'blankDays' | 'oldRuleExtraWork' | 'jpMonthlyOffDayWork' | 'leaveSettleOverCap' | 'leaveSettleNotDaily'
   message: string
   /** 目安の金額（円）。無い注意点もある */
   amount?: number
@@ -1399,6 +1400,10 @@ export interface WorkerMonthly {
   allowanceDays?: number   // 日当の対象日数
   driveAllowance?: number  // 運転手当（課税。割増賃金基礎への算入は社労士レビュー後）
   driveLegs?: number       // 運転した便数（行き・帰り合計）
+  /** 有給精算の日数（日本人の日給月給・2026-10〜。lib/leave-settle.ts。出面には入らない） */
+  leaveSettleDays?: number
+  /** 有給精算手当 = 日額 × 有給精算の日数（salaryNetPay に加算済み） */
+  leaveSettleAllowance?: number
   /** 給与チェックの注意点（支給額は変えない・2026年9月分〜・2026-10-02）。無い月は付かない */
   payNotes?: PayNote[]
   /** 日曜に出勤した日（注意点用・全員） */
@@ -2531,6 +2536,40 @@ export function computeMonthly(
       // 原価への反映は後段の「原価=実支給」ブロックが手当込みの支給額を現場へ配賦する
       // （2026-09-02: 日本人日給月給も実支給配賦に統一したため、ここでの直接加算は廃止。
       //   残すと手当が二重に原価計上される）
+    }
+  }
+
+  // ── 有給精算手当（日本人の日給月給・2026年10月分〜・lib/leave-settle.ts）──
+  //   有給の残りを日数で給料に回す（休みの多い月の補い）。承認済みの分は plData の buyoutHistory に
+  //   reason='monthly-settle'・ym 付きで記録されている。出面には何も書かないので、年5日・管理簿の「取得」には入らない。
+  //   原価への反映は後段の「原価=実支給」ブロックが支給額ごと現場へ配賦する（運転手当と同じ）。
+  if (ym >= LEAVE_SETTLE_FROM_YM) {
+    for (const wm of workerMap.values()) {
+      const days = settledDaysForYm(main.plData?.[String(wm.id)] as unknown as Parameters<typeof settledDaysForYm>[0], ym)
+      if (days <= 0) continue
+      const raw = main.workers.find(x => x.id === wm.id)
+      wm.leaveSettleDays = days
+      if (!isLeaveSettleEligible(raw) || !(wm.rate > 0)) {
+        // 承認のあとに月給・役員へ変わった人など。勝手に払わず、事務に気づかせる
+        ;(wm.payNotes ||= []).push({
+          code: 'leaveSettleNotDaily',
+          message: `${LEAVE_SETTLE_LABEL}が ${days}日 承認されていますが、日給月給ではないため支給に入れていません。休暇管理で承認を取り消すか、代表に確認してください`,
+        })
+        continue
+      }
+      const amount = ceilYen(days * wm.rate)
+      wm.leaveSettleAllowance = amount
+      wm.netPay += amount
+      if (wm.salaryNetPay !== undefined) wm.salaryNetPay += amount
+      // 申請・承認の時は月の途中なので、締めの時点で月24日を超えていないかを見直す（支給額は変えない）
+      const paidDays = wm.actualWorkDays + wm.plUsed + wm.compDays + wm.examDays
+      if (paidDays + days > LEAVE_SETTLE_MONTH_CAP_DAYS) {
+        ;(wm.payNotes ||= []).push({
+          code: 'leaveSettleOverCap',
+          message: `出勤${wm.actualWorkDays}＋有給${wm.plUsed}＋0.6補${wm.compDays}＋試験${wm.examDays}＋有給精算${days} = ${paidDays + days}日 で、月${LEAVE_SETTLE_MONTH_CAP_DAYS}日を超えています。休暇管理で精算の承認を取り消して申請し直してもらうか、このまま払うかを決めてください`,
+          amount,
+        })
+      }
     }
   }
 

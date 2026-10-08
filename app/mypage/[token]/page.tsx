@@ -28,6 +28,8 @@ import { useParams } from 'next/navigation'
 import StaffHeader from '@/components/StaffHeader'
 import { Icon } from '@/components/ui/Icon'
 import ForemanApprovals from '@/components/mypage/ForemanApprovals'
+import LeaveSettleCard from '@/components/mypage/LeaveSettleCard'
+import LeaveSettleApprovals from '@/components/leave/LeaveSettleApprovals'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
 
@@ -274,6 +276,8 @@ export default function MyPage() {
 
         {/* ── 承認すること（職長だけ） ── */}
         <ForemanApprovals token={token} canApprove={!!data.canApprove} />
+        {/* 有給精算の承認（政仁さん・代表だけ。承認待ちがあるときだけ出る） */}
+        {data.canApprove && <LeaveSettleApprovals token={token} />}
 
         {/* ── 有給 ── */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -292,7 +296,7 @@ export default function MyPage() {
                 <div className="text-sm text-gray-500 pb-1">日 残っています</div>
               </div>
               <div className="text-xs text-gray-500 mt-2">
-                今期 {lv.total}日 のうち {lv.used}日 取得済み
+                今期 {lv.total}日 のうち {lv.used}日 使用済み
                 <span className="block mt-0.5">
                   期間: {fmtFull(lv.grantDate)} 〜 {fmtFull(lastDayOf(lv.periodEnd))}
                 </span>
@@ -330,6 +334,9 @@ export default function MyPage() {
             </button>
           )}
         </div>
+
+        {/* ── 有給精算（日本人の日給月給の人だけ出る・2026-10-08） ── */}
+        <LeaveSettleCard token={token} onChanged={load} />
 
         {/* ── これからの有給 ── */}
         {upcoming.length > 0 && (

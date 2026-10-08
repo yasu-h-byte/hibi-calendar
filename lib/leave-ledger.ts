@@ -191,7 +191,8 @@ export function buildLeaveLedgerModel(
         buyouts.push({
           id: w.id, name: w.name, grantDate: r.grantDate as string, at: (h.at || '').slice(0, 10), days: h.days,
           amount: h.amount ?? null,
-          reason: h.reason === 'year-end' ? '期末買取' : h.reason === 'retirement' ? '退職時精算' : h.reason || '',
+          reason: h.reason === 'year-end' ? '期末買取' : h.reason === 'retirement' ? '退職時精算'
+            : h.reason === 'monthly-settle' ? `有給精算（${String((h as { ym?: string }).ym || '').replace(/^(\d{4})(\d{2})$/, '$1年$2月')}分の給与）` : h.reason || '',
         })
       }
     }

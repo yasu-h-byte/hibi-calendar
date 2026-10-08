@@ -83,6 +83,9 @@ export interface PayrollSnapshot {
   // 遠方現場日当・運転手当（2026-10 施行）。salaryNetPay に加算済みなので I1 の構成要素に含める
   siteAllowance?: number
   driveAllowance?: number
+  /** 有給精算手当（日本人の日給月給・2026-10〜）。salaryNetPay に加算済み */
+  leaveSettleAllowance?: number
+  leaveSettleDays?: number
   /** 休憩短縮手当（2026-09 施行）。同じく salaryNetPay に加算済み */
   breakShortenAllowance?: number
   /** 給与チェックの注意点（lib/compute.ts computeMonthly が付ける。支給額は変えない・2026-10-02） */
@@ -154,6 +157,7 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
     + (w.compAllowance || 0)
     + (w.siteAllowance || 0)
     + (w.driveAllowance || 0)
+    + (w.leaveSettleAllowance || 0)
     + (w.breakShortenAllowance || 0)
     - (w.absentDeduction || 0)
   if (Math.abs(components - salaryNet) > 2) {
@@ -318,6 +322,9 @@ export interface PayrollAuditWorker {
   siteAllowance?: number
   allowanceDays?: number
   driveAllowance?: number
+  /** 有給精算手当（日本人の日給月給・2026-10〜）。salaryNetPay に加算済み */
+  leaveSettleAllowance?: number
+  leaveSettleDays?: number
   driveLegs?: number
   regularWorkDays?: number
   isDispatched?: boolean
@@ -457,6 +464,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.breakShortenAllowance || 0)
       + (w.siteAllowance || 0)
       + (w.driveAllowance || 0)
+      + (w.leaveSettleAllowance || 0)
       - (w.absentDeduction || 0)
       - (w.compBaseDeduction || 0)
   } else {
@@ -471,6 +479,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.breakShortenAllowance || 0)
       + (w.siteAllowance || 0)
       + (w.driveAllowance || 0)
+      + (w.leaveSettleAllowance || 0)
       - (w.absentDeduction || 0)
   }
   const reported = w.salaryNetPay || 0
@@ -479,7 +488,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
     pass: Math.abs(sumPay - reported) < 2,
     detail: mode.useOldRules
       ? `基本 ${fmtYen(fixedBase)} + 休業補償 ${fmtYen(w.additionalAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)}${(w.compBaseDeduction || 0) > 0 ? ` - 補償日通常分 ${fmtYen(w.compBaseDeduction || 0)}` : ''} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`
-      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 有給日給 ${fmtYen(w.paidLeaveAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)}${(w.siteAllowance || 0) + (w.driveAllowance || 0) > 0 ? ` + 日当 ${fmtYen(w.siteAllowance || 0)} + 運転 ${fmtYen(w.driveAllowance || 0)}` : ''} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
+      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 有給日給 ${fmtYen(w.paidLeaveAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)}${(w.siteAllowance || 0) + (w.driveAllowance || 0) > 0 ? ` + 日当 ${fmtYen(w.siteAllowance || 0)} + 運転 ${fmtYen(w.driveAllowance || 0)}` : ''}${(w.leaveSettleAllowance || 0) > 0 ? ` + 有給精算 ${fmtYen(w.leaveSettleAllowance || 0)}` : ''} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
   })
 
   // 4. otMul の妥当性

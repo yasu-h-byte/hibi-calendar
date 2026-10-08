@@ -10,6 +10,7 @@ import { useEffect, useState, useCallback } from 'react'
 import LedgerExportButton from './components/LedgerExportButton'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import MaintenanceButton from '@/components/leave/MaintenanceButton'
+import LeaveSettleApprovals from '@/components/leave/LeaveSettleApprovals'
 import { PLWorker, OrgFilter, LeaveTab, HomeLeave, PendingGrant, PendingGrantForm, LeaveRequest, SiteOption, MforemanMap } from './types'
 import { PageHeader, ToolButton, UnderlineTabs, Segment } from '@/components/ui/PageParts'
 import ListTab from './components/ListTab'
@@ -224,6 +225,10 @@ export default function LeavePage() {
       )}
 
       {/* タブ本体（常時マウント・visibleで表示切替） */}
+      {/* 有給精算（日本人の日給月給・2026-10-08）。申請タブの上に出す */}
+      {activeTab === 'requests' && password && (
+        <LeaveSettleApprovals password={password} canApprove={roleCan(permRoleOf({ role: userRole }), 'leave.finalApprove')} />
+      )}
       <RequestsTab
         visible={activeTab === 'requests'}
         leaveRequests={leaveRequests}
