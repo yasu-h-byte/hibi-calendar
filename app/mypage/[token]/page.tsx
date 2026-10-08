@@ -326,6 +326,11 @@ export default function MyPage() {
           {!lv.noGrant && lv.remaining <= 0 && (
             <div className="text-xs text-hibi-sub text-center mt-1.5">残日数がないため申請できません</div>
           )}
+          {/* 有給のルールの説明（年5日・申請・有給精算・期末の買取。public/notice-yukyu-rule-jp.html・2026-10-08） */}
+          <a href="/notice-yukyu-rule-jp.html"
+            className="w-full mt-2 rounded-xl min-h-[44px] py-2.5 inline-flex items-center justify-center gap-1.5 bg-white border-2 border-gray-300 text-hibi-charcoal font-bold active:bg-gray-100">
+            <Icon name="book" size={16} />有給のルールを読む
+          </a>
           {!canApply && requests.length > 0 && (
             <button type="button"
               onClick={() => { setShowApply(true); setApplyDate('') }}
