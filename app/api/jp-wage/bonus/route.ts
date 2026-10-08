@@ -17,7 +17,8 @@ import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers, isAlreadyRetired, effectiveRateForYm } from '@/lib/workers'
-import { allocateBonus, nextRevisionDate, lastRevisionDate, FIVE_DAY_RESERVE, FIXED_BONUS_STEP_DOWN, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
+import { fiveDayReserve } from '@/lib/leave-settle'
+import { allocateBonus, nextRevisionDate, lastRevisionDate, FIXED_BONUS_STEP_DOWN, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
 import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
 import { todayJstIso } from '@/lib/date-utils'
 import { getEndedPeriodBalance } from '@/lib/leave-balance'
@@ -145,6 +146,8 @@ export async function GET(request: NextRequest) {
     let leaveGrantDate = ''
     let leavePeriodEnd = ''
     let leaveBuyoutRecorded = false
+    // 年5日に足りない分（買取から除く日数）。2026-10-01 付与期から（有給精算と同じ式・2026-10-08）
+    let leaveFiveDayReserve = 0
     try {
       const b = await getEndedPeriodBalance(w.id, bonusAsOf)
       if (b) {
@@ -152,6 +155,7 @@ export async function GET(request: NextRequest) {
         leavePeriodEnd = b.periodLastDay
         leaveBuyoutRecorded = b.yearEndBuyoutRecorded
         leaveRemaining = b.yearEndBuyoutRecorded ? 0 : b.remaining
+        leaveFiveDayReserve = b.grantDate >= '2026-10-01' ? fiveDayReserve(b.grantDays, b.periodUsed) : 0
       }
     } catch { /* 有給が読めなくても賞与の他の項目は出す */ }
     return {
@@ -168,6 +172,7 @@ export async function GET(request: NextRequest) {
       leaveGrantDate,
       leavePeriodEnd,
       leaveBuyoutRecorded,
+      leaveFiveDayReserve,
     }
   }))
 
@@ -238,7 +243,7 @@ export async function POST(request: NextRequest) {
   //   期中（夏季賞与など）の year-end 記録が素通りだった。
   // 2026-10-02 総合点検: 買い取る期 = 支給日の時点で終わっている直近の期（getEndedPeriodBalance・GET と同じ）。
   //   期の途中（まだ終わっていない）は買い取れない。期末買取が記録済みの期にも重ねて記録しない。
-  //   上限「残−5日」（付与日 >= 2026-10-01 の期）の式は代表の判断待ちのため変えていない
+  // 2026-10-08（代表確認）: 上限は「残 −（5 − 稼働日に取った有給）」（付与日 >= 2026-10-01 の期）。有給精算と同じ式（lib/leave-settle.ts fiveDayReserve）
   const buyoutTargets = new Map<number, Awaited<ReturnType<typeof getEndedPeriodBalance>>>()
   {
     const errs: string[] = []
@@ -253,9 +258,10 @@ export async function POST(request: NextRequest) {
       const bal = await getEndedPeriodBalance(line.workerId, paidOn)
       if (!bal) { errs.push(`${line.name}: 支給日 ${paidOn} の時点で終わっている有給の期がありません（期の途中では買い取れません）`); continue }
       if (bal.yearEndBuyoutRecorded) { errs.push(`${line.name}: この期（付与日 ${bal.grantDate}〜${bal.periodLastDay}）の期末買取は記録済みです`); continue }
-      const cap = bal.grantDate >= '2026-10-01' ? Math.max(0, bal.remaining - FIVE_DAY_RESERVE) : bal.remaining
+      const reserve = bal.grantDate >= '2026-10-01' ? fiveDayReserve(bal.grantDays, bal.periodUsed) : 0
+      const cap = Math.max(0, bal.remaining - reserve)
       if (days > cap) {
-        errs.push(`${line.name}: 買取 ${days}日 は上限 ${cap}日 を超えています（期 ${bal.grantDate}〜${bal.periodLastDay}・残 ${bal.remaining}日${bal.grantDate >= '2026-10-01' ? '・年5日分を除く' : ''}）`)
+        errs.push(`${line.name}: 買取 ${days}日 は上限 ${cap}日 を超えています（期 ${bal.grantDate}〜${bal.periodLastDay}・残 ${bal.remaining}日${reserve > 0 ? `・年5日に足りない ${reserve}日 を除く` : ''}）`)
       }
       buyoutTargets.set(line.workerId, bal)
       // 日額と金額はサーバで決め直す（画面の値を信じない・買い取る期の最後の日の日額）

@@ -17,7 +17,7 @@ import { SaveButton } from '@/components/ui/SaveButton'
 import {
   bonusPoints, allocateBonus, GRADE_LABELS, GRADES_IN_ORDER,
   childAllowance, attendanceBonusDays, attendanceBonusAmount,
-  NON_SMOKER_ALLOWANCE, FIVE_DAY_RESERVE, FIXED_BONUS_STEP_DOWN,
+  NON_SMOKER_ALLOWANCE, FIXED_BONUS_STEP_DOWN,
   type JpGrade, type Hyogo, type BonusMember,
 } from '@/lib/jp-wage'
 import { isAlreadyRetired } from '@/lib/workers'
@@ -48,8 +48,10 @@ interface MemberInfo {
   dispatchTo: string
   /** 買い取る期（支給日の時点で終わっている直近の期）の残。終わった期が無い／期末買取が記録済みなら 0 */
   leaveRemaining: number
-  /** 買い取る期の付与日。買取上限（残−5日）の判定に使う */
+  /** 買い取る期の付与日 */
   leaveGrantDate: string
+  /** 年5日に足りない分（買取から除く日数・2026-10-01 付与期から） */
+  leaveFiveDayReserve?: number
   /** 買い取る期の最後の日（2026-10-02 総合点検。旧: 9/30 固定だった） */
   leavePeriodEnd?: string
   /** その期の期末買取が記録済み */
@@ -134,15 +136,16 @@ export default function BonusTable() {
     const inf = info[a.workerId]
     const o = ov[a.workerId] || {}
     const rate = inf?.rate || 0
-    // 2026-10-01 付与期からは年5日を確保するため「残日数 − 5日」が買取の上限
-    // （代表決定 2026-08-31・docs/paid-leave.md）。それ以前の期は全額買取できる。
-    const capped = !!inf?.leaveGrantDate && inf.leaveGrantDate >= '2026-10-01'
+    // 2026-10-01 付与期からは「残日数 −（5 − 稼働日に取った有給）」が買取の上限（2026-10-08 有給精算とそろえた。
+    //   旧: いつも残−5日）。5日取った人は全部買い取れる。それ以前の期は全額買取できる。
+    const reserve = inf?.leaveFiveDayReserve || 0
+    const capped = reserve > 0
     // 買い取る期は「支給日の時点で終わっている直近の期」（API が支給日で出す・2026-10-02 総合点検）。
     //   終わった期が無い（期の途中）・期末買取が記録済みなら leaveRemaining=0 で、自動では買い取らない。
     //   旧: 支給日が 10/1 以降かどうか（9/30 期末の固定）で決めていた
     const days = o.days !== undefined
       ? o.days
-      : attendanceBonusDays(inf?.leaveRemaining || 0, { capForFiveDayObligation: capped })
+      : attendanceBonusDays(inf?.leaveRemaining || 0, { reserveDays: reserve })
     const attendanceAmount = attendanceBonusAmount(days, rate)
     const nonSmokerAmount = inf?.nonSmoker ? NON_SMOKER_ALLOWANCE : 0
     const child = childAllowance(inf?.children || [], paidOn)
@@ -391,7 +394,7 @@ export default function BonusTable() {
                           className="w-14 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded px-1.5 py-1 text-right text-sm tabular-nums"
                         />
                         {l.capped && (
-                          <span className="block text-3xs text-gray-400">上限（残−{FIVE_DAY_RESERVE}日）</span>
+                          <span className="block text-3xs text-gray-400">上限（残−{info[l.workerId]?.leaveFiveDayReserve || 0}日・年5日に足りない分）</span>
                         )}
                         {info[l.workerId]?.leavePeriodEnd ? (
                           <span className="block text-3xs text-gray-400">

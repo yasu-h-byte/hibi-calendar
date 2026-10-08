@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { confirmDialog, confirmDanger, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
-import { ymLabel, LEAVE_SETTLE_LABEL, type LeaveSettleRequest } from '@/lib/leave-settle'
+import { ymLabel, type LeaveSettleRequest } from '@/lib/leave-settle'
 
 const STATUS: Record<LeaveSettleRequest['status'], { label: string; cls: string }> = {
   pending: { label: '承認待ち', cls: 'bg-amber-100 text-amber-800' },
@@ -119,7 +119,7 @@ export default function LeaveSettleApprovals({ token, password, canApprove = tru
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
       <div className="flex items-baseline gap-2 mb-1">
-        <div className="text-sm font-bold text-gray-700">{LEAVE_SETTLE_LABEL}の申請</div>
+        <div className="text-sm font-bold text-gray-700">有給精算の申請</div>
         {pending.length > 0 && <span className="text-xs font-bold text-amber-700">承認待ち {pending.length}件</span>}
       </div>
       <p className="text-xs text-hibi-sub mb-2">日本人の日給月給の人が、有給の残りを給料に回す申請です（年5日の分は残す・月24日まで）。</p>
