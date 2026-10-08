@@ -5,6 +5,10 @@ import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, periodIndexOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
 import { addDaysIso, addMonthsSafe } from '@/lib/date-utils'
+import {
+  isToolSubsidyKind, purchasesBudgetUse, purchasesCompanyAmount, toolSubsidyCompanyAmount, toolSubsidyError,
+  TOOL_SUBSIDY_ITEMS, type ToolSubsidyKind,
+} from '@/lib/tool-subsidy'
 
 // 期間の計算は lib/tool-budget-period.ts（スタッフのスマホと共通・2026-09-30）
 type Period = ToolBudgetPeriod
@@ -17,6 +21,8 @@ interface Purchase {
   registeredAt: string
   /** 残高を超えて登録した（事務が確認のうえ通した・2026-09-30）。超過分は翌期の枠から引かれる */
   over?: boolean
+  /** 会社半額負担（2026-10-08・外国人の電動インパクト）。company = 会社が負担した額。枠から引くのは amount − company */
+  subsidy?: { kind: ToolSubsidyKind; company: number }
 }
 
 interface ToolBudgetRecord {
@@ -54,6 +60,13 @@ async function getToolBudgetData(): Promise<ToolBudgetData> {
 
 async function saveToolBudgetData(data: ToolBudgetData): Promise<void> {
   await setDoc(doc(db, 'demmen', 'toolBudget'), data)
+}
+
+/** その人の全期間の購入（2年に1回の確認用） */
+function allPurchasesOf(tbData: ToolBudgetData, workerId: number): Purchase[] {
+  return Object.values(tbData.records)
+    .filter(r => r && Number(r.workerId) === Number(workerId))
+    .flatMap(r => r.purchases || [])
 }
 
 // 対象判定は lib/workers.ts の isToolBudgetEligible に一元化（2026-08-28）。
@@ -99,7 +112,8 @@ export async function GET(request: NextRequest) {
       const defaultBudgetT = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
       const budget = record?.budget ?? defaultBudgetT
       const purchases = record?.purchases || []
-      const used = purchases.reduce((sum, p) => sum + p.amount, 0)
+      // 会社半額負担の分は枠から引かない（2026-10-08）
+      const used = purchasesBudgetUse(purchases)
       // 前の期間からの繰越（2026-09-30）。マイナスは使いすぎの持ち越し
       const carry = toolBudgetCarryIn(anchor, period.index, worker.id, tbData.records, defaultBudgetT)
 
@@ -107,6 +121,7 @@ export async function GET(request: NextRequest) {
         budget,
         carry,
         used,
+        companyPaid: purchasesCompanyAmount(purchases),
         remaining: budget + carry - used,
         purchases,
         period,
@@ -156,7 +171,7 @@ export async function GET(request: NextRequest) {
       const record = key ? tbData.records[key] : null
       const budget = record?.budget ?? defaultBudget
       const purchases = record?.purchases || []
-      const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
+      const used = purchasesBudgetUse(purchases)
       // 前の期間からの繰越（2026-09-30）。開始前の人は0
       const carry = period && !notStarted ? toolBudgetCarryIn(anchor, period.index, w.id, tbData.records, defaultBudget) : 0
       return {
@@ -174,6 +189,7 @@ export async function GET(request: NextRequest) {
         defaultBudget,
         carry,
         used,
+        companyPaid: purchasesCompanyAmount(purchases),
         remaining: budget + carry - used,
         purchases,
       }
@@ -210,7 +226,7 @@ export async function POST(request: NextRequest) {
 
     // 購入登録
     if (action === 'addPurchase') {
-      const { workerId, periodStart, date, amount, item, allowOver } = body
+      const { workerId, periodStart, date, amount, item, allowOver, subsidyKind } = body
       if (!workerId || !periodStart || !date || !amount) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       }
@@ -243,19 +259,30 @@ export async function POST(request: NextRequest) {
           error: `購入日 ${date} がこの期間（${period.start}〜${period.end}）の外です。日付を確認してください`,
         }, { status: 400 })
       }
+      // ④ 会社半額負担（2026-10-08）: 対象者・対象日・2年に1回をサーバで確かめ、会社負担額もサーバで出す
+      let subsidy: Purchase['subsidy'] | undefined
+      if (subsidyKind) {
+        if (!isToolSubsidyKind(subsidyKind)) return NextResponse.json({ error: '半額負担の品目が正しくありません' }, { status: 400 })
+        const err = toolSubsidyError({ kind: subsidyKind, visa: w.visa, date: String(date), others: allPurchasesOf(tbData, w.id) })
+        if (err) return NextResponse.json({ error: err }, { status: 400 })
+        subsidy = { kind: subsidyKind, company: toolSubsidyCompanyAmount(subsidyKind, Number(amount)) }
+      }
+      // 枠から引くのは本人負担の分だけ
+      const useAmount = Number(amount) - (subsidy?.company ?? 0)
+
       const defaultBudget = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
       const cur = tbData.records[key]
       const budgetNow = cur?.budget ?? defaultBudget
-      const usedNow = (cur?.purchases || []).reduce((sum: number, p: Purchase) => sum + p.amount, 0)
+      const usedNow = purchasesBudgetUse(cur?.purchases)
       const carryNow = toolBudgetCarryIn(anchor!, period.index, w.id, tbData.records, defaultBudget)
       const remainingNow = budgetNow + carryNow - usedNow
-      const over = Number(amount) > remainingNow
+      const over = useAmount > remainingNow
       if (over && !allowOver) {
         return NextResponse.json({
-          error: `残高 ¥${Math.max(0, remainingNow).toLocaleString()} を超えています（¥${(Number(amount) - Math.max(0, remainingNow)).toLocaleString()} 超過）`,
+          error: `${subsidy ? `本人負担 ¥${useAmount.toLocaleString()} が` : ''}残高 ¥${Math.max(0, remainingNow).toLocaleString()} を超えています（¥${(useAmount - Math.max(0, remainingNow)).toLocaleString()} 超過）`,
           code: 'over_budget',
           remaining: remainingNow,
-          overBy: Number(amount) - Math.max(0, remainingNow),
+          overBy: useAmount - Math.max(0, remainingNow),
         }, { status: 409 })
       }
 
@@ -277,6 +304,7 @@ export async function POST(request: NextRequest) {
         item: item || '',
         registeredAt: new Date().toISOString(),
         ...(over ? { over: true } : {}),
+        ...(subsidy ? { subsidy } : {}),
       })
 
       await saveToolBudgetData(tbData)
@@ -296,6 +324,36 @@ export async function POST(request: NextRequest) {
         tbData.records[key].purchases = tbData.records[key].purchases.filter(p => p.id !== purchaseId)
         await saveToolBudgetData(tbData)
       }
+      return NextResponse.json({ success: true })
+    }
+
+    // 登録済みの購入に会社半額負担を付ける／外す（2026-10-08。10月に普通の購入として入れた分を直す用）
+    if (action === 'setPurchaseSubsidy') {
+      const { workerId, periodStart, purchaseId, subsidyKind } = body
+      if (workerId === undefined || workerId === null || !periodStart || !purchaseId) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      }
+      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+      const workers = mainSnap.exists() ? (mainSnap.data().workers || []) : []
+      const w = workers.find((wk: { id: number }) => wk.id === Number(workerId))
+      if (!w) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
+
+      const tbData = await getToolBudgetData()
+      const rec = tbData.records[`${workerId}_${periodStart}`]
+      const p = rec?.purchases.find(x => x.id === purchaseId)
+      if (!rec || !p) return NextResponse.json({ error: '購入記録が見つかりません' }, { status: 404 })
+
+      if (subsidyKind === null || subsidyKind === '') {
+        delete p.subsidy
+      } else {
+        if (!isToolSubsidyKind(subsidyKind)) return NextResponse.json({ error: '半額負担の品目が正しくありません' }, { status: 400 })
+        const others = allPurchasesOf(tbData, w.id).filter(x => x.id !== purchaseId)
+        const err = toolSubsidyError({ kind: subsidyKind, visa: w.visa, date: p.date, others })
+        if (err) return NextResponse.json({ error: err }, { status: 400 })
+        p.subsidy = { kind: subsidyKind, company: toolSubsidyCompanyAmount(subsidyKind, p.amount) }
+        if (!p.item) p.item = TOOL_SUBSIDY_ITEMS[subsidyKind].label
+      }
+      await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
 
@@ -383,7 +441,7 @@ export async function POST(request: NextRequest) {
       const defaultBudgetP = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
       const budget = record?.budget ?? defaultBudgetP
       const purchases = record?.purchases || []
-      const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
+      const used = purchasesBudgetUse(purchases)
       const carry = toolBudgetCarryIn(anchor, period.index, w.id, tbData.records, defaultBudgetP)
 
       return NextResponse.json({
@@ -391,6 +449,7 @@ export async function POST(request: NextRequest) {
         budget,
         carry,
         used,
+        companyPaid: purchasesCompanyAmount(purchases),
         remaining: budget + carry - used,
         purchases,
       })

@@ -11,6 +11,7 @@
  */
 
 import { todayJstIso } from './date-utils'
+import { purchasesBudgetUse, type PurchaseLike } from './tool-subsidy'
 
 export interface ToolBudgetPeriod {
   start: string  // YYYY-MM-DD
@@ -88,7 +89,7 @@ export const TOOL_BUDGET_CARRY_FROM = '2026-09-30'
 
 export interface ToolBudgetRecordLike {
   budget?: number
-  purchases?: { amount: number }[]
+  purchases?: PurchaseLike[]
 }
 
 /** ある期間が終わったときに翌期へ繰り越す額（予算 B・繰越 C・使用 U） */
@@ -112,7 +113,8 @@ export function toolBudgetCarryIn(
     if (p.end < TOOL_BUDGET_CARRY_FROM) { carry = 0; continue }
     const rec = records[`${workerId}_${p.start}`]
     const budget = rec?.budget ?? defaultBudget
-    const used = (rec?.purchases || []).reduce((s, x) => s + (Number(x.amount) || 0), 0)
+    // 会社半額負担の分は枠から引かない（2026-10-08）
+    const used = purchasesBudgetUse(rec?.purchases)
     carry = carryOut(budget, carry, used)
   }
   return carry
