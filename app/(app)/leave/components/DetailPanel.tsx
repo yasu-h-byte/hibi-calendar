@@ -46,7 +46,9 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
   if (w.grantDate) records.push({ at: w.grantDate, text: `今期の付与 ${w.grantDays}日${w.method === 'manual' ? '（手作業）' : ''}` })
   if ((w.carryOver ?? 0) > 0 && w.grantDate) records.push({ at: w.grantDate, text: `前の期から繰越 ${w.carryOver}日${w.carryOverExpiryDate ? `（${slash(w.carryOverExpiryDate)} まで）` : ''}` })
   for (const d of w.designatedLeaves ?? []) records.push({ at: d.designatedAt?.slice(0, 10) || d.date, text: `${slash(d.date)} を${d.kind === 'manual-entry' ? '有給として直接入力' : '時季指定'}${d.note ? `（${d.note}）` : ''}` })
-  for (const b of w.buyoutHistory ?? []) records.push({ at: b.at?.slice(0, 10) || '', text: `${b.days}日を買取${b.amount ? `（${b.amount.toLocaleString()}円）` : ''}${b.reason ? `・${b.reason}` : ''}` })
+  for (const b of w.buyoutHistory ?? []) records.push({ at: b.at?.slice(0, 10) || '', text: b.reason === 'monthly-settle'
+    ? `${b.days}日を有給精算（${String((b as { ym?: string }).ym || '').replace(/^(\d{4})(\d{2})$/, '$1年$2月')}分の給与に回した）`
+    : `${b.days}日を買取${b.amount ? `（${b.amount.toLocaleString()}円）` : ''}${b.reason ? `・${b.reason}` : ''}` })
   for (const h of w.adjustmentHistory ?? []) records.push({ at: h.at?.slice(0, 10) || '', text: `${h.field === 'grantDays' ? '付与日数' : h.field === 'adjustment' ? '調整' : h.field === 'carryOver' ? '繰越' : h.field} を ${h.before || '—'} → ${h.after} に変更` })
   records.sort((a, b) => b.at.localeCompare(a.at))
 

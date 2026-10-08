@@ -359,6 +359,15 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 </td>
               </tr>
             )}
+            {(w.leaveSettleAllowance || 0) > 0 && (
+              <tr>
+                <td>有給精算手当<br/><span className="text-3xs text-gray-500">(有給の残りを給料に回した分)</span></td>
+                <td className="font-mono">
+                  <div className="text-3xs text-gray-500">日額 {fmtYen(w.rate || 0)} × {fmtNum(w.leaveSettleDays, '日')}（本人の申請・承認済み。出面の有給日数には入らない）</div>
+                  <div className="font-bold">{fmtYen(w.leaveSettleAllowance || 0)}</div>
+                </td>
+              </tr>
+            )}
             {(w.siteAllowance || 0) > 0 && (
               <tr>
                 <td>遠方現場日当 <span className="text-3xs text-gray-500">(非課税・実費弁償)</span></td>

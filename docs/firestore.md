@@ -136,6 +136,25 @@ workSchedule?: {
 - 重複チェック条件: `status !== 'rejected' && status !== 'cancelled'` の既存レコードがあるときのみエラー
 - **Firestoreルール**: `allow read, write: if true`
 
+### leaveSettleRequests/{workerId}_{ym}
+有給精算の申請（日本人の日給月給・2026-10-08〜。決まりは [paid-leave.md](paid-leave.md) の「有給精算」節・`lib/leave-settle.ts`）。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| workerId | number | 申請者ID |
+| workerName | string | 申請時の名前（表示はマスタの最新名で上書き） |
+| ym | string | 給料に回す月（YYYYMM） |
+| days | number | 日数（1日単位） |
+| status | string | `pending` / `approved` / `rejected` / `cancelled`（本人取消） / `revoked`（承認の取り消し） |
+| reason | string? | 本人のメモ |
+| requestedAt | string | 申請日時（ISO） |
+| decidedAt / decidedBy | string? | 承認・却下・取り消しの日時と人 |
+| rejectedReason | string? | 却下の理由（本人に見える） |
+| grantDate | string? | 承認時に記録した付与レコードの付与日 |
+
+- 1人1か月1件。却下・取り消しのあとは同じIDで申請し直せる（上書き）
+- **承認済みの日数の正本は `demmen/main.plData` の `buyoutHistory`**（`reason: 'monthly-settle'`・`ym`・`settleId`）。給与計算（`computeMonthly`）はこちらを読む
+
 ### homeLongLeave/{auto}
 帰国（長期休暇）申請。`leaveRequests` 同様に `status` に `cancelled` を含む。スタッフは pending のみスマホから取り消し可能。
 

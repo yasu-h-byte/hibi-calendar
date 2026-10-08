@@ -43,14 +43,15 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・就業カレンダー・夜勤の入力。10月改訂で マイページからの承認（出面のまとめ承認・有給・帰国申請）を追加', url: '/manual-foreman.html', badge: '10月改訂', updated: '2026-10-03' },
 
   // ── 有給担当（事務・事業責任者） ──
-  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。帰国期間中でも有給を使えるようになった点（2026-09）と、年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算', url: '/manual-yukyu.html', badge: '10月改訂', updated: '2026-10-03' },
+  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。帰国期間中でも有給を使えるようになった点（2026-09）と、年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算', url: '/manual-yukyu.html', badge: '10月改訂', updated: '2026-10-08' },
 
   // ── 評価（運用前・管理者のみ） ──
   { category: 'manual', roles: ['admin'], title: '評価管理マニュアル（ベトナム人）', desc: '年次評価と時給改定（入社記念日サイクル）。5タブ構成・評価者ウェイト・スコア計算・昇給テーブル', url: '/manual-evaluation.html', updated: '2026-10-03' },
-  { category: 'manual', roles: ['admin', 'approver'], title: '賃金・評価 操作マニュアル（日本人）', desc: '号俸制の年次改定の回し方（評語・代表加算・平均昇給率）と賞与4区分（利益分配・精勤・禁煙・子ども手当）の作成〜確定〜有給買取の自動記録まで', url: '/manual-wage-jp.html', badge: 'NEW', updated: '2026-09-28' },
+  { category: 'manual', roles: ['admin', 'approver'], title: '賃金・評価 操作マニュアル（日本人）', desc: '号俸制の年次改定の回し方（評語・代表加算・平均昇給率）と賞与4区分（利益分配・精勤・禁煙・子ども手当）の作成〜確定〜有給買取の自動記録まで', url: '/manual-wage-jp.html', badge: 'NEW', updated: '2026-10-08' },
 
   // ── スタッフ向け（全員が内容を把握しておく／スタッフ本人はスマホから） ──
-  { category: 'staff', title: 'マイページの使い方（日本人スタッフ向け）', desc: '有給の残数確認と申請・年5日ルール・道具代の残額確認（申請はマネーフォワード）。専用URLの配布時に一緒に渡す1枚もの', url: '/manual-mypage-jp.html', badge: 'NEW', updated: '2026-10-03' },
+  { category: 'staff', title: 'マイページの使い方（日本人スタッフ向け）', desc: '有給の残数確認と申請・年5日ルール・道具代の残額確認（申請はマネーフォワード）。専用URLの配布時に一緒に渡す1枚もの', url: '/manual-mypage-jp.html', badge: 'NEW', updated: '2026-10-08' },
+  { category: 'staff', title: '有給休暇のルール（日本人スタッフ向け）', desc: '年5日は現場が動いている日に必ず休む・有給の申請・有給精算（日給月給の人が残りを給料に回す・月24日まで）・期末の買取。マイページの「有給のルールを読む」から開く。トークノートでの周知用の文もこの内容', url: '/notice-yukyu-rule-jp.html', badge: 'NEW', updated: '2026-10-08' },
   { category: 'staff', title: '【お知らせ】給料の計算のしかた（2026年9月分から）', desc: 'ベトナム人スタッフ向け（日本語＋ベトナム語）。「自分の都合で休んでも給料があまり減らない」ゆがみを直す理由（2人の比較つき）と5つのルール・計算例。自分の都合の欠勤は1日ごとに保証が1日減る（働いた日の分は必ず払う）。8月分までの支払いはそのまま', url: '/notice-salary-rule-2026-09.html', badge: '日本語+ベトナム語', updated: '2026-09-30' },
   { category: 'staff', title: 'スタッフ向けマニュアル（ベトナム人）', desc: '使う場面ごと（毎日・休むとき・毎月・ときどき）の7章。出勤登録／休みの出し方（会社の都合・自分の都合・有給・帰国）／月末の出面の確認／カレンダーの署名／忘れた・まちがえたとき／有給・道具代の残り／困ったとき（日本語＋ベトナム語）', url: '/staff-manual-vi.html', badge: '日本語+ベトナム語', updated: '2026-10-03' },
   { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', badge: '日本語+ベトナム語', updated: '2026-09-26' },

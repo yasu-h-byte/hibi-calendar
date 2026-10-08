@@ -1,3 +1,4 @@
+import { fiveDayReserve } from '@/lib/leave-settle'
 import { describe, it, expect } from 'vitest'
 import {
   childAllowance, isChildEligible, attendanceBonusDays, attendanceBonusAmount,
@@ -66,10 +67,14 @@ describe('精勤賞与（有給の買取）', () => {
     expect(attendanceBonusAmount(attendanceBonusDays(0), 18620)).toBe(0)
   })
 
-  it('来期からは「残日数 − 5日」が上限', () => {
-    expect(attendanceBonusDays(20, { capForFiveDayObligation: true })).toBe(15)
-    expect(attendanceBonusDays(5, { capForFiveDayObligation: true })).toBe(0)
-    expect(attendanceBonusDays(3, { capForFiveDayObligation: true })).toBe(0)  // マイナスにしない
+  it('来期からは「残日数 −（5 − 稼働日に取った有給）」が上限（2026-10-08 有給精算とそろえた）', () => {
+    // 20日付与・1日も取っていない → 5日を除いて15日
+    expect(attendanceBonusDays(20, { reserveDays: fiveDayReserve(20, 0) })).toBe(15)
+    // 5日取り終えた人（残15）→ 全部買い取れる（旧: 残−5 で10日しか買い取れず5日が消えていた）
+    expect(attendanceBonusDays(15, { reserveDays: fiveDayReserve(20, 5) })).toBe(15)
+    // 3日取った人（残17）→ 足りない2日を除いて15日
+    expect(attendanceBonusDays(17, { reserveDays: fiveDayReserve(20, 3) })).toBe(15)
+    expect(attendanceBonusDays(3, { reserveDays: 5 })).toBe(0)  // マイナスにしない
   })
 
   it('上限なし（今期まで）は残日数の全部', () => {

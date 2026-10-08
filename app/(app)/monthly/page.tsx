@@ -85,6 +85,9 @@ interface WorkerMonthly {
   allowanceDays?: number
   driveAllowance?: number
   driveLegs?: number
+  // 有給精算（日本人の日給月給・2026-10〜。支給額合計には加算済み、ここは内訳表示用）
+  leaveSettleDays?: number
+  leaveSettleAllowance?: number
   // 夜勤（2026-08）: 人工は workDays と分離して持つ。詳細は lib/compute.ts の WorkerMonthly
   manDays?: number
   nightShiftDays?: number
@@ -835,10 +838,12 @@ function MonthlyPageInner() {
   const showCompBaseDeduction = filteredWorkers.some(w => (w.compBaseDeduction || 0) > 0)
   // 休憩短縮手当は該当者がいる月だけ列を出す（2026-09〜・現状フンさんのみ）
   const showBreakShorten = filteredWorkers.some(w => (w.breakShortenAllowance || 0) > 0)
+  // 有給精算（日本人の日給月給・2026-10〜・lib/leave-settle.ts）: 使った人がいる月だけ列を出す
+  const showLeaveSettle = filteredWorkers.some(w => (w.leaveSettleAllowance || 0) > 0)
   // 2026-08-28: 日当は保留・運転手当のみ施行。月ではなく「該当者がいるか」で列を出す
   const showAllowance = filteredWorkers.some(w => (w.siteAllowance || 0) > 0 || (w.driveAllowance || 0) > 0)
   const salaryColCount = (ym >= '202605' ? 9 : 5) + (showAllowance ? 2 : 0)
-    + (showBreakShorten ? 1 : 0) + (showCompBaseDeduction ? 1 : 0)
+    + (showBreakShorten ? 1 : 0) + (showLeaveSettle ? 1 : 0) + (showCompBaseDeduction ? 1 : 0)
   const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + salaryColCount
 
   return (
@@ -1506,6 +1511,9 @@ function MonthlyPageInner() {
                     {showBreakShorten && (
                       <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="休憩短縮に伴う所定外労働（出勤日 × 短縮分 × 残業単価）。雇用契約書の所定超25%に合わせて割増">休憩短縮</th>
                     )}
+                    {showLeaveSettle && (
+                      <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="有給精算手当（日本人の日給月給）。有給の残りを本人の申請で給料に回した分 = 日額 × 日数。出面の有給日数には入らない">有給精算</th>
+                    )}
                     {/* 遠方現場日当・運転手当（2026-10 施行、lib/allowance.ts） */}
                     {showAllowance && (
                       <>
@@ -1569,6 +1577,8 @@ function MonthlyPageInner() {
                               lines.push(`法定外残業:    ¥${(w.otAllowance || 0).toLocaleString()}`)
                             if ((w.legalHolidayAllowance || 0) > 0)
                               lines.push(`法定休日:      ¥${(w.legalHolidayAllowance || 0).toLocaleString()}`)
+                            if ((w.leaveSettleAllowance || 0) > 0)
+                              lines.push(`有給精算手当:  ¥${(w.leaveSettleAllowance || 0).toLocaleString()}（${w.leaveSettleDays || 0}日・有給の残りを給料に回した分）`)
                             if ((w.nightAllowance || 0) > 0)
                               lines.push(`深夜:          ¥${(w.nightAllowance || 0).toLocaleString()}`)
                             if ((w.compAllowance || 0) > 0)
@@ -1835,6 +1845,12 @@ function MonthlyPageInner() {
                               {(w.breakShortenAllowance || 0) > 0 ? fmtYen(w.breakShortenAllowance!) : '—'}
                             </td>
                           )}
+                          {showLeaveSettle && (
+                            <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.leaveSettleAllowance || 0) > 0 ? 'text-violet-600' : 'text-gray-400'}`}
+                              title={(w.leaveSettleAllowance || 0) > 0 ? `有給精算 ${w.leaveSettleDays || 0}日` : undefined}>
+                              {(w.leaveSettleAllowance || 0) > 0 ? fmtYen(w.leaveSettleAllowance!) : '—'}
+                            </td>
+                          )}
                           {showAllowance && (
                             <>
                               <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.siteAllowance || 0) > 0 ? 'text-teal-600' : 'text-gray-400'}`}
@@ -1968,6 +1984,14 @@ function MonthlyPageInner() {
                         <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                           {(() => {
                             const total = filteredWorkers.reduce((s, w) => s + (w.breakShortenAllowance || 0), 0)
+                            return total > 0 ? fmtYen(total) : '—'
+                          })()}
+                        </td>
+                      )}
+                      {showLeaveSettle && (
+                        <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
+                          {(() => {
+                            const total = filteredWorkers.reduce((s, w) => s + (w.leaveSettleAllowance || 0), 0)
                             return total > 0 ? fmtYen(total) : '—'
                           })()}
                         </td>

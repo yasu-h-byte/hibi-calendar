@@ -677,19 +677,21 @@ export function childAllowance(
 /**
  * 精勤賞与（有給の買取）。
  *
- * 買取日数 × 日額。2026-10-01 付与期からは **年5日の取得を確保するため
- * 「残日数 − 5日」を上限**にする（代表決定 2026-08-31・docs/paid-leave.md）。
+ * 買取日数 × 日額。2026-10-01 付与期からは **年5日に足りない分を除いた残り**を上限にする。
+ *   上限 = 残日数 −（5 − その期に稼働日で取った有給）。5日取った人は残りを全部買い取れる。
+ *   2026-10-08 代表確認:「5日は必ず稼働日に取る。それ以外は月ごとに取り崩しても（有給精算）、期末に買い取ってもよい」。
+ *   有給精算（lib/leave-settle.ts fiveDayReserve）と同じ式にそろえた。
+ *   旧（2026-08-31〜10-08）: いつも「残日数 − 5日」。5日取り終えた人も5日分が買い取られずに消えていた。
  * それ以前の期は残日数の全部を買い取れる（従来の運用）。
  */
 export const FIVE_DAY_RESERVE = 5
 
 export function attendanceBonusDays(
   remainingDays: number,
-  opts?: { capForFiveDayObligation?: boolean },
+  opts?: { reserveDays?: number },
 ): number {
   const raw = Math.max(0, Math.floor(remainingDays))
-  if (!opts?.capForFiveDayObligation) return raw
-  return Math.max(0, raw - FIVE_DAY_RESERVE)
+  return Math.max(0, raw - Math.max(0, opts?.reserveDays ?? 0))
 }
 
 /** 精勤賞与の金額 = 買取日数 × 日額 */
