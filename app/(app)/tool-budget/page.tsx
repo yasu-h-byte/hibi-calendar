@@ -12,6 +12,7 @@ import { PageHeader, ToolButton, TodoCard, Segment, SearchBox, Chip, SidePanel, 
 import { SaveButton } from '@/components/ui/SaveButton'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
+import { isToolSubsidyEligible, toolSubsidyCompanyAmount, TOOL_SUBSIDY_FROM, TOOL_SUBSIDY_ITEMS, type ToolSubsidyKind } from '@/lib/tool-subsidy'
 
 interface Purchase {
   id: string
@@ -21,6 +22,8 @@ interface Purchase {
   registeredAt: string
   /** 残高を超えて登録した */
   over?: boolean
+  /** 会社半額負担（2026-10-08）。company = 会社が負担した額 */
+  subsidy?: { kind: ToolSubsidyKind; company: number }
 }
 
 interface Period {
@@ -43,7 +46,10 @@ interface WorkerBudget {
   carry?: number
   /** この人の区分の既定額（API が区分別設定から算出） */
   defaultBudget?: number
+  /** 枠から引いた額（会社半額負担の分は除く） */
   used: number
+  /** この期間に会社が半額負担した額 */
+  companyPaid?: number
   remaining: number
   purchases: Purchase[]
 }
@@ -121,6 +127,7 @@ export default function ToolBudgetPage() {
 
   const totalBudget = workers.reduce((s, w) => s + w.budget + (w.carry ?? 0), 0)
   const totalUsed = workers.reduce((s, w) => s + w.used, 0)
+  const totalCompanyPaid = workers.reduce((s, w) => s + (w.companyPaid ?? 0), 0)
   const setupCount = workers.filter(w => w.period).length
 
   const companyGroups = [
@@ -249,7 +256,7 @@ export default function ToolBudgetPage() {
       {!loading && workers.length > 0 && (
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <TbStat label={`予算（${workers.length}名）`} value={`¥${totalBudget.toLocaleString()}`} sub={`今の期間の予算の合計（繰り越し込み）${setupCount < workers.length ? `／期間が決まっている ${setupCount}名` : ''}`} />
-          <TbStat label="使った" value={`¥${totalUsed.toLocaleString()}`} sub="今の期間に買ったものの合計" />
+          <TbStat label="使った" value={`¥${totalUsed.toLocaleString()}`} sub={totalCompanyPaid > 0 ? `本人の枠から使った分の合計（ほかに会社の半額負担 ¥${totalCompanyPaid.toLocaleString()}）` : '今の期間に買ったものの合計'} />
           <TbStat label="残り" value={`¥${totalRemaining.toLocaleString()}`} sub={overList.length > 0 ? `使いすぎ ${overList.length}名を含む` : '予算 − 使った'} />
         </section>
       )}
@@ -374,6 +381,10 @@ function WorkerModal({
   const [newDate, setNewDate] = useState('')
   const [newAmount, setNewAmount] = useState('')
   const [newItem, setNewItem] = useState('')
+  // 会社半額負担（2026-10-08・外国人の電動インパクトだけ）
+  const [newSubsidy, setNewSubsidy] = useState<ToolSubsidyKind | ''>('')
+  const subsidyEligible = isToolSubsidyEligible(worker.visa)
+  const newCompany = newSubsidy && Number(newAmount) > 0 ? toolSubsidyCompanyAmount(newSubsidy, Number(newAmount)) : 0
 
   // worker props が更新されたら state を同期
   useEffect(() => {
@@ -412,7 +423,7 @@ function WorkerModal({
 
   // 2026-09-30: 登録時に残高・期間をサーバで確認する。残高を超えるときは確認してから通す
   //   戻り値: true=登録した / null=「やめる」が押された（失敗ではない） / false=だめだった（帯はここで出す）
-  const addPurchase = async (date: string, amount: number, item: string): Promise<boolean | null> => {
+  const addPurchase = async (date: string, amount: number, item: string, subsidyKind?: ToolSubsidyKind): Promise<boolean | null> => {
     if (!worker.period) return null
     const post = (allowOver: boolean) => fetch('/api/tool-budget', {
       method: 'POST',
@@ -425,6 +436,7 @@ function WorkerModal({
         amount,
         item,
         allowOver,
+        ...(subsidyKind ? { subsidyKind } : {}),
       }),
     })
     try {
@@ -467,12 +479,40 @@ function WorkerModal({
 
   const handleAddNew = async () => {
     if (!newDate || !newAmount) return null
-    const ok = await addPurchase(newDate, Number(newAmount), newItem)
+    const ok = await addPurchase(newDate, Number(newAmount), newItem || (newSubsidy ? TOOL_SUBSIDY_ITEMS[newSubsidy].label : ''), newSubsidy || undefined)
     if (!ok) return ok
     setNewDate('')
     setNewAmount('')
     setNewItem('')
+    setNewSubsidy('')
     onRefresh()
+  }
+
+  // 登録済みの購入に半額負担を付ける／外す（10月に普通の購入として入れた分を直す用）
+  const handleSetSubsidy = async (p: Purchase, kind: ToolSubsidyKind | null) => {
+    if (!worker.period) return
+    const label = TOOL_SUBSIDY_ITEMS.impact.label
+    const ok = kind
+      ? await confirmDialog({
+        title: `この購入を「${label}の会社半額負担」にしますか？`,
+        description: `会社負担 ¥${toolSubsidyCompanyAmount(kind, p.amount).toLocaleString()}（上限 ¥${TOOL_SUBSIDY_ITEMS[kind].cap.toLocaleString()}）。本人の枠からは残りの ¥${(p.amount - toolSubsidyCompanyAmount(kind, p.amount)).toLocaleString()} だけ引きます。`,
+        confirmLabel: '半額負担にする',
+      })
+      : await confirmDialog({
+        title: 'この購入の会社半額負担を外しますか？',
+        description: `購入額 ¥${p.amount.toLocaleString()} をすべて本人の枠から引きます。`,
+        confirmLabel: '外す',
+      })
+    if (!ok) return
+    try {
+      const r = await fetch('/api/tool-budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'setPurchaseSubsidy', workerId: worker.workerId, periodStart: worker.period.start, purchaseId: p.id, subsidyKind: kind }),
+      })
+      if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('半額負担の変更', j?.error || 'サーバが受け付けませんでした'); return }
+      onRefresh()
+    } catch (e) { notify.failed('半額負担の変更', e) }
   }
 
   const handleDelete = async (purchaseId: string) => {
@@ -561,7 +601,10 @@ function WorkerModal({
                   {/* 進捗バー */}
                   <div>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-600 dark:text-gray-300">使用済 ¥{worker.used.toLocaleString()}</span>
+                      <span className="text-gray-600 dark:text-gray-300">
+                        使用済 ¥{worker.used.toLocaleString()}
+                        {(worker.companyPaid ?? 0) > 0 && <span className="text-green-700 dark:text-green-400">（ほかに会社負担 ¥{(worker.companyPaid ?? 0).toLocaleString()}）</span>}
+                      </span>
                       <span className="text-gray-600 dark:text-gray-300">残額 <strong className="text-green-600 dark:text-green-400">¥{worker.remaining.toLocaleString()}</strong></span>
                     </div>
                     <div className="w-full h-3 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
@@ -664,10 +707,23 @@ function WorkerModal({
                             <td className="py-1.5 px-3">
                               {p.item || '—'}
                               {p.over && <span className="ml-1.5 text-3xs bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold">超過（翌期から差し引き）</span>}
+                              {p.subsidy && <span className="ml-1.5 text-3xs bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 px-1.5 py-0.5 rounded-full font-bold">会社半額負担</span>}
                             </td>
-                            <td className="py-1.5 px-3 text-right tabular-nums">¥{p.amount.toLocaleString()}</td>
+                            <td className="py-1.5 px-3 text-right tabular-nums">
+                              ¥{p.amount.toLocaleString()}
+                              {p.subsidy && (
+                                <div className="text-3xs text-hibi-sub dark:text-gray-400">
+                                  会社 ¥{p.subsidy.company.toLocaleString()} ／ 本人 ¥{(p.amount - p.subsidy.company).toLocaleString()}
+                                </div>
+                              )}
+                            </td>
                             <td className="py-1.5 px-3 text-center">
-                              <RowButton tone="danger" onClick={() => handleDelete(p.id)}>削除する</RowButton>
+                              <div className="flex flex-col items-center gap-1">
+                                {subsidyEligible && (p.subsidy
+                                  ? <RowButton onClick={() => handleSetSubsidy(p, null)}>半額負担を外す</RowButton>
+                                  : p.date >= TOOL_SUBSIDY_FROM && <RowButton onClick={() => handleSetSubsidy(p, 'impact')}>半額負担にする</RowButton>)}
+                                <RowButton tone="danger" onClick={() => handleDelete(p.id)}>削除する</RowButton>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -716,6 +772,23 @@ function WorkerModal({
                     </div>
                     <SaveButton action="追加" onSave={handleAddNew} disabled={!newDate || !newAmount} />
                   </div>
+                  {subsidyEligible && (
+                    <div className="mt-2.5 pt-2.5 border-t border-blue-200 dark:border-blue-800">
+                      <label className="inline-flex items-center gap-2 text-sm font-bold text-gray-800 dark:text-gray-100 cursor-pointer">
+                        <input type="checkbox" checked={newSubsidy === 'impact'}
+                          onChange={e => setNewSubsidy(e.target.checked ? 'impact' : '')} className="w-4 h-4" />
+                        {TOOL_SUBSIDY_ITEMS.impact.label}（会社が半額負担）
+                      </label>
+                      <p className="text-2xs text-gray-500 dark:text-gray-400 mt-1">
+                        会社負担は半額で上限 ¥{TOOL_SUBSIDY_ITEMS.impact.cap.toLocaleString()}、{TOOL_SUBSIDY_ITEMS.impact.intervalYears}年に1回まで（{TOOL_SUBSIDY_FROM.replace(/-0?/g, '/')} 以降の購入）。本人の枠からは残りだけ引きます。
+                      </p>
+                      {newSubsidy && Number(newAmount) > 0 && (
+                        <p className="text-xs font-bold text-green-800 dark:text-green-300 mt-1 tabular-nums">
+                          会社 ¥{newCompany.toLocaleString()} ／ 本人の枠から ¥{(Number(newAmount) - newCompany).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </section>
             </>

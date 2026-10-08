@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261008_tool_subsidy',
+    title: '道具代: ベトナム人の電動インパクトは会社が半額負担になりました',
+    content:
+      '道具代管理で購入を登録するとき「電動インパクト（会社が半額負担）」にチェックすると、会社が半分（上限25,000円）を負担し、本人の枠からは残りだけを引きます。'
+      + '2年に1回まで・10月1日以降の購入が対象です。10月に普通の購入として登録した電動インパクトは、購入履歴の「半額負担にする」で直せます。',
+    category: 'new',
+    publishedAt: '2026-10-08T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261007_jp_bonus',
     title: '日本人の賞与: 精勤賞与は前の期の日額で計算し、確定を取り消せるようになりました',
     content:

@@ -290,6 +290,8 @@ export async function GET(request: NextRequest) {
     let toolBudgetPeriodStart: string | null = null
     let toolBudgetPeriodEnd: string | null = null
     let toolBudgetCarry = 0
+    /** この期間に会社が半額負担した額（2026-10-08） */
+    let toolBudgetCompanyPaid = 0
     try {
       if (tbEligible && tbSnapPre) {
         const tbSnap = tbSnapPre
@@ -312,7 +314,10 @@ export async function GET(request: NextRequest) {
               const { toolBudgetCarryIn } = await import('@/lib/tool-budget-period')
               const tbDefault = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
               const tbBudget = tbRecord?.budget ?? tbDefault
-              const tbUsed = (tbRecord?.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
+              const { purchasesBudgetUse, purchasesCompanyAmount } = await import('@/lib/tool-subsidy')
+              // 会社半額負担の分は枠から引かない（2026-10-08）
+              const tbUsed = purchasesBudgetUse(tbRecord?.purchases)
+              toolBudgetCompanyPaid = purchasesCompanyAmount(tbRecord?.purchases)
               // 前の期間からの繰越（2026-09-30）。マイナスは使いすぎの持ち越し
               toolBudgetCarry = toolBudgetCarryIn(anchor!, period.index, worker.id, tbData.records || {}, tbDefault)
               toolBudgetRemaining = tbBudget + toolBudgetCarry - tbUsed
@@ -430,6 +435,7 @@ export async function GET(request: NextRequest) {
       missingDays,
       toolBudgetRemaining,
       toolBudgetCarry,
+      toolBudgetCompanyPaid,
       // 休憩短縮（旧契約の毎日20分など）。出面には記録せず給与計算で足している分を、画面で見せるため（2026-09-30）
       breakShorten: (worker.breakShortenMin ?? 0) > 0 && worker.breakShortenFrom
         ? { min: worker.breakShortenMin, from: worker.breakShortenFrom } : null,

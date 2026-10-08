@@ -63,6 +63,8 @@ interface StaffData {
   toolBudgetPeriodStart?: string | null
   /** 前の期間からの繰越（マイナスは使いすぎの持ち越し） */
   toolBudgetCarry?: number
+  /** この期間に会社が半額負担した額（電動インパクト・2026-10-08） */
+  toolBudgetCompanyPaid?: number
   toolBudgetPeriodEnd: string | null
   plRemaining: number | null
   /** 期が終わって次の付与がまだ（申請は止まる・2026-10-02） */
@@ -1507,6 +1509,11 @@ export default function StaffAttendancePage() {
                 )}
                 {data.toolBudgetRemaining < 0 && (
                   <div className="text-xs text-red-600 font-bold">¥{(-data.toolBudgetRemaining).toLocaleString()} 超過 / Vượt</div>
+                )}
+                {(data.toolBudgetCompanyPaid ?? 0) > 0 && (
+                  <div className="text-xs font-bold text-green-700">
+                    会社が負担 ¥{(data.toolBudgetCompanyPaid ?? 0).toLocaleString()} / Công ty trả
+                  </div>
                 )}
                 {(data.toolBudgetPeriodStart || data.toolBudgetPeriodEnd) && (
                   <div className="text-xs text-hibi-sub mt-1 leading-tight">
