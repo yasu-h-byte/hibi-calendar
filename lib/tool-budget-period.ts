@@ -171,3 +171,14 @@ export function periodIndexOf(anchor: string, periodStart: string): number | nul
   }
   return null
 }
+
+/**
+ * 同じ購入（同じ購入日・同じ金額）がもう登録されていれば、それを返す（2026-10-09）
+ * 登録できたことに気づかず二度押しした例があった（ラップさん 9/30 6,980円が2件・2件目が超過扱い）。
+ * 同じ日に同じ金額の別の買い物もありうるので、止めずに確認してから通す。
+ */
+export function findDuplicatePurchase<T extends { date?: string; amount: number }>(
+  purchases: T[] | undefined | null, date: string, amount: number,
+): T | null {
+  return (purchases || []).find(p => p.date === date && Number(p.amount) === Number(amount)) ?? null
+}
