@@ -39,9 +39,10 @@ describe('対象者・対象日・2年に1回', () => {
     expect(isToolSubsidyEligible('none')).toBe(false)
     expect(toolSubsidyError({ kind: 'impact', visa: 'none', date: '2026-10-05', others: [] })).toMatch(/外国人/)
   })
-  test('2026-10-01 より前の購入は対象外（10月の分はさかのぼって可）', () => {
-    expect(toolSubsidyError({ kind: 'impact', visa: 'jisshu1', date: '2026-09-30', others: [] })).toMatch(/以降/)
-    expect(toolSubsidyError({ kind: 'impact', visa: 'jisshu1', date: '2026-10-01', others: [] })).toBeNull()
+  test('2026-08-01 より前の購入は対象外（2026-10-09 に 10/1 → 8/1 へ広げた・さかのぼって可）', () => {
+    expect(toolSubsidyError({ kind: 'impact', visa: 'jisshu1', date: '2026-07-31', others: [] })).toMatch(/以降/)
+    expect(toolSubsidyError({ kind: 'impact', visa: 'jisshu1', date: '2026-08-01', others: [] })).toBeNull()
+    expect(toolSubsidyError({ kind: 'impact', visa: 'jisshu1', date: '2026-08-27', others: [] })).toBeNull()
   })
   test('前回から2年たつまでは使えない', () => {
     const others = [{ date: '2026-10-05', amount: 40000, subsidy: { kind: 'impact' as const, company: 20000 } }]
