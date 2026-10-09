@@ -10,7 +10,7 @@
  * 以前はスマホ側だけ別の計算を持っていて、起点日が先の人に「来期」を今の残額として出していた。
  */
 
-import { todayJstIso } from './date-utils'
+import { todayJstIso, addMonthsSafe } from './date-utils'
 import { purchasesBudgetUse, type PurchaseLike } from './tool-subsidy'
 
 export interface ToolBudgetPeriod {
@@ -49,6 +49,47 @@ export function getCurrentPeriod(anchor: string, refDate: Date | string = todayJ
     if (p.end >= ref) return p
   }
   return null
+}
+
+// ────────────────────────────────────────
+//  領収書の日付で期間を決める（2026-10-09 代表「あくまで領収書の日付ベースで管理したい」）
+// ────────────────────────────────────────
+//
+// 購入日は**領収書の日付をそのまま**記録し、どの期間の枠から引くかもその日付で決める。
+// 旧: 画面で開いている期間（今の期間）の中の日付しか入れられず、9月の領収書は日付を 10/1 に
+//     書き換えて品名に本当の日付を書いていた（日本人の枠は 2026-10-01 開始）。
+// - 前の期間の日付 → その期間に入る（期間をまたいで遅れて出てきた領収書）
+// - 枠が始まる前の日付 → 開始の前月（1日〜）までなら最初の期間に入れる（制度開始の直前に買った分）。それより前は入れない
+// - 先の日付 → 入れない（打ち間違い）
+
+/** 枠が始まる前の領収書を最初の期間に入れられる範囲（開始の何か月前の1日から） */
+export const TOOL_BUDGET_PRESTART_GRACE_MONTHS = 1
+
+/** 入れられるいちばん古い領収書の日付（画面の日付欄の下限にも使う） */
+export function earliestReceiptDate(anchor: string): string {
+  return addMonthsSafe(anchor, -TOOL_BUDGET_PRESTART_GRACE_MONTHS).slice(0, 8) + '01'
+}
+
+/** 領収書の日付 → 入れる期間。入れられないときは理由 */
+export function receiptPeriodOf(
+  anchor: string,
+  dateIso: string,
+  todayIso: string = todayJstIso(),
+): { period: ToolBudgetPeriod; preStart: boolean } | { error: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso) || isNaN(new Date(dateIso + 'T00:00:00').getTime())) {
+    return { error: '領収書の日付が正しくありません' }
+  }
+  if (dateIso > todayIso) return { error: `領収書の日付 ${dateIso} が先の日になっています。日付を確認してください` }
+  if (dateIso < anchor) {
+    const earliest = earliestReceiptDate(anchor)
+    if (dateIso < earliest) {
+      return { error: `領収書の日付 ${dateIso} は、道具代の枠が始まる日（${anchor}）より前です（${earliest} 以降の領収書だけ最初の期間に入れられます）` }
+    }
+    const first = getPeriodByIndex(anchor, 1)
+    return first ? { period: first, preStart: true } : { error: '道具代の期間を出せませんでした（起点日を確認してください）' }
+  }
+  const p = getCurrentPeriod(anchor, dateIso)
+  return p ? { period: p, preStart: false } : { error: '道具代の期間を出せませんでした（起点日を確認してください）' }
 }
 
 /** index 番目（1始まり）の期間 */

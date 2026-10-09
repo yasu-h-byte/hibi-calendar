@@ -77,3 +77,46 @@ describe('点検（2026-09-30）: 日本時間・2/29 起点', () => {
     expect(p?.start).toBe('2028-02-29')
   })
 })
+
+import { receiptPeriodOf, earliestReceiptDate } from '@/lib/tool-budget-period'
+
+describe('領収書の日付で期間を決める（2026-10-09）', () => {
+  const anchor = '2026-10-01'  // 日本人の枠の開始
+  const today = '2026-10-09'
+
+  test('9月の領収書（開始の前月）は最初の期間に入る。日付は書き換えない', () => {
+    const r = receiptPeriodOf(anchor, '2026-09-26', today)
+    expect('error' in r).toBe(false)
+    if (!('error' in r)) {
+      expect(r.period.start).toBe('2026-10-01')
+      expect(r.period.index).toBe(1)
+      expect(r.preStart).toBe(true)
+    }
+  })
+
+  test('開始の前月より前（8月）は入れない', () => {
+    const r = receiptPeriodOf(anchor, '2026-08-31', today)
+    expect('error' in r && r.error).toContain('2026-09-01 以降')
+  })
+
+  test('先の日付は入れない', () => {
+    const r = receiptPeriodOf(anchor, '2026-10-10', today)
+    expect('error' in r && r.error).toContain('先の日')
+  })
+
+  test('期間が変わったあとに出てきた前の期間の領収書は、前の期間に入る', () => {
+    const r = receiptPeriodOf(anchor, '2027-09-28', '2027-10-05')
+    expect(!('error' in r) && r.period.index).toBe(1)
+    const r2 = receiptPeriodOf(anchor, '2027-10-02', '2027-10-05')
+    expect(!('error' in r2) && r2.period.index).toBe(2)
+  })
+
+  test('画面の日付欄の下限は開始の前月1日', () => {
+    expect(earliestReceiptDate('2026-10-01')).toBe('2026-09-01')
+    expect(earliestReceiptDate('2026-12-15')).toBe('2026-11-01')
+  })
+
+  test('日付の形がおかしいときは入れない', () => {
+    expect('error' in receiptPeriodOf(anchor, '2026/09/26', today)).toBe(true)
+  })
+})

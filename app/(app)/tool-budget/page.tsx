@@ -12,6 +12,8 @@ import { PageHeader, ToolButton, TodoCard, Segment, SearchBox, Chip, SidePanel, 
 import { SaveButton } from '@/components/ui/SaveButton'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
+import { earliestReceiptDate } from '@/lib/tool-budget-period'
+import { todayJstIso } from '@/lib/date-utils'
 import { isToolSubsidyEligible, toolSubsidyCompanyAmount, TOOL_SUBSIDY_FROM, TOOL_SUBSIDY_ITEMS, type ToolSubsidyKind } from '@/lib/tool-subsidy'
 
 interface Purchase {
@@ -379,6 +381,9 @@ function WorkerModal({
   const [bulkMemo, setBulkMemo] = useState('既存使用分')
 
   const [newDate, setNewDate] = useState('')
+  // 購入日（領収書の日付）の範囲（2026-10-09）: 枠が始まる前月の1日〜今日。どの期間に入るかはサーバが日付で決める
+  const receiptMin = worker.periodAnchor ? earliestReceiptDate(worker.periodAnchor) : (worker.period?.start || '')
+  const receiptMax = todayJstIso()
   const [newAmount, setNewAmount] = useState('')
   const [newItem, setNewItem] = useState('')
   // 会社半額負担（2026-10-08・外国人の電動インパクトだけ）
@@ -460,6 +465,11 @@ function WorkerModal({
         const j = await res.json().catch(() => ({}))
         notify.failed('登録', j.error || 'サーバが受け付けませんでした')
         return false
+      }
+      // 領収書の日付で期間が決まる（2026-10-09）。開いている期間と違う期間に入ったら伝える
+      const j = await res.json().catch(() => ({}))
+      if (j.otherPeriod && j.periodStart) {
+        notify.success(`領収書の日付 ${date.replace(/-/g, '/')} は ${String(j.periodStart).replace(/-/g, '/')}〜${String(j.periodEnd || '').replace(/-/g, '/')} の期間に入れました`)
       }
       return true
     } catch (e) {
@@ -653,7 +663,7 @@ function WorkerModal({
                           type="date"
                           value={bulkDate}
                           onChange={e => setBulkDate(e.target.value)}
-                          min={worker.period.start} max={worker.period.end}
+                          min={receiptMin} max={receiptMax}
                           className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-36" />
                       </div>
                       <div>
@@ -744,12 +754,12 @@ function WorkerModal({
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
                   <div className="flex items-end gap-2 flex-wrap">
                     <div>
-                      <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">購入日</label>
+                      <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5" title="領収書の日付をそのまま入れます。どの期間の枠から引くかも、この日付で決まります">購入日（領収書の日付）</label>
                       <input
                         type="date"
                         value={newDate}
                         onChange={e => setNewDate(e.target.value)}
-                        min={worker.period.start} max={worker.period.end}
+                        min={receiptMin} max={receiptMax}
                         className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-36" />
                     </div>
                     <div>
