@@ -95,6 +95,27 @@ export async function GET(request: NextRequest) {
     // (旧実装: 全 plData を読んで judgeFiveDayObligation で集計していた処理は
     //  上記方針により削除。/leave ページ内の表示は別途存続)
 
+    // ── 困ったこと・要望: 自分あての未読（2026-10-09）。代表は代表がまだ読んでいない書き込み、ほかの人は自分の書き込みへの返信 ──
+    let feedbackUnread = 0
+    try {
+      const { getApiAuthUser, callerCan } = await import('@/lib/auth')
+      const a = await getApiAuthUser(request)
+      if (a.authorized && await callerCan(request, 'feedback.post')) {
+        const { db } = await import('@/lib/firebase')
+        const { collection, getDocs, query, where } = await import('@/lib/fsdb')
+        const { FEEDBACK_COL, isUnreadFor } = await import('@/lib/feedback')
+        const manage = await callerCan(request, 'feedback.manage')
+        const me = a.actor === 'super-admin' ? 0 : Number(a.actor)
+        // 件数は画面の「未読」と同じ判定（isUnreadFor）
+        const snap = manage
+          ? await getDocs(collection(db, FEEDBACK_COL))
+          : await getDocs(query(collection(db, FEEDBACK_COL), where('author.workerId', '==', me)))
+        feedbackUnread = snap.docs.filter(d => isUnreadFor(d.data() as Parameters<typeof isUnreadFor>[0], { workerId: me, manage })).length
+      }
+    } catch (e) {
+      console.warn('[sidebar-badges] feedback count failed:', e)
+    }
+
     return NextResponse.json({
       ym,
       generatedAt: now.toISOString(),
@@ -102,6 +123,7 @@ export async function GET(request: NextRequest) {
         monthly: monthlyAnomalyCount,    // 月次集計: 検算違反スタッフ数
         calendar: calendarPendingCount,  // カレンダー: 未承認サイト数 (18日以降のみ)
         leave: leaveAlertCount,           // 休暇管理: 常に 0 (アラート不要方針)
+        feedback: feedbackUnread,         // 困ったこと・要望: 自分あての未読
       },
     })
   } catch (error) {

@@ -121,6 +121,9 @@ export const CAPABILITIES = {
   // ── 管理 ──
   'system.admin':            { group: '管理', label: 'システム設定・パスワード・バックアップ・アクセス履歴', roles: ['owner'] },
   'docs.view':               { group: '管理', label: '資料一覧', roles: ['foreman', ...ALL_OFFICE] },
+  // 困ったこと・要望（2026-10-09 代表）。書けるのはログインしている人全員（見られるのは自分の書き込みだけ）。全部を見て返信・状態を変えるのは代表
+  'feedback.post':           { group: '管理', label: '困ったこと・要望を書く（自分の書き込みを見る・返信する）※試験運用中は森田さん・政仁さん・代表だけ', roles: ['foreman', ...ALL_OFFICE] },
+  'feedback.manage':         { group: '管理', label: '困ったこと・要望を全部見る・返信する・状態を変える', roles: ['owner'] },
 } as const satisfies Record<string, { group: string; label: string; roles: readonly PermRole[] }>
 
 export type Capability = keyof typeof CAPABILITIES
@@ -151,10 +154,21 @@ export const PAY_CAPS: ReadonlySet<Capability> = new Set<Capability>([
 export const isPayViewerId = (workerId: unknown): boolean =>
   typeof workerId === 'number' && PAY_VIEWER_WORKER_IDS.includes(workerId)
 
-/** 役割と本人（給与の権限のときだけ）の両方で判定する。サーバーは lib/auth.ts の requireCap / callerCan が同じ判定 */
+/**
+ * 「困ったこと・要望」の試験運用（2026-10-09 代表「まずは森田さんと政仁だけに開放して試験運用」）。
+ * 0 = 日比靖仁（代表・全部を見て返信する役）／ 1 = 日比政仁（事業責任者）／ 303 = 森田陽子（事務）。
+ * ここにいない人には、メニュー・画面・API・件数のどれにも出さない。
+ * 全員に開くときは null にする（そのとき lib/release-notes.ts にお知らせを足す）
+ */
+export const FEEDBACK_PILOT_WORKER_IDS: readonly number[] | null = [0, 1, 303]
+const FEEDBACK_CAPS: ReadonlySet<Capability> = new Set<Capability>(['feedback.post', 'feedback.manage'])
+
+/** 役割と本人（給与の権限・試験運用中の機能のときだけ）の両方で判定する。サーバーは lib/auth.ts の requireCap / callerCan が同じ判定 */
 export function capAllowed(role: PermRole | null, workerId: unknown, cap: Capability): boolean {
   if (!roleCan(role, cap)) return false
   if (PAY_CAPS.has(cap) && !isPayViewerId(workerId)) return false
+  if (FEEDBACK_CAPS.has(cap) && FEEDBACK_PILOT_WORKER_IDS
+    && !(typeof workerId === 'number' && FEEDBACK_PILOT_WORKER_IDS.includes(workerId))) return false
   return true
 }
 

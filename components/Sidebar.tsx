@@ -23,7 +23,7 @@ function TextSizeIcon() {
   )
 }
 
-export type SidebarBadges = { monthly: number; calendar: number; leave: number }
+export type SidebarBadges = { monthly: number; calendar: number; leave: number; feedback?: number }
 
 // /api/sidebar-badges を同じ画面の中で1回にまとめる（2026-10-01 高速化）。
 //   サイドバーとダッシュボードが同時に同じ API を呼び、当月の出面（300KB）と給与計算を2回ずつ走らせていた。
@@ -211,6 +211,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
                     if (item.href === '/monthly') badgeCount = badges.monthly
                     else if (item.href === '/calendar') badgeCount = badges.calendar
                     else if (item.href === '/leave') badgeCount = badges.leave
+                    else if (item.href === '/feedback') badgeCount = badges.feedback ?? 0
                   }
                   return (
                     <button

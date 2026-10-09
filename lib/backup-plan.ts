@@ -34,6 +34,7 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   // 2026-10-05 追加
   { coll: 'payNoteAcks', prefix: 'paynoteack', note: '給与チェックの注意点を「確認した」記録（誰が・いつ・メモ）' },
   // 2026-10-08 追加
+  { coll: 'feedback', prefix: 'feedback', note: '困ったこと・要望のやり取り（画像は Storage の feedback/ に置き、退避しない）' },
   { coll: 'leaveSettleRequests', prefix: 'leavesettle', note: '有給精算の申請・承認（承認済みの日数は plData の buyoutHistory にも記録）' },
 ]
 

@@ -72,6 +72,8 @@ export const MENU_ITEMS: MenuItem[] = [
   // 会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴（アクセス履歴もここから）
   { label: '管理者設定', icon: 'gear', href: '/settings', section: 'マスタ・管理', cap: 'system.admin', activePrefixes: ['/access-log'] },
   { label: '資料一覧', icon: 'book', href: '/docs', section: 'マスタ・管理', cap: 'docs.view' },
+  // 困ったこと・要望（2026-10-09）。返信が来たら件数が付く
+  { label: '困ったこと・要望', icon: 'pen', href: '/feedback', section: 'マスタ・管理', cap: 'feedback.post' },
 ]
 
 /**
@@ -155,6 +157,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: 'HFU → 日比建設 の請求書の設定（単価・HFUの会社情報）', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: 'えいちえふゆー hfu 単価' },
   { label: '既定の単価（鳶・土工）・基本給ベース日数', where: '管理者設定 → 単価の既定値', href: '/settings?tab=settings', cap: 'system.admin', keywords: 'でふぉると たんか ベース日数' },
   { label: 'マニュアル', where: '資料一覧', href: '/docs', cap: 'docs.view', keywords: 'まにゅある 使い方 手順' },
+  { label: '困ったこと・要望を書く', where: '困ったこと・要望', href: '/feedback', cap: 'feedback.post', keywords: 'ようぼう こまった ふぐあい しつもん 不具合 質問 問い合わせ 相談' },
 ]
 
 /** かな・カナ・全半角・大小文字の違いを無視して比べるための正規化 */
