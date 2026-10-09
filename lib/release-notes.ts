@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261009_feedback',
+    title: '「困ったこと・要望」ができました',
+    content:
+      'システムで困ったこと・こうしてほしいこと・使い方の質問は、メニュー「マスタ・管理」→「困ったこと・要望」に書いてください。画面の写真（スクショ）も付けられます。'
+      + '返事が来るとメニューに件数が付き、そのままやり取りを続けられます。見られるのは書いた本人と代表だけです。',
+    category: 'new',
+    publishedAt: '2026-10-09T21:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', ...OFFICE],
+  },
+  {
     id: 'rn_20261009_tool_prev_period',
     title: '道具代: 前の期間の購入を見て、消せるようになりました',
     content:

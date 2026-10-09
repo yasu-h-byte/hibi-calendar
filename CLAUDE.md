@@ -31,6 +31,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/manual-invoice.md](docs/manual-invoice.md) | （アーカイブ・2026-09-26）請求書の発行マニュアル。森田さんマニュアル・政仁さんマニュアルへ統合済み |
 | [docs/roles-auth.md](docs/roles-auth.md) | 役割・認証・権限（**権限の唯一の決まりは lib/permissions.ts**。職長の通行証） |
 | [docs/staff-docs.md](docs/staff-docs.md) | 書類庫（在留カード・雇用契約書の保管。Firebase Storage・署名つきURL・見られるのは代表/事業責任者/事務） |
+| `feedback`（Firestore）| **困ったこと・要望（2026-10-09）**。森田さんたちの書き込み。セッションの最初に未対応（status が open/doing・unreadForOwner）を Firebase MCP で確かめ、代表に伝える。返信の書き方は [docs/firestore.md](docs/firestore.md)「困ったこと・要望」 |
 | [docs/peer-invoice.md](docs/peer-invoice.md) | 応援の請求書（同業者へ送る請求書 + 出面明細を印刷。/peer-invoice。発行で凍結・取り消しは欠番）＋ HFU → 日比建設 の請求書（HFU所属の人工 × 社内単価）＋ 受け取った外注の請求書（/subcon-invoice・経営コックピットが毎朝読む） |
 
 ## 開発の基本ルール

@@ -405,6 +405,26 @@ workSchedule?: {
 | status | 'current' \| 'old' | 同じ人・同じ種類で最新は1件。新しいものを最新で入れると前のものは old（消さない） |
 | uploadedAt / uploadedBy / updatedAt | string | 登録日時・登録者（super-admin / worker:ID） |
 
+## 困ったこと・要望 `feedback/{id}`（2026-10-09）
+
+1件の書き込み＝1つのやり取り。決まりは `lib/feedback.ts`、保存は `/api/feedback`、画面は `/feedback`。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| createdAt / updatedAt | string | ISO 日時 |
+| author | {workerId, name} | 書いた人（代表は workerId 0） |
+| kind | 'trouble' \| 'request' \| 'question' | 困った・おかしい／こうしてほしい／使い方の質問 |
+| page | string | どの画面のことか（メニューの名前。空 = 全体・わからない） |
+| title | string | ひとこと（空なら本文の1行目） |
+| status | 'open' \| 'doing' \| 'done' \| 'wontfix' | 受付／対応中／直した／見送り（変えるのは代表だけ） |
+| messages | {id, at, by:{kind:'user'\|'owner'\|'dev', workerId, name}, text, images?:{path,name}[]}[] | やり取り。dev は開発（Claude） |
+| unreadForAuthor / unreadForOwner | boolean | 書いた人・代表の未読。相手が書くと付き、開くと消える（メニューの件数） |
+
+- 見られるのは、書いた本人と代表（`feedback.manage`）だけ
+- 画像は Storage `feedback/{id}/…`（書類庫と同じ非公開バケット）。画面には15分の署名つきURLで出す
+- **開発（Claude）の返信**: 代表のセッションから Firestore に直接、messages の末尾に `by.kind = 'dev'` の1件を足し、
+  `updatedAt` と `unreadForAuthor: true` を付ける（messages は**必ず読んでから全体を書き戻す**。足すだけ・消さない）
+
 ## 日次バックアップの対象（2026-10-02 総合点検で一本化）
 
 対象の決まりは **`lib/backup-plan.ts` だけ**。`app/api/backup/snapshot` はこの一覧を回す。

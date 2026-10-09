@@ -121,6 +121,9 @@ export const CAPABILITIES = {
   // ── 管理 ──
   'system.admin':            { group: '管理', label: 'システム設定・パスワード・バックアップ・アクセス履歴', roles: ['owner'] },
   'docs.view':               { group: '管理', label: '資料一覧', roles: ['foreman', ...ALL_OFFICE] },
+  // 困ったこと・要望（2026-10-09 代表）。書けるのはログインしている人全員（見られるのは自分の書き込みだけ）。全部を見て返信・状態を変えるのは代表
+  'feedback.post':           { group: '管理', label: '困ったこと・要望を書く（自分の書き込みを見る・返信する）', roles: ['foreman', ...ALL_OFFICE] },
+  'feedback.manage':         { group: '管理', label: '困ったこと・要望を全部見る・返信する・状態を変える', roles: ['owner'] },
 } as const satisfies Record<string, { group: string; label: string; roles: readonly PermRole[] }>
 
 export type Capability = keyof typeof CAPABILITIES

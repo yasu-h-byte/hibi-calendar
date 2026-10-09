@@ -35,6 +35,7 @@ export const PAGE_CAPS: { path: string; caps: Capability[] | null }[] = [
   { path: '/access-log', caps: ['system.admin'] },
   { path: '/debug-att', caps: ['system.admin'] },
   { path: '/docs', caps: ['docs.view'] },
+  { path: '/feedback', caps: ['feedback.post'] },
   // 廃止した画面（転送先の画面がそれぞれ止める）
   { path: '/guide', caps: null },
 ]
