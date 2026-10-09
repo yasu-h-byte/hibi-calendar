@@ -30,7 +30,7 @@ const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 // 給与計算エンジンと人員マスタ画面の参考表示で同じ値を使うため lib/constants.ts に集約。
 export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
 import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM, JP_AVG_MONTHLY_WORK_DAYS } from './constants'
-import { currentYmJst, todayJstDate } from '@/lib/date-utils'
+import { currentYmJst, todayJstDate, todayJstIso } from '@/lib/date-utils'
 import { LEAVE_SETTLE_FROM_YM, LEAVE_SETTLE_MONTH_CAP_DAYS, LEAVE_SETTLE_LABEL, isLeaveSettleEligible, settledDaysForYm } from './leave-settle'
 
 /**
@@ -2117,9 +2117,13 @@ export function computeMonthly(
           perSite.set(pk2.sid, (perSite.get(pk2.sid) || 0) + 1)
         }
         const mainSite = [...perSite.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || wm.sites[0]
+        // 数えるのは昨日まで（2026-10-09 代表指摘: 10/9 に10月の月次を開くと、まだ来ていない稼働日まで
+        //   「記録が無い日 15日」と出ていた）。今日はまだ入力の途中なので数えない。締めた過去の月には影響しない
+        const todayIso = todayJstIso()
         let blank = 0
         for (let d = 1; d <= dim; d++) {
           const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
+          if (iso >= todayIso) break
           if (hire && iso < hire) continue
           if (ret && iso > ret) continue
           if (calendarDays[mainSite]?.[String(d)] !== 'work') continue

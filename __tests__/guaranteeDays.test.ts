@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi, afterEach } from 'vitest'
 import { computeMonthly, type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
@@ -132,5 +132,17 @@ describe('稼働日未入力の警告', () => {
   test('全日入力済みなら警告なし', () => {
     const { w } = run(18, 16, 2, 0, 0)
     expect(w.calendarBlankDays).toBeUndefined()
+  })
+  // 2026-10-09: 月の途中に開いたら、まだ来ていない日（今日を含む）は数えない
+  describe('月の途中', () => {
+    afterEach(() => { vi.useRealTimers() })
+    test('9/25 に開くと、空欄の稼働日 22〜26日のうち 22・23・24日の3日だけ', () => {
+      vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-25T03:00:00Z'))  // 日本時間 9/25 12:00
+      expect(run(23, 18, 0, 0, 0).w.calendarBlankDays).toBe(3)
+    })
+    test('9/15 に開くと、空欄の稼働日はまだ来ていないので警告なし', () => {
+      vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-15T03:00:00Z'))
+      expect(run(23, 18, 0, 0, 0).w.calendarBlankDays).toBeUndefined()
+    })
   })
 })
