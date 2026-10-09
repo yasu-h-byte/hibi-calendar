@@ -3,7 +3,7 @@ import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
-import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, receiptPeriodOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
+import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, receiptPeriodOf, type ToolBudgetPeriod, findDuplicatePurchase } from '@/lib/tool-budget-period'
 import { addDaysIso, addMonthsSafe } from '@/lib/date-utils'
 import {
   isToolSubsidyKind, purchasesBudgetUse, purchasesCompanyAmount, toolSubsidyCompanyAmount, toolSubsidyError,
@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
 
     // 購入登録
     if (action === 'addPurchase') {
-      const { workerId, periodStart, date, amount, item, allowOver, subsidyKind } = body
+      const { workerId, periodStart, date, amount, item, allowOver, allowDuplicate, subsidyKind } = body
       if (!workerId || !periodStart || !date || !amount) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       }
@@ -264,6 +264,16 @@ export async function POST(request: NextRequest) {
         const err = toolSubsidyError({ kind: subsidyKind, visa: w.visa, date: String(date), others: allPurchasesOf(tbData, w.id) })
         if (err) return NextResponse.json({ error: err }, { status: 400 })
         subsidy = { kind: subsidyKind, company: toolSubsidyCompanyAmount(subsidyKind, Number(amount)) }
+      }
+      // ⑤ 同じ購入日・同じ金額の登録がもうあれば、allowDuplicate で明示したときだけ通す（2026-10-09 二度押し対策）
+      if (!allowDuplicate) {
+        const dup = findDuplicatePurchase(allPurchasesOf(tbData, w.id), String(date), Number(amount))
+        if (dup) {
+          return NextResponse.json({
+            error: `${String(date).replace(/-/g, '/')} の ¥${Number(amount).toLocaleString()}（${dup.item || '品名なし'}）がもう登録されています`,
+            code: 'duplicate',
+          }, { status: 409 })
+        }
       }
       // 枠から引くのは本人負担の分だけ
       const useAmount = Number(amount) - (subsidy?.company ?? 0)

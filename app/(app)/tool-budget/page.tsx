@@ -430,7 +430,7 @@ function WorkerModal({
   //   戻り値: true=登録した / null=「やめる」が押された（失敗ではない） / false=だめだった（帯はここで出す）
   const addPurchase = async (date: string, amount: number, item: string, subsidyKind?: ToolSubsidyKind): Promise<boolean | null> => {
     if (!worker.period) return null
-    const post = (allowOver: boolean) => fetch('/api/tool-budget', {
+    const post = (allowOver: boolean, allowDuplicate: boolean) => fetch('/api/tool-budget', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
       body: JSON.stringify({
@@ -441,25 +441,38 @@ function WorkerModal({
         amount,
         item,
         allowOver,
+        allowDuplicate,
         ...(subsidyKind ? { subsidyKind } : {}),
       }),
     })
     try {
-      let res = await post(false)
-      if (res.status === 409) {
+      // 2026-10-09: 同じ購入の二度登録（duplicate）と残高超え（over_budget）は、確認してから通す。両方当たることもあるので順に聞く
+      let allowOver = false
+      let allowDuplicate = false
+      let res = await post(allowOver, allowDuplicate)
+      while (res.status === 409) {
         const j = await res.json().catch(() => ({}))
-        if (j.code === 'over_budget') {
+        if (j.code === 'duplicate' && !allowDuplicate) {
+          const okDup = await confirmDialog({
+            title: '同じ購入がもう登録されています。それでも登録しますか？',
+            description: `${j.error || ''}\n二度押しでなければ（同じ日に同じ金額の別の買い物なら）登録してください。`.trim(),
+            confirmLabel: '別の購入として登録する',
+          })
+          if (!okDup) return null
+          allowDuplicate = true
+        } else if (j.code === 'over_budget' && !allowOver) {
           const okOver = await confirmDialog({
             title: `${worker.workerName} さんの道具代の残高を超えます。それでも登録しますか？`,
             description: `${j.error || ''}\n超過分は、次の期間の枠から差し引かれます。`.trim(),
             confirmLabel: '超えて登録する',
           })
           if (!okOver) return null
-          res = await post(true)
+          allowOver = true
         } else {
           notify.failed('登録', j.error || 'サーバが受け付けませんでした')
           return false
         }
+        res = await post(allowOver, allowDuplicate)
       }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -468,8 +481,12 @@ function WorkerModal({
       }
       // 領収書の日付で期間が決まる（2026-10-09）。開いている期間と違う期間に入ったら伝える
       const j = await res.json().catch(() => ({}))
+      // 2026-10-09: 登録できたことを緑の帯で必ず伝える（旧: ボタンの文字が2秒変わるだけで、気づかず二度登録した例があった）
+      const what = `${worker.workerName} さんに ${date.replace(/-/g, '/')} の ¥${amount.toLocaleString()} を登録しました`
       if (j.otherPeriod && j.periodStart) {
-        notify.success(`領収書の日付 ${date.replace(/-/g, '/')} は ${String(j.periodStart).replace(/-/g, '/')}〜${String(j.periodEnd || '').replace(/-/g, '/')} の期間に入れました`)
+        notify.success(what, `領収書の日付で ${String(j.periodStart).replace(/-/g, '/')}〜${String(j.periodEnd || '').replace(/-/g, '/')} の期間に入れました`)
+      } else {
+        notify.success(what)
       }
       return true
     } catch (e) {

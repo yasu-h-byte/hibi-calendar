@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf } from '@/lib/tool-budget-period'
+import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, findDuplicatePurchase } from '@/lib/tool-budget-period'
 
 const d = (s: string) => new Date(s + 'T00:00:00')
 describe('道具代の期間', () => {
@@ -118,5 +118,15 @@ describe('領収書の日付で期間を決める（2026-10-09）', () => {
 
   test('日付の形がおかしいときは入れない', () => {
     expect('error' in receiptPeriodOf(anchor, '2026/09/26', today)).toBe(true)
+  })
+})
+
+describe('同じ購入の二度登録', () => {
+  test('同じ購入日・同じ金額があれば見つける', () => {
+    const ps = [{ date: '2026-09-30', amount: 6980, item: '道具' }]
+    expect(findDuplicatePurchase(ps, '2026-09-30', 6980)?.item).toBe('道具')
+    expect(findDuplicatePurchase(ps, '2026-09-30', 6981)).toBeNull()
+    expect(findDuplicatePurchase(ps, '2026-10-01', 6980)).toBeNull()
+    expect(findDuplicatePurchase([], '2026-09-30', 6980)).toBeNull()
   })
 })

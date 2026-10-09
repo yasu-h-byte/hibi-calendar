@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261009_tool_dup_guard',
+    title: '道具代: 登録できたら緑の帯が出るように・同じ購入の二度登録は確認が出るように',
+    content:
+      '道具代管理で購入を登録すると「◯◯ さんに ◯/◯ の ¥◯ を登録しました」と緑の帯が出ます。'
+      + '同じ人・同じ購入日・同じ金額がもう登録されているときは「同じ購入がもう登録されています」と確認が出ます。二度押しなら「やめる」を押してください。',
+    category: 'fix',
+    publishedAt: '2026-10-09T19:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261009_tool_subsidy_from_aug',
     title: '道具代: 電動インパクトの半額負担は8月1日以降の購入が対象になりました',
     content:
