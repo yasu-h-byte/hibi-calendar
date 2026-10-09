@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261009_tool_prev_period',
+    title: '道具代: 前の期間の購入を見て、消せるようになりました',
+    content:
+      '購入は領収書の日付の期間に入るため、前の期間の日付の購入は今の期間の購入履歴に出ていませんでした。'
+      + '購入履歴の上の「← 前の期間」で、その期間の購入と残りを見て、削除や半額負担の付け外しができます。',
+    category: 'fix',
+    publishedAt: '2026-10-09T20:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261009_tool_dup_guard',
     title: '道具代: 登録できたら緑の帯が出るように・同じ購入の二度登録は確認が出るように',
     content:
