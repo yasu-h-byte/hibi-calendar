@@ -3,7 +3,7 @@ import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
-import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, periodIndexOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
+import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, receiptPeriodOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
 import { addDaysIso, addMonthsSafe } from '@/lib/date-utils'
 import {
   isToolSubsidyKind, purchasesBudgetUse, purchasesCompanyAmount, toolSubsidyCompanyAmount, toolSubsidyError,
@@ -241,24 +241,22 @@ export async function POST(request: NextRequest) {
       if (!w) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
 
       const tbData = await getToolBudgetData()
-      const key = `${workerId}_${periodStart}`
 
       // ── 登録時のチェック（2026-09-30 代表依頼）──
       //   ① 期間はその人の起点日から数えた期間であること（旧: 入社日で期間番号を出していた）
       //   ② 購入日がその期間の中であること（打ち間違いで別の期間に入るのを防ぐ）
       //   ③ 残高（予算＋前期からの繰越−使用済み）を超えないこと。超える場合は allowOver で明示したときだけ通し、
       //      購入に over を残す（超過分は翌期の枠から差し引かれる・toolBudgetCarryIn）
+      //   2026-10-09（代表「あくまで領収書の日付ベースで管理したい」）: ①② を「領収書の日付で期間を決める」に変えた。
+      //   画面で開いている期間（periodStart）ではなく、日付の入る期間に記録する（前の期間の領収書・開始前月の領収書も入る）
       const { anchor } = toolBudgetAnchorOf({ id: w.id, visa: w.visa, hireDate: w.hireDate }, tbData.periodAnchors)
-      const idx = anchor ? periodIndexOf(anchor, String(periodStart)) : null
-      const period = anchor && idx ? getPeriodByIndex(anchor, idx) : null
-      if (!period) {
-        return NextResponse.json({ error: 'この人の道具代の期間ではありません（起点日を確認してください）' }, { status: 400 })
+      if (!anchor) {
+        return NextResponse.json({ error: 'この人の道具代の起点日が設定されていません' }, { status: 400 })
       }
-      if (String(date) < period.start || String(date) > period.end) {
-        return NextResponse.json({
-          error: `購入日 ${date} がこの期間（${period.start}〜${period.end}）の外です。日付を確認してください`,
-        }, { status: 400 })
-      }
+      const rp = receiptPeriodOf(anchor, String(date))
+      if ('error' in rp) return NextResponse.json({ error: rp.error }, { status: 400 })
+      const period = rp.period
+      const key = `${workerId}_${period.start}`
       // ④ 会社半額負担（2026-10-08）: 対象者・対象日・2年に1回をサーバで確かめ、会社負担額もサーバで出す
       let subsidy: Purchase['subsidy'] | undefined
       if (subsidyKind) {
@@ -308,7 +306,11 @@ export async function POST(request: NextRequest) {
       })
 
       await saveToolBudgetData(tbData)
-      return NextResponse.json({ success: true })
+      // 画面で開いている期間と違う期間に入ったら、画面がそれを伝える
+      return NextResponse.json({
+        success: true, periodStart: period.start, periodEnd: period.end, periodIndex: period.index,
+        otherPeriod: String(periodStart || '') !== period.start,
+      })
     }
 
     // 購入削除

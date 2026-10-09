@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261009_tool_receipt_date',
+    title: '道具代: 購入日は領収書の日付のまま入れられるようになりました',
+    content:
+      '道具代管理の購入日は、領収書の日付をそのまま入れてください。どの期間の枠から引くかは、その日付で自動で決まります。'
+      + '日本人の枠が始まる前の9月の領収書も、9月の日付のまま最初の期間（10月〜）に入れられます（これまでは10/1に書き換えていました）。',
+    category: 'fix',
+    publishedAt: '2026-10-09T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261008_leave_settle',
     title: '有給: 日給月給の人は、有給の残りを給料に回せるようになりました（有給精算）',
     content:
