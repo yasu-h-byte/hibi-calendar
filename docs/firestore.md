@@ -421,7 +421,7 @@ workSchedule?: {
 | unreadForAuthor / unreadForOwner | boolean | 書いた人・代表の未読。相手が書くと付き、開くと消える（メニューの件数） |
 
 - 見られるのは、書いた本人と代表（`feedback.manage`）だけ
-- **試験運用中（2026-10-09〜）は森田さん（303）と代表（0）だけ**に開いている（`lib/permissions.ts` の `FEEDBACK_PILOT_WORKER_IDS`。全員に開くときは null にして、お知らせを足す）
+- **試験運用中（2026-10-09〜）は森田さん（303）・政仁さん（1）・代表（0）だけ**に開いている（`lib/permissions.ts` の `FEEDBACK_PILOT_WORKER_IDS`。全員に開くときは null にして、お知らせを足す）
 - 画像は Storage `feedback/{id}/…`（書類庫と同じ非公開バケット）。画面には15分の署名つきURLで出す
 - **開発（Claude）の返信**: 代表のセッションから Firestore に直接、messages の末尾に `by.kind = 'dev'` の1件を足し、
   `updatedAt` と `unreadForAuthor: true` を付ける（messages は**必ず読んでから全体を書き戻す**。足すだけ・消さない）

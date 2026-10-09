@@ -37,13 +37,14 @@ describe('困ったこと・要望の決まり', () => {
 })
 
 describe('権限', () => {
-  test('試験運用中は森田さん（303）と代表（0）だけ・全部を見るのは代表だけ', () => {
+  test('試験運用中は森田さん（303）・政仁さん（1）・代表（0）だけ・全部を見るのは代表だけ', () => {
     expect(can({ role: 'jimu', workerId: 303 }, 'feedback.post')).toBe(true)
     expect(can({ role: 'admin', workerId: 0 }, 'feedback.post')).toBe(true)
     // ほかの事務・職長・事業責任者には出さない
     expect(can({ role: 'jimu', workerId: 304 }, 'feedback.post')).toBe(false)
     expect(can({ role: 'foreman', workerId: 20 }, 'feedback.post')).toBe(false)
-    expect(can({ role: 'approver', workerId: 1 }, 'feedback.post')).toBe(false)
+    expect(can({ role: 'approver', workerId: 1 }, 'feedback.post')).toBe(true)
+    expect(can({ role: 'officer', workerId: 2 }, 'feedback.post')).toBe(false)
     expect(can({ role: 'jimu', workerId: 303 }, 'feedback.manage')).toBe(false)
     expect(can({ role: 'approver', workerId: 1 }, 'feedback.manage')).toBe(false)
     expect(can({ role: 'admin', workerId: 0 }, 'feedback.manage')).toBe(true)
