@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261009_tool_subsidy_from_aug',
+    title: '道具代: 電動インパクトの半額負担は8月1日以降の購入が対象になりました',
+    content:
+      '電動インパクトの会社半額負担の対象を「10月1日以降」から「8月1日以降の購入」に広げました。'
+      + '8〜9月に買った電動インパクトも、領収書の日付のまま登録して「電動インパクト（会社が半額負担）」にチェックできます（2年に1回・上限25,000円は同じ）。',
+    category: 'info',
+    publishedAt: '2026-10-09T15:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261009_tool_receipt_date',
     title: '道具代: 購入日は領収書の日付のまま入れられるようになりました',
     content:
