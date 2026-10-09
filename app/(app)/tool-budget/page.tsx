@@ -515,9 +515,47 @@ function WorkerModal({
     onRefresh()
   }
 
+  // ── 前の期間の購入履歴を見る（2026-10-09）──
+  //   領収書の日付で期間を決めるようになり（#95）、前の期間の日付の領収書はその期間に入る。
+  //   ところがこの画面は今の期間しか出しておらず、入れた購入が見えず消せなかった（ラップさん 9/30 の二重登録）。
+  //   期間を切り替えて、その期間の購入を見て・消して・半額負担を付け外しできるようにする
+  const curIdx = worker.period?.index ?? 1
+  const [viewIdx, setViewIdx] = useState<number>(curIdx)
+  const [viewData, setViewData] = useState<{ period: Period; budget: number; carry: number; used: number; companyPaid?: number; remaining: number; purchases: Purchase[] } | null>(null)
+  const [viewLoading, setViewLoading] = useState(false)
+  const viewingPast = viewIdx !== curIdx
+
+  const fetchView = useCallback(async (idx: number) => {
+    setViewLoading(true)
+    try {
+      const r = await fetch('/api/tool-budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'getPeriod', workerId: worker.workerId, periodIndex: idx }),
+      })
+      if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('前の期間の読み込み', j?.error || 'サーバが受け付けませんでした'); return }
+      setViewData(await r.json())
+    } catch (e) { notify.failed('前の期間の読み込み', e) } finally { setViewLoading(false) }
+  }, [password, worker.workerId])
+
+  const showPeriod = (idx: number) => {
+    setViewIdx(idx)
+    if (idx === curIdx) setViewData(null)
+    else fetchView(idx)
+  }
+  // 消した・直したあとは、今の期間（一覧）と見ている前の期間の両方を読み直す
+  const refreshAfterChange = () => {
+    onRefresh()
+    if (viewingPast) fetchView(viewIdx)
+  }
+  // 別の人を開いたら今の期間に戻す
+  useEffect(() => { setViewIdx(worker.period?.index ?? 1); setViewData(null) }, [worker.workerId]) // eslint-disable-line react-hooks/exhaustive-deps -- 人が変わったときだけ戻す
+  const shownPeriod: Period | null = viewingPast ? (viewData?.period ?? null) : worker.period
+  const shownPurchases: Purchase[] = viewingPast ? (viewData?.purchases ?? []) : worker.purchases
+
   // 登録済みの購入に半額負担を付ける／外す（10月に普通の購入として入れた分を直す用）
   const handleSetSubsidy = async (p: Purchase, kind: ToolSubsidyKind | null) => {
-    if (!worker.period) return
+    if (!shownPeriod) return
     const label = TOOL_SUBSIDY_ITEMS.impact.label
     const ok = kind
       ? await confirmDialog({
@@ -535,15 +573,15 @@ function WorkerModal({
       const r = await fetch('/api/tool-budget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'setPurchaseSubsidy', workerId: worker.workerId, periodStart: worker.period.start, purchaseId: p.id, subsidyKind: kind }),
+        body: JSON.stringify({ action: 'setPurchaseSubsidy', workerId: worker.workerId, periodStart: shownPeriod.start, purchaseId: p.id, subsidyKind: kind }),
       })
       if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('半額負担の変更', j?.error || 'サーバが受け付けませんでした'); return }
-      onRefresh()
+      refreshAfterChange()
     } catch (e) { notify.failed('半額負担の変更', e) }
   }
 
   const handleDelete = async (purchaseId: string) => {
-    if (!worker.period) return
+    if (!shownPeriod) return
     if (!(await confirmDanger({
       title: 'この購入記録を削除しますか？',
       description: '使った額から差し引かれ、残高が戻ります。',
@@ -556,16 +594,17 @@ function WorkerModal({
         body: JSON.stringify({
           action: 'deletePurchase',
           workerId: worker.workerId,
-          periodStart: worker.period.start,
+          periodStart: shownPeriod.start,
           purchaseId,
         }),
       })
       if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('購入記録を削除', j?.error || 'サーバが受け付けませんでした'); return }
-      onRefresh()
-    } catch { /* ignore */ }
+      notify.success('購入記録を削除しました')
+      refreshAfterChange()
+    } catch (e) { notify.failed('購入記録を削除', e) }
   }
 
-  const sortedPurchases = [...worker.purchases].sort((a, b) => b.date.localeCompare(a.date))
+  const sortedPurchases = [...shownPurchases].sort((a, b) => b.date.localeCompare(a.date))
   const pct = worker.budget + (worker.carry ?? 0) > 0 ? Math.min(100, (worker.used / (worker.budget + (worker.carry ?? 0))) * 100) : 100
 
   return (
@@ -712,8 +751,30 @@ function WorkerModal({
                   <span className="bg-hibi-navy dark:bg-blue-700 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
                     {worker.purchases.length === 0 ? '4' : '3'}
                   </span>
-                  購入履歴（{worker.purchases.length}件）
+                  購入履歴（{shownPurchases.length}件）
                 </h3>
+                {/* 期間の切り替え（2026-10-09）。前の期間の日付の領収書は前の期間に入っている */}
+                {curIdx > 1 && (
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <RowButton disabled={viewIdx <= 1 || viewLoading} onClick={() => showPeriod(viewIdx - 1)}>← 前の期間</RowButton>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200 tabular-nums">
+                      {shownPeriod ? formatPeriod(shownPeriod) : '読み込み中…'}
+                      <span className={viewingPast ? 'text-amber-700 dark:text-amber-400' : 'text-hibi-sub dark:text-gray-400'}>{viewingPast ? '（前の期間）' : '（今の期間）'}</span>
+                    </span>
+                    <RowButton disabled={viewIdx >= curIdx || viewLoading} onClick={() => showPeriod(viewIdx + 1)}>次の期間 →</RowButton>
+                    {viewingPast && <RowButton onClick={() => showPeriod(curIdx)}>今の期間に戻る</RowButton>}
+                  </div>
+                )}
+                {viewingPast && viewData && (
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-2 tabular-nums">
+                    予算 ¥{viewData.budget.toLocaleString()}
+                    {viewData.carry !== 0 && <>（繰越 {viewData.carry > 0 ? '+' : '−'}¥{Math.abs(viewData.carry).toLocaleString()}）</>}
+                    ・使った ¥{viewData.used.toLocaleString()}
+                    {(viewData.companyPaid ?? 0) > 0 && <>（ほかに会社負担 ¥{(viewData.companyPaid ?? 0).toLocaleString()}）</>}
+                    ・残り <b className={viewData.remaining < 0 ? 'text-red-700 dark:text-red-400' : ''}>{viewData.remaining < 0 ? '−' : ''}¥{Math.abs(viewData.remaining).toLocaleString()}</b>
+                    {viewData.remaining < 0 && '（超えた分は次の期間の枠から引かれます）'}
+                  </p>
+                )}
                 <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg border border-gray-200 dark:border-gray-600 dark:text-gray-200 overflow-hidden">
                   {sortedPurchases.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-4">購入記録なし</p>

@@ -332,10 +332,13 @@ export async function POST(request: NextRequest) {
 
       const tbData = await getToolBudgetData()
       const key = `${workerId}_${periodStart}`
-      if (tbData.records[key]) {
-        tbData.records[key].purchases = tbData.records[key].purchases.filter(p => p.id !== purchaseId)
-        await saveToolBudgetData(tbData)
+      // 2026-10-09: 見つからなければ「消した」と返さない（旧: 何もせず success を返していた）
+      const rec = tbData.records[key]
+      if (!rec || !rec.purchases.some(p => p.id === purchaseId)) {
+        return NextResponse.json({ error: 'この購入記録は見つかりません（もう消えているか、別の期間の記録です）' }, { status: 404 })
       }
+      rec.purchases = rec.purchases.filter(p => p.id !== purchaseId)
+      await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
 
@@ -432,7 +435,8 @@ export async function POST(request: NextRequest) {
     // 特定期間の取得（履歴閲覧）
     if (action === 'getPeriod') {
       const { workerId, periodIndex } = body
-      if (!workerId || !periodIndex) {
+      // workerId は 0 もありうる（代表）ので !workerId で弾かない
+      if (workerId === undefined || workerId === null || !periodIndex) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       }
 
