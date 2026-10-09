@@ -86,17 +86,21 @@ export function feedbackTextError(text: unknown, imageCount = 0): string | null 
   return null
 }
 
-/** 返信したあとの未読の付け方。相手側に未読を付け、自分側は既読にする */
-export function unreadAfterPost(byKind: FeedbackAuthorKind): Pick<FeedbackThread, 'unreadForAuthor' | 'unreadForOwner'> {
-  return byKind === 'user'
-    ? { unreadForAuthor: false, unreadForOwner: true }
-    : { unreadForAuthor: true, unreadForOwner: false }
+/**
+ * 返信したあとの未読の付け方。相手側に未読を付け、自分側は既読にする。
+ * 代表が自分で書いた書き込みは、代表あての未読を付けない（2026-10-09 お試しで「自分の書き込みが未読」になった）
+ */
+export function unreadAfterPost(byKind: FeedbackAuthorKind, opts: { authorIsManager?: boolean } = {}): Pick<FeedbackThread, 'unreadForAuthor' | 'unreadForOwner'> {
+  if (byKind === 'user') return { unreadForAuthor: false, unreadForOwner: !opts.authorIsManager }
+  return { unreadForAuthor: true, unreadForOwner: false }
 }
 
 /** その人にとって未読か（manage = 代表として見ているか） */
 export function isUnreadFor(t: Pick<FeedbackThread, 'unreadForAuthor' | 'unreadForOwner' | 'author'>, viewer: { workerId: number; manage: boolean }): boolean {
-  if (viewer.manage) return t.unreadForOwner
-  return t.author.workerId === viewer.workerId && t.unreadForAuthor
+  const mine = t.author.workerId === viewer.workerId
+  // 代表が自分で書いたものは、返信が来たら（unreadForAuthor）代表にも未読
+  if (viewer.manage) return t.unreadForOwner || (mine && t.unreadForAuthor)
+  return mine && t.unreadForAuthor
 }
 
 /** 一覧の並び: 未読 → 終わっていない → 新しい順 */

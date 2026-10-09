@@ -103,14 +103,14 @@ export async function GET(request: NextRequest) {
       if (a.authorized && await callerCan(request, 'feedback.post')) {
         const { db } = await import('@/lib/firebase')
         const { collection, getDocs, query, where } = await import('@/lib/fsdb')
-        const { FEEDBACK_COL } = await import('@/lib/feedback')
-        if (await callerCan(request, 'feedback.manage')) {
-          feedbackUnread = (await getDocs(query(collection(db, FEEDBACK_COL), where('unreadForOwner', '==', true)))).size
-        } else {
-          const me = a.actor === 'super-admin' ? 0 : Number(a.actor)
-          const snap = await getDocs(query(collection(db, FEEDBACK_COL), where('author.workerId', '==', me)))
-          feedbackUnread = snap.docs.filter(d => d.data().unreadForAuthor === true).length
-        }
+        const { FEEDBACK_COL, isUnreadFor } = await import('@/lib/feedback')
+        const manage = await callerCan(request, 'feedback.manage')
+        const me = a.actor === 'super-admin' ? 0 : Number(a.actor)
+        // 件数は画面の「未読」と同じ判定（isUnreadFor）
+        const snap = manage
+          ? await getDocs(collection(db, FEEDBACK_COL))
+          : await getDocs(query(collection(db, FEEDBACK_COL), where('author.workerId', '==', me)))
+        feedbackUnread = snap.docs.filter(d => isUnreadFor(d.data() as Parameters<typeof isUnreadFor>[0], { workerId: me, manage })).length
       }
     } catch (e) {
       console.warn('[sidebar-badges] feedback count failed:', e)

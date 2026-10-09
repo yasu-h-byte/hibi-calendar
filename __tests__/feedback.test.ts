@@ -14,12 +14,16 @@ describe('困ったこと・要望の決まり', () => {
     expect(unreadAfterPost('user')).toEqual({ unreadForAuthor: false, unreadForOwner: true })
     expect(unreadAfterPost('owner')).toEqual({ unreadForAuthor: true, unreadForOwner: false })
     expect(unreadAfterPost('dev')).toEqual({ unreadForAuthor: true, unreadForOwner: false })
+    // 代表が自分で書いたものには、代表あての未読を付けない
+    expect(unreadAfterPost('user', { authorIsManager: true })).toEqual({ unreadForAuthor: false, unreadForOwner: false })
   })
   test('未読は見る人で変わる（代表は代表の未読・本人は自分の書き込みの未読だけ）', () => {
     const t = { author: { workerId: 303, name: '森田' }, unreadForAuthor: true, unreadForOwner: false }
     expect(isUnreadFor(t, { workerId: 303, manage: false })).toBe(true)
     expect(isUnreadFor(t, { workerId: 5, manage: false })).toBe(false)
     expect(isUnreadFor(t, { workerId: 0, manage: true })).toBe(false)
+    // 代表が自分で書いたものに返信が来たら、代表にも未読
+    expect(isUnreadFor({ author: { workerId: 0, name: '代表' }, unreadForAuthor: true, unreadForOwner: false }, { workerId: 0, manage: true })).toBe(true)
   })
   test('並び: 未読 → 終わっていない → 新しい順', () => {
     const list = [

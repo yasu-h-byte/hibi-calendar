@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       const thread: Omit<FeedbackThread, 'id'> = {
         createdAt: now, updatedAt: now, author: { workerId: me.workerId, name: me.name },
         kind, page: String(page || '').slice(0, 40), title: t, status: 'open', messages: [msg],
-        ...unreadAfterPost('user'),
+        ...unreadAfterPost('user', { authorIsManager: me.manage }),
       }
       await setDoc(doc(db, FEEDBACK_COL, id), thread)
       return NextResponse.json({ success: true, id })
@@ -164,15 +164,19 @@ export async function POST(request: NextRequest) {
       await updateDoc(ref, {
         messages: [...(t.messages || []), msg],
         updatedAt: now,
-        ...unreadAfterPost(kind),
+        ...unreadAfterPost(kind, { authorIsManager: me.manage && t.author.workerId === me.workerId }),
         ...(reopen ? { status: 'open' } : {}),
       })
       return NextResponse.json({ success: true })
     }
 
     if (action === 'markRead') {
-      const field = me.manage && t.author.workerId !== me.workerId ? 'unreadForOwner' : 'unreadForAuthor'
-      if (t[field]) await updateDoc(ref, { [field]: false })
+      // 開いた人の側の未読を消す。代表が自分の書き込みを開いたときは両方
+      const mine = t.author.workerId === me.workerId
+      const clear: Record<string, boolean> = {}
+      if (mine && t.unreadForAuthor) clear.unreadForAuthor = false
+      if (me.manage && t.unreadForOwner) clear.unreadForOwner = false
+      if (Object.keys(clear).length) await updateDoc(ref, clear)
       return NextResponse.json({ success: true })
     }
 

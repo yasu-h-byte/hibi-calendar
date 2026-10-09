@@ -317,9 +317,7 @@ function ThreadPanel({ id, me, password, onClose, onChanged }: {
     let alive = true
     load().then(async th => {
       if (!alive || !th) return
-      const mine = th.author.workerId === me.workerId
-      const unread = me.manage && !mine ? th.unreadForOwner : th.unreadForAuthor
-      if (unread) {
+      if (isUnreadFor(th, me)) {
         await fetch('/api/feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
