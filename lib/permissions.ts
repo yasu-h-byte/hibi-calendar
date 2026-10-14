@@ -78,6 +78,8 @@ export const CAPABILITIES = {
   'calendar.edit':           { group: '毎月', label: '就業カレンダーの作成・提出（担当現場）', roles: ['foreman', 'owner'] },
   'calendar.approve':        { group: '毎月', label: '就業カレンダーの承認', roles: ['approver', 'owner'] },
   'leave.view':              { group: '毎月', label: '休暇管理を見る', roles: ALL_OFFICE },
+  // 休みの予定（帰国・有給・欠勤届を見るだけ・2026-10-14 代表）。職長も見る。理由・残日数・お金は出さない
+  'timeOff.view':            { group: '毎月', label: '休みの予定（帰国・有給・欠勤届）を見る', roles: ['foreman', ...ALL_OFFICE] },
   'leave.foremanApprove':    { group: '毎月', label: '有給・帰国申請の職長承認（担当現場）', roles: ['foreman', 'approver', 'owner'] },
   'leave.finalApprove':      { group: '毎月', label: '有給・帰国申請の最終承認', roles: ['approver', 'owner'] },
   'leave.manage':            { group: '毎月', label: '有給の付与・時季指定・買取の記録', roles: ['jimu', 'approver', 'owner'] },
