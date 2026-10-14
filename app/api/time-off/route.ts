@@ -2,7 +2,7 @@
  * 休みの予定（2026-10-14）。決まりは lib/time-off.ts。見るだけ（書き込みは無い）。
  *
  * GET → { today, items: TimeOffItem[], sites: {id,name}[], mySiteIds: string[] }
- *   - 期間: 今日〜60日先（帰国は今日帰国中のものも）
+ *   - 期間: 有給・欠勤届は今日〜60日先。帰国は時期に限らず、まだ終わっていないものすべて（2026-10-14 代表）
  *   - 帰国: homeLongLeave（承認済み・申請中・職長承認まで）
  *   - 有給: 出面に入った有給（承認済み）＋ leaveRequests の申請中・職長承認まで（承認待ち）
  *   - 欠勤届: 出面の「欠」（届出）
@@ -46,7 +46,8 @@ async function build(today: string) {
     if (!workers.has(h.workerId) || !h.startDate || !h.endDate) return
     const stage = h.status === 'approved' ? 'approved' : (h.status === 'pending' || h.status === 'foreman_approved') ? 'pending' : null
     if (!stage) return
-    if (h.endDate < today || h.startDate > until) return
+    // 帰国は時期に限らず、まだ終わっていないものはすべて出す（2026-10-14 代表「帰国情報は時期に限らず全て」）
+    if (h.endDate < today) return
     ranges.push({
       kind: 'home', stage, workerId: h.workerId, workerName: nameOf(h.workerId), siteIds: siteIdsOf(h.workerId),
       start: h.startDate, end: h.endDate, ...(isReturnUndecided(h.endDate) ? { returnUndecided: true } : {}),

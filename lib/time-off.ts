@@ -24,7 +24,7 @@ export const TIME_OFF_STAGE_LABEL: Record<TimeOffStage, string> = {
   reported: '届出',
 }
 
-/** 先の予定を何日先まで出すか */
+/** 有給・欠勤届を何日先まで出すか（帰国は時期に限らず、まだ終わっていないものすべて・2026-10-14 代表） */
 export const TIME_OFF_DAYS_AHEAD = 60
 
 /** API が返す1件（許可リスト。ここに無い項目は返さない） */

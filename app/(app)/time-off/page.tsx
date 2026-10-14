@@ -92,7 +92,7 @@ export default function TimeOffPage() {
       <PageHeader
         group="出面・勤怠"
         title="休みの予定"
-        sub={`帰国・有給・欠勤届の予定です（今日から${TIME_OFF_DAYS_AHEAD}日先まで）。見るだけの画面です。承認は休暇管理、入力は出面入力で行います`}
+        sub={`帰国・有給・欠勤届の予定です（帰国は先の予定もすべて、有給・欠勤届は今日から${TIME_OFF_DAYS_AHEAD}日先まで）。見るだけの画面です。承認は休暇管理、入力は出面入力で行います`}
       />
 
       <div className="flex flex-wrap items-center gap-3">
