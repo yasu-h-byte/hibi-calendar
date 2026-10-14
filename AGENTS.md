@@ -1,0 +1,294 @@
+# DEDURA＋（デヅラプラス） - 開発ルール
+
+HIBI CONSTRUCTION 鳶事業部の出面管理システム。**システム名は DEDURA＋、会社名は
+HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表示はシステム名、
+公開カレンダー・帳票・スタッフ向け通知の差出人は会社名を使う。表示は必ず
+`components/Brand.tsx` 経由。詳細は [docs/ui-design.md](docs/ui-design.md) の「ブランド」節。
+
+各仕様の詳細は `docs/` ディレクトリを参照。仕様変更時は該当ドキュメントを更新すること。
+
+## 仕様ドキュメント
+
+| ファイル | 内容 |
+|---------|------|
+| [docs/company.md](docs/company.md) | 会社概要・組織構成・従業員構成 |
+| [docs/labor-rules.md](docs/labor-rules.md) | 労働時間・変形労働時間制・運用サイクル |
+| **[docs/payroll-manual.md](docs/payroll-manual.md)** | **給与計算 実務マニュアル（運用者向け・最重要）** |
+| **[docs/manual-morita.md](docs/manual-morita.md)** | **事務業務マニュアル（森田さん向け・網羅版。奥寺さん・佐藤さんから引き継ぐ給与締め・有給・道具代・請求を1冊に。個人パスワード発行は付録）** |
+| [docs/payroll-manual-okutera.md](docs/payroll-manual-okutera.md) | 給与計算マニュアル（奥寺さん用・アーカイブ。計算ロジックの記録として保存） |
+| [docs/manual-syaroshi.md](docs/manual-syaroshi.md) | 社労士提出用資料マニュアル（HFU分・キャシュモ向け） |
+| [docs/salary-calculation.md](docs/salary-calculation.md) | 給与計算の技術仕様（開発者向け） |
+| [docs/calc-examples.md](docs/calc-examples.md) | 給与計算例集（社労士確認用・8パターン） |
+| [docs/labor-agreements.md](docs/labor-agreements.md) | 労使協定・36協定・就業規則対応表（社労士向け） |
+| [docs/historical-changes.md](docs/historical-changes.md) | 給与計算ルール変更履歴（労基法115条対応） |
+| [docs/paid-leave.md](docs/paid-leave.md) | 有給休暇管理・法定付与・申請フロー・年5日義務 |
+| [docs/allowance.md](docs/allowance.md) | 遠方現場日当・運転手当（2026-10施行・判定値・長期従事逓減） |
+| [docs/changes-2026-10.md](docs/changes-2026-10.md) | 2026年10月からの変更点まとめ（賃金・手当・有給・道具代・事務体制・9月中の作業） |
+| [docs/attendance.md](docs/attendance.md) | 出面入力・PC/スマホ画面・フッター合計ルール |
+| [docs/ui-design.md](docs/ui-design.md) | UI・デザイン・色分け・言語表示ルール |
+| [docs/firestore.md](docs/firestore.md) | Firestoreデータ構造・コレクション定義 |
+| [docs/integration.md](docs/integration.md) | 経営コックピットとの連携（読むだけの窓口・合言葉・税抜の約束） |
+| [docs/manual-invoice.md](docs/manual-invoice.md) | （アーカイブ・2026-09-26）請求書の発行マニュアル。森田さんマニュアル・政仁さんマニュアルへ統合済み |
+| [docs/roles-auth.md](docs/roles-auth.md) | 役割・認証・権限（**権限の唯一の決まりは lib/permissions.ts**。職長の通行証） |
+| [docs/staff-docs.md](docs/staff-docs.md) | 書類庫（在留カード・雇用契約書の保管。Firebase Storage・署名つきURL・見られるのは代表/事業責任者/事務） |
+| `feedback`（Firestore）| **困ったこと・要望（2026-10-09・試験運用は森田さん・政仁さん・代表だけ）**。森田さんたちの書き込み。セッションの最初に未対応（status が open/doing・unreadForOwner）を Firebase MCP で確かめ、代表に伝える。返信の書き方は [docs/firestore.md](docs/firestore.md)「困ったこと・要望」 |
+| [docs/peer-invoice.md](docs/peer-invoice.md) | 応援の請求書（同業者へ送る請求書 + 出面明細を印刷。/peer-invoice。発行で凍結・取り消しは欠番）＋ HFU → 日比建設 の請求書（HFU所属の人工 × 社内単価）＋ 受け取った外注の請求書（/subcon-invoice・経営コックピットが毎朝読む） |
+
+## 開発の基本ルール
+
+### 技術スタック
+- Next.js 14（App Router）+ TypeScript + Tailwind CSS
+- Firebase Firestore（プロジェクト: dedura-kanri）
+- Vercel にデプロイ
+
+### Tailwind クラス文字列の置き場所ルール
+
+Tailwind は `tailwind.config.ts` の `content` に列挙したディレクトリの**ファイルを
+文字列として grep** し、そこに現れたクラス名だけ CSS を生成する。したがって
+**クラス文字列を返すヘルパーを `content` 対象外のディレクトリに置くと、
+そのクラスの CSS が生成されず UI が無色（透明）になる**。
+
+- `content` 対象: `app/`, `components/`, `lib/`
+- クラス文字列を返すヘルパーは上記のいずれかに置く。新しいディレクトリ
+  （`utils/`, `src/` 等）を作ってそこに置く場合は、**同時に `content` へ追加する**
+- 動的なクラス組み立て（`` `bg-${color}-500` ``）は grep に引っかからないので常に禁止。
+  必ず完全なクラス名を文字列リテラルで書く
+- 文字の大きさは **px で指定しない**（`text-[10px]` 禁止）。rem 系（`text-3xs`/`text-2xs`/`text-xs`/`text-sm`…）を使う。
+  10px 相当より小さい字は使わない。`npm run lint:px` が検出する。表は [docs/ui-design.md](docs/ui-design.md) の「文字の大きさ」節
+- ブラウザ標準の `confirm()` / `alert()` / `prompt()` は使わない。確認は `lib/confirm-dialog.ts`（confirmDialog / confirmDanger / confirmWithReason）、
+  お知らせは `lib/notify.ts`（notify.success / failed / error）、入力の不備は `<FieldError>`。`npm run lint:dialog` が検出する。
+  独自モーダルの枠（`fixed inset-0`）も書かず `components/ui/Modal.tsx` の `<Modal>` を使う（同じ lint が検出）。決まりは [docs/ui-design.md](docs/ui-design.md) の「確認・お知らせ・保存の部品」節
+
+**2026-07 有給消化バー障害の記録**
+
+有給管理画面（`app/(app)/leave/`）の消化率バーが無色になった。原因は
+コミット `15fa98d` のリファクタリングで `rateBarColor()` を
+`app/(app)/leave/page.tsx` から `lib/leave-utils.ts` へ移動したこと。当時の
+`content` は `app/` と `components/` しかスキャンしておらず、
+`from-green-400` 等のグラデーションクラスがどのスキャン対象ファイルにも
+現れなくなったため CSS が生成されず、バーが透明になった。
+対処として `content` に `./lib/**/*.{js,ts,jsx,tsx}` を追加。
+**ロジックの移動だけでも見た目が壊れる**ため、クラス文字列を含む関数を
+別ファイルへ動かしたときは移動先が `content` 対象か必ず確認すること。
+
+### 日付は日本時間で取る（2026-10-01 一括修正）
+
+サーバ（Vercel）は **UTC** で動く。日本時間 0〜9時は UTC ではまだ前日なので、
+`new Date().getMonth()` や `new Date().toISOString().slice(0, 10)` で「今日・今月・今年」を
+取ると、その時間帯だけ前日・前月になる（ブラウザでも toISOString は UTC）。
+2026-10-01 に約40か所をまとめて直した（職長画面で今日が開けない・月初に前月の配置で判定・帳票の作成日が前日 等）。
+
+- 今日 `'YYYY-MM-DD'` → `todayJstIso()` ／ 今月 `'YYYYMM'` → `currentYmJst()` ／ 今年 → `currentYearJst()`
+- 今日の Date（getDate/getDay/setDate で前後させる用・ローカル0時）→ `todayJstDate()`
+- 出面の日付（`new Date(y, m-1, d)`）と比べる境界日 → `localMidnight('YYYY-MM-DD')`（`new Date('YYYY-MM-DD')` は UTC 0時）
+- 日付の加減 → `addDaysIso()` / `addMonthsSafe()`（`setFullYear(+1)` + `toISOString` はしない）
+- すべて `lib/date-utils.ts`。コミット前に `npm run lint:utc`（意図して UTC を使う行は `// utc-ok`）
+
+### 個人の金額を画面の JS に書かない（2026-10-02）
+
+`/_next/static` の JS チャンクは**ログインなしで誰でも取れる**。画面（`'use client'`）から
+import される `lib/` に個人の時給・予定額・事情を書くと、権限チェックと関係なく丸見えになる。
+2026-10-02 まで `lib/wage-curve.ts` の予定表と `lib/wage-analysis.ts` の個別事情が
+/wage-analysis・/evaluation の共有チャンクに載っていた。
+
+- 個人のデータはサーバー専用モジュール（`import 'server-only'`。例 `lib/wage-plan.server.ts`）か
+  Firestore に置き、権限（`lib/permissions.ts`）をチェックする API から渡す
+- 画面側の lib には純粋な計算と制度の定数（最賃・カーブ）だけを置く
+- `npm run build` の後に `scripts/check-client-bundle-secrets.mjs`（postbuild）が
+  チャンクに予定額・注記が無いかを調べ、見つかればビルドを失敗させる
+
+### 「並べる方式」をやめ、既定を安全側にする（2026-10-02 総合点検）
+
+今週の不具合の多くは「対象を1つずつ並べていて、あとから足したものが抜ける」型だった
+（担当現場チェックの対象アクション・給与で消す項目・バックアップの対象）。新しいものを足すときは、
+**既定で安全側（チェックする・伏せる・退避する）にして、外すものだけを理由つきで並べる**。
+
+| 何を | 決まりの場所 | 足し忘れを落とすもの |
+|---|---|---|
+| 出面グリッドの担当現場チェック | `lib/attendance-authz.ts` isForemanScopedGridAction（外すものだけ列挙） | `__tests__/attendanceAuthz.test.ts` |
+| 給与の項目を返す API | 許可リスト（`lib/workers.ts` WORKER_*_KEYS） | `__tests__/payLock.test.ts` |
+| 日次バックアップの対象 | `lib/backup-plan.ts`（退避する／意図して外す） | `__tests__/backupCoverage.test.ts` |
+| 月の締めの判定 | `lib/locks.ts` checkMonthLockedForWorkers（人の会社で見る。会社なしの checkMonthLocked(ym) は禁止） | `__tests__/locksForWorkers.test.ts` |
+| 承認できる日 | `lib/attendance-authz.ts` approvalDateError（先の日・実在しない日は承認しない） | 同上 |
+
+画面で止めている操作は、**必ずサーバでも同じ判定で止める**（画面だけの守りは API 直叩きで抜けられる）。
+保存の通信は結果（`res.ok`）を必ず見て、失敗したら表示を戻して理由を出す（楽観更新のまま放置しない）。
+
+### 旧アプリとの関係
+- 旧アプリ（dedura-kanri）の保存機能は**完全無効化済み**
+- Firestoreは共有だが、旧アプリからの書き込みは発生しない
+- 新システムに完全移行済み（2026年4月〜）
+
+### ESLint（2026-10-03 導入）
+
+`npm run lint`（`next lint`・設定は `.eslintrc.json`・next/core-web-vitals）。`npm run build` でも自動で走り、**エラーがあるとビルドが失敗する**。
+`react-hooks/exhaustive-deps` は警告（直せる所から直す。意図して外す依存は `// eslint-disable-next-line react-hooks/exhaustive-deps` に理由を書く）。
+`-eslint/*` の規則は入れていないので、その名前の disable 注記を書かない（「規則が見つからない」エラーになる）。
+
+### コミットルール
+- `Co-Authored-By: Codex Fable 5 <noreply@anthropic.com>` を付与
+  - **実際に作業したモデル名を書く**こと。モデルが変わったらこの行も更新する
+    （履歴からどのモデルが書いたコードか辿れるようにするため）
+- 日本語でコミットメッセージを記述
+
+### マニュアル改訂ルール（必読）
+
+業務マニュアル（`docs/manual-*.md`、`public/manual-*.html`）を改訂したら、
+**必ず以下 3 箇所の更新日を同時に変更する** こと。1つでも忘れると古い日付が
+残り、利用者（奥寺さん等）が「これは最新か？」と判断できなくなる。
+
+| 場所 | 更新する箇所 |
+|---|---|
+| `docs/manual-*.md` (原本) | フロントマター「最終更新」+ 改訂履歴の表に新エントリ |
+| `public/manual-*.html` (公開HTML) | 冒頭の「最終更新: YYYY年MM月」+ 改訂履歴の表に新エントリ |
+| `app/(app)/docs/page.tsx` (資料一覧) | 該当エントリの `updated: 'YYYY-MM-DD'` |
+
+改訂履歴の表には「何を変更したか」を 1-2 行で記載。空のエントリは作らない。
+
+例: 給与計算マニュアル (奥寺さん用) の場合
+- `docs/payroll-manual-okutera.md`
+- `public/manual-payroll-okudera.html`
+- `app/(app)/docs/page.tsx` の `'/manual-payroll-okudera.html'` 行
+
+### 関係者の役割
+
+このアプリには「事業責任者」と「アプリ開発・管理者」という2つの異なる役割が存在する。混同しないこと。
+
+| 役割 | 担当 | 業務 |
+|---|---|---|
+| **アプリ開発・管理者** | **グループ代表 靖仁さん** | このアプリの仕様策定・開発依頼・運用管理。Codex に話しかけているのはこの人。日々の改善要望・バグ指摘もここから来る |
+| **事業責任者**         | **政仁さん**             | 就業カレンダー・出面・給与計算等の業務上の最終承認権限を持つ |
+
+- Codex が会話相手として向き合うのは原則 **靖仁さん**（メール: y.hibi@kwj.jp）
+- アプリ内の承認フローで「最終承認者」として登場するのは **政仁さん**
+- 両者は別人。コミットメッセージ・コメント・ドキュメントで言及するときは混同しないこと
+
+### 給与の取り扱い（最重要・2026-10-02 代表）
+
+**個人の給与（時給・日額・月給・支給額・昇給額・号俸）を見られるのは、靖仁さん・政仁さん・森田さんの3人だけ。**
+職長・役員・ほかの事務（奥寺さん・佐藤さん）・スタッフには、画面でも API でも資料でも絶対に見せない。
+
+- 鍵は三重。新しい画面・API・資料を作るときは**3つとも**守ること
+  1. **役割と本人の鍵**（`lib/permissions.ts`）: 給与の権限（`PAY_CAPS`: pay.view・monthly.*・cost.*・wage.*・workers.edit/editPay・staffDocs.* など）は
+     役割（事務・事業責任者・代表）に加えて本人（`PAY_VIEWER_WORKER_IDS` = 0・1・303）も確かめる。サーバーは `requireCap` / `callerCan`、画面は `can()` が同じ判定
+  2. **画面の入口の鍵**（`lib/page-guard.ts`）: 新しい画面は必要な権限を1行足す（足し忘れはテストが落とす）
+  3. **データの鍵**: 給与を含む API は `requireCap(…給与の権限…)` で止める。権限の無い人にも返す API は**許可リスト**で項目を絞る
+     （消す項目を並べる方式にしない。2026-10-02 に prevRate 等の消し漏れがあった）
+- **資料（`public/`・`docs/` から公開するもの）に実在の人の給与額を書かない。** `public/` はログインなしで誰でも開ける。
+  例は「Aさん」や「日給20,000円の人」のような架空の金額にする。`npm run lint:pay` とテスト（`__tests__/payLock.test.ts`）が検出する
+- 見られる人を変えるのは代表の指示があるときだけ（`PAY_VIEWER_WORKER_IDS` と `PAY_ROLES`）
+
+### 承認フローの原則
+**現場レベルの作業は職長、最終承認は事業責任者（政仁さん）。この原則はすべての機能に適用する。**
+
+- **就業カレンダー**: 職長が作成・提出 → 政仁さんが最終承認
+- **出面（出退勤）**: スタッフが入力 → 職長が確認・ロック → 政仁さんが最終承認
+- **有給申請**: スタッフが申請 → 管理者が承認
+- 新機能を追加する際も、この承認フローの原則に従うこと
+- 職長が直接「最終承認」する機能は作らない（職長は「提出」「確認」まで）
+
+### 問題解決の原則（最重要）
+
+**目先の対処ではなく、根本原因をしっかり直す。これがデフォルトの方針。**
+
+問題が見つかった時の標準フロー：
+
+1. **症状が起きる仕組みを最後まで追う**
+   - 表面（UI誤表示）→ 集計層（合計が違う）→ 算出層（残業計算ロジック）→
+     データ層（Firestore のフィールド残骸）まで段階的に下る
+   - 「なぜ?」を 3〜5 回繰り返して根本にたどり着く
+
+2. **下流で防御 + 上流で根治、両方やる**
+   - 下流の防御（集計時のフィルタ等）= 即時の応急処置
+   - 上流の根治（データを正しく書き込む / そもそも残骸を作らない）= 本来の解決
+   - 両方やることで「二度と同じ問題が起きない」状態を作る
+
+3. **横展開で類似箇所をすべて修正**
+   - 1箇所修正したら、同種パターンが他にないか必ずgrepする
+   - 「ここはまだいい、後で」は技術的負債を増やすだけ
+
+4. **共通ヘルパーで一元化**
+   - 同じロジックを何箇所にも書かない
+   - 例: `isWorkingDay()`, `computeAttendanceDeleteFields()`, `ensureDocExists()`
+   - 一箇所直せば全てに反映される構造を作る
+
+5. **修正後の検証**
+   - 「この修正で同種の問題が二度と起きないか」を検証
+   - 必要なら lint / test / 検算スクリプトを追加して再発を機械的に防ぐ
+   - 例: `scripts/lint-firestore-safety.mjs`, `scripts/diagnose-merge-empty-map.mjs`,
+     `scripts/cleanup-attendance-residue.mjs`
+
+6. **根本原因を AGENTS.md / memory に記録**
+   - 同じ罠を別の人が踏まないように、原因と対処を文書化
+   - 例: 下記「Firestore 書き込みの安全ルール」
+
+### Firestore 書き込みの安全ルール（必読）
+
+**2026-05-07 に att_202605 の出面データが全消失する事故が発生した。** 同種の事故を絶対に二度と起こさないため、以下のルールを厳守すること。
+
+#### 禁止パターン
+
+```ts
+// ❌ 絶対禁止 — 既存の d フィールド全体が空マップに置換される
+await setDoc(ref, { d: {} }, { merge: true })
+
+// ❌ 同上 — 子値に空マップ {} を渡す書き込みは全て危険
+await setDoc(ref, { d: {}, sd: existing }, { merge: true })
+```
+
+`setDoc(ref, data, { merge: true })` の `merge:true` は **「言及されていない他の top-level field」だけ** を保護する。`data` 内で明示された field の VALUE は **置換** される。子値に `{}` を渡すと、その field の中身が空になる。
+
+#### 推奨パターン
+
+```ts
+// ✅ ドキュメント存在保証だけ
+import { ensureDocExists } from '@/lib/firestore-safe'
+await ensureDocExists(ref)
+
+// ✅ 単一エントリの追加・更新（既存キーは保持）
+await setDoc(ref, { d: { [key]: entry } }, { merge: true })  // 子値が非空なら安全
+
+// ✅ 特定フィールドの削除
+await updateDoc(ref, { [`d.${key}.${field}`]: deleteField() })
+
+// ✅ 特定 worker の plData だけ更新
+await updateDoc(ref, { [`plData.${workerId}`]: records })
+```
+
+#### 検証
+
+- コミット前に `npm run lint:firestore` を実行（危険パターンを検出）。資料を触ったら `npm run lint:pay` も
+- 実機検証は `npm run diagnose:firestore` で `demmen/att_900001` テスト doc を使った挙動確認
+
+#### 多層防御
+
+1. **コードレベル**: `lib/firestore-safe.ts` の helper 経由で書き込む
+2. **lint レベル**: `scripts/lint-firestore-safety.mjs` が危険パターンを検出
+3. **サーバレベル**: `firestore.rules` の `notWipingMap()` が「非空マップ→空マップ」書き込みを拒否
+4. **バックアップ**: `app/api/backup/snapshot` が日次で `backups` コレクションへスナップショット保存（PITR 代替）
+
+復元: `/api/backup/restore` (admin only)。
+
+### Firestore 運用の必須ルール（Admin SDK 移行済み）
+
+セキュリティ根治（サーバを Admin SDK 化 + rules を deny-by-default 化）は **2026-06-29 完了**。
+経緯・移行手順・障害履歴（2026-06-30 preferRest / 2026-07-02 クォータ超過）・ロールバック手順は
+**[docs/admin-sdk-migration.md](docs/admin-sdk-migration.md)** を参照。コードを書くときの必須ルールのみ以下に残す:
+
+- サーバの Firestore アクセスは**静的・動的 import とも `@/lib/fsdb` に統一**
+  （`firebase/firestore` を直接 import しない。`lib/firebase.ts` の Web SDK 初期化のみ例外）
+- firebase-admin は **v14 モジュラーAPI**。`next.config.js` の serverComponentsExternalPackages /
+  webpack alias 設定を壊さない（eval-require 化すると Vercel で "Cannot find module" になる）
+- **`preferRest: true` 必須**（`lib/firebase-admin.ts` で適用済み。外すと Vercel で読み取りが断続500）
+- **読み取り回数を増やさない**: 高頻度アクセスは `getMainData`(30秒キャッシュ) /
+  `loadCalendarMatrix`(20秒キャッシュ) 経由で。ポーリング間隔を短くしない
+  （クォータ超過で全画面500になった障害歴あり。恒久対策は Blaze 化）
+- **出面ドキュメント（att_YYYYMM・1件200〜300KB）は同一リクエスト内で二度読まない**。
+  集計系（ダッシュボード・通知ベル）は「前月より前の確定済み月」だけ
+  `getAttDataCached`(5分キャッシュ) を使う（`isClosedMonthYm` で判定）。
+  当月・前月・出面グリッドの読みには**絶対に使わない**（入力直後の再取得が古い値になる）。
+  2026-09-02 にダッシュボードが同じ月を2〜3回ずつ計37回読んでいた件の対処
+- **Admin SDK は rules をバイパスする** → 誤消去ガードは rules でなくコード層
+  （`lib/firestore-safe.ts`）+ `npm run lint:firestore` + 日次バックアップで担保
+- 診断: `GET /api/health`（adminMode / readOk / readError）。readError.code 8/429 は
+  クォータ超過（コードのバグではない）

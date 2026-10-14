@@ -48,6 +48,8 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: '出面入力', icon: 'clipboard', href: '/attendance', section: '出面・勤怠', cap: 'attendance.view', activePrefixes: ['/attendance/mobile'] },
   { label: '就業カレンダー', icon: 'calendar', href: '/calendar', section: '出面・勤怠', cap: 'calendar.view' },
   { label: '休暇管理', icon: 'umbrella', href: '/leave', section: '出面・勤怠', cap: 'leave.view' },
+  // 休みの予定（2026-10-14）。帰国・有給・欠勤届を見るだけ。職長も見る
+  { label: '休みの予定', icon: 'plane', href: '/time-off', section: '出面・勤怠', cap: 'timeOff.view' },
   // ── 給与・締め ──
   { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
   // 「帳票出力」のメニュー項目は 2026-10-03 に廃止（月次集計・締めのタブだけに。検索からは引ける）
@@ -156,6 +158,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: 'スタッフのアクセス履歴', where: '管理者設定 → バックアップ・履歴', href: '/access-log', cap: 'system.admin', keywords: 'あくせす ログイン 未アクセス' },
   { label: 'HFU → 日比建設 の請求書の設定（単価・HFUの会社情報）', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: 'えいちえふゆー hfu 単価' },
   { label: '既定の単価（鳶・土工）・基本給ベース日数', where: '管理者設定 → 単価の既定値', href: '/settings?tab=settings', cap: 'system.admin', keywords: 'でふぉると たんか ベース日数' },
+  { label: '休みの予定（帰国・有給・欠勤届）', where: '休みの予定', href: '/time-off', cap: 'timeOff.view', keywords: 'やすみ きこく ゆうきゅう けっきん 帰国中 予定 休暇' },
   { label: 'マニュアル', where: '資料一覧', href: '/docs', cap: 'docs.view', keywords: 'まにゅある 使い方 手順' },
   { label: '困ったこと・要望を書く', where: '困ったこと・要望', href: '/feedback', cap: 'feedback.post', keywords: 'ようぼう こまった ふぐあい しつもん 不具合 質問 問い合わせ 相談' },
 ]

@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261014_time_off',
+    title: '「休みの予定」ができました（帰国・有給・欠勤届）',
+    content:
+      'メニュー「出面・勤怠」→「休みの予定」で、今日いない人と、これから60日先までの帰国・有給・欠勤届を一覧で見られます。職長は最初に自分の現場の人だけが出ます（切り替えで全部の現場も見られます）。'
+      + '見るだけの画面です。承認は休暇管理、入力は出面入力で行います。',
+    category: 'new',
+    publishedAt: '2026-10-14T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', ...OFFICE],
+  },
+  {
     id: 'rn_20261009_tool_prev_period',
     title: '道具代: 前の期間の購入を見て、消せるようになりました',
     content:

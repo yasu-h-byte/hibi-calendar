@@ -15,6 +15,7 @@ export const PAGE_CAPS: { path: string; caps: Capability[] | null }[] = [
   { path: '/attendance', caps: ['attendance.view'] },
   { path: '/calendar', caps: ['calendar.view'] },
   { path: '/leave', caps: ['leave.view'] },
+  { path: '/time-off', caps: ['timeOff.view'] },
   { path: '/monthly', caps: ['monthly.view'] },
   { path: '/peer-statement', caps: ['invoice.view'] },
   { path: '/peer-invoice', caps: ['invoice.view'] },
