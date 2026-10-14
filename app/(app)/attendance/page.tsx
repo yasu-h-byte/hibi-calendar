@@ -18,7 +18,6 @@ import {
   collectRestDayWorkWarnings,
 } from '@/lib/attendance-grid'
 import AttendanceActionBar from '@/components/AttendanceActionBar'
-import HomeLeaveBanner from '@/components/attendance/HomeLeaveBanner'
 import UpcomingRetirementsBanner from '@/components/attendance/UpcomingRetirementsBanner'
 import NextMonthCalendarBanner from '@/components/attendance/NextMonthCalendarBanner'
 import AttendanceWarningBanner from '@/components/attendance/AttendanceWarningBanner'
@@ -1393,10 +1392,8 @@ export default function AttendanceGridPage() {
   const nmSites = (nextMonthCalCheck?.sites || []).filter(s => s.siteId === calSiteIdHere)
   const nmNotReady = nmSites.filter(s => !s.status || s.status === 'draft' || s.status === 'rejected').length
   const nmSubmitted = nmSites.filter(s => s.status === 'submitted').length
-  // 帰国の予定は「確認すること」に数えない（2026-10-02 代表: 会社全体の帰国予定が全現場に出て、毎回開く必要がなかった）。
-  //   帰国中はセルに「帰国中」と出る。開いた中の帰国情報は、この現場に配置されている人だけにする
-  const siteWorkerIds = new Set((data?.workers || []).map(w => w.id))
-  const siteHomeLeaves = (data?.homeLeaves || []).filter(h => siteWorkerIds.has(h.workerId))
+  // 帰国の予定はこの画面に出さない（2026-10-14 代表「出面画面からは外そう」）。帰国中の日はマスに「帰国」と出る。
+  //   会社全体の帰国・有給・欠勤届の予定は「休みの予定」（/time-off）で見る
   const checkItems: string[] = []
   if (nmNotReady > 0) checkItems.push(`翌月の就業カレンダー 未作成 ${nmNotReady}件`)
   else if (nmSubmitted > 0) checkItems.push(`翌月の就業カレンダー 承認待ち ${nmSubmitted}件`)
@@ -1497,10 +1494,6 @@ export default function AttendanceGridPage() {
         />
       )}
 
-      {/* 帰国の予定は件数に数えないが、ほかに確認することが無い現場でも見えるように出す（2026-10-02 点検: #36 で見えなくなっていた） */}
-      {!loading && data && checkItems.length === 0 && siteHomeLeaves.length > 0 && (
-        <HomeLeaveBanner homeLeaves={siteHomeLeaves} />
-      )}
       {/* ── 確認すること: ふだんは1行の要約。開くと今までの注意書きを並べる（中身・動きは旧と同じ） ── */}
       {!loading && data && checkItems.length > 0 && (
         <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/15 overflow-hidden">
@@ -1529,8 +1522,6 @@ export default function AttendanceGridPage() {
                 tone="warning"
               />
 
-              {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
-              <HomeLeaveBanner homeLeaves={siteHomeLeaves} />
               {/* 休みの区別の取り違えの疑い（職長承認の前に気づけるように・2026-09-30） */}
               {data && <RestMismatchBanner items={data.restMismatch} workers={data.workers} month={data.month} />}
 
