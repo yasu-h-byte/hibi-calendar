@@ -50,11 +50,15 @@ function compact<T extends Record<string, unknown>>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T
 }
 
-/** 請求元として選べる会社: 出面の外注として配置できる会社（同業・外注）＋ 支払内訳書を出す一次（山岡建設工業など・kind: 'prime'） */
+/**
+ * 請求元として選べる会社: 出面の外注として配置できる会社（同業・外注）＋ 支払内訳書を出す一次（山岡建設工業など・kind: 'prime'）。
+ * 一次と同業の両方の役割を持つ会社（山岡建設工業は人の貸し借りもする）は両方に出す（2026-10-15: 支払内訳書の支払元に山岡が出なかった）。
+ * 同じ id が2行になるが、名前は同じなので find はどちらに当たってもよい。
+ */
 function selectableCompanies(main: MainData): { id: string; name: string; kind: 'subcon' | 'prime' }[] {
   const all = (main.subcons || []) as unknown as CompanyLike[]
   const subs = all.filter(c => canBorrowFrom(c)).map(c => ({ id: c.id, name: c.name, kind: 'subcon' as const }))
-  const primes = all.filter(c => hasRole(c, 'prime') && !canBorrowFrom(c)).map(c => ({ id: c.id, name: c.name, kind: 'prime' as const }))
+  const primes = all.filter(c => hasRole(c, 'prime')).map(c => ({ id: c.id, name: c.name, kind: 'prime' as const }))
   return [...subs, ...primes]
 }
 
