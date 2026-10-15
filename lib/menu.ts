@@ -132,7 +132,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '応援の請求書（同業者へ）', where: '請求・支払 → 請求・支払の一覧', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
   { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求・支払 → 紙の請求書の控え', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
   { label: '受け取った外注の請求書（保管・出面との見比べ）', where: '請求・支払 → 受け取った請求書', href: '/subcon-invoice', cap: 'invoice.view', keywords: 'うけとった 外注 請求書 紙 写真 スキャン 支払 見比べ' },
-  { label: 'HFU → 日比建設 の請求書', where: '請求・支払 → 請求書を作る → HFU', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
+  { label: 'HFU → 日比建設 の請求書', where: '請求・支払 → 一覧 → HFU の「請求書を作る」', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
   { label: '請求書の自社情報・振込先', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: '登録番号 インボイス 口座 振込' },
   // 経営
   { label: '現場の請求額の入力', where: '原価・収益 → 現場別', href: '/cost', cap: 'cost.edit', keywords: 'せいきゅうがく 売上 粗利' },

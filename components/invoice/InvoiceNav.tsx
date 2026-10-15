@@ -11,13 +11,15 @@ export type InvoiceScreen = 'list' | 'create' | 'paper' | 'received'
 
 const TABS: { key: InvoiceScreen; label: string; href: string }[] = [
   { key: 'list', label: '請求・支払の一覧', href: '/peer-statement' },
-  { key: 'create', label: '請求書を作る', href: '/peer-invoice' },
+  // 2026-10-15 代表: 「請求書を作る」のタブは外す。会社を選ばずに開くと空の画面になるため。
+  // 請求書は一覧の会社ごとの「請求書を作る」から開く（開いている間は「一覧」のタブを選んだ状態にする）
   { key: 'paper', label: '紙の請求書の控え', href: '/paper-invoice' },
   // 2026-10-05: 外注から届いた請求書（出した請求書と同じ場所で扱う）
   { key: 'received', label: '受け取った請求書', href: '/subcon-invoice' },
 ]
 
 export function INVOICE_SCREEN_TITLE(key: InvoiceScreen): string {
+  if (key === 'create') return '請求書を作る'
   return TABS.find(t => t.key === key)?.label ?? ''
 }
 
@@ -25,7 +27,7 @@ export default function InvoiceNav({ current }: { current: InvoiceScreen }) {
   return (
     <nav aria-label="請求の画面" className="flex gap-5 border-b border-hibi-line dark:border-gray-700 overflow-x-auto">
       {TABS.map(t => {
-        const on = t.key === current
+        const on = t.key === current || (current === 'create' && t.key === 'list')
         return (
           <Link
             key={t.key}
