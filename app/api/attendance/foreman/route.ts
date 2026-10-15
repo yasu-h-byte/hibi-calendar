@@ -267,6 +267,12 @@ export async function POST(request: NextRequest) {
           }, { status: 409 })
         }
       }
+      // 休憩チェックの打刻ミスの疑い（2026-10-15）。確認済み（ackBreakCheck）でなければ止めて一覧を返す
+      {
+        const { breakCheckResponse } = await import('@/lib/break-check.server')
+        const r = await breakCheckResponse(site.id, ym, [Number(day)], body.ackBreakCheck)
+        if (r) return r
+      }
       await setApprovalForDay(site.id, ym, day, foreman.id)
       return NextResponse.json({ success: true })
     }
@@ -297,6 +303,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'days (1〜31件) を指定してください' }, { status: 400 })
       }
       const ym = ymKey(year, month)
+      {
+        const { breakCheckResponse } = await import('@/lib/break-check.server')
+        const r = await breakCheckResponse(site.id, ym, days.map(Number), body.ackBreakCheck)
+        if (r) return r
+      }
       const { approvedDays, skipped } = await approveDaysForSite(site.id, ym, days, foreman.id)
       return NextResponse.json({ success: true, approvedDays, skipped })
     }

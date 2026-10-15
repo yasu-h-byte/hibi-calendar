@@ -196,6 +196,12 @@ export async function POST(request: NextRequest) {
     const site = parentSites(main).find(s => s.id === siteId)
     if (!site) return NextResponse.json({ error: '現場が見つかりません' }, { status: 404 })
     const mforeman = (main.mforeman || {}) as Mforeman
+    // 休憩チェックの打刻ミスの疑い（2026-10-15）。権限を確かめたあとで点検する（職長承認・最終承認とも）。
+    //   確認済み（ackBreakCheck）でなければ止めて一覧を返す
+    const breakCheck = async () => {
+      const { breakCheckResponse } = await import('@/lib/break-check.server')
+      return breakCheckResponse(siteId, ym, days.map(Number).filter(Number.isInteger), (body as { ackBreakCheck?: unknown }).ackBreakCheck)
+    }
 
     if (action === 'approve_days') {
       // 職長: その月にその現場の職長（職種が職長）／管理者: 職長がいない現場の代行だけ
@@ -204,12 +210,14 @@ export async function POST(request: NextRequest) {
       if (!isForeman && !isProxy) {
         return NextResponse.json({ error: 'この現場の職長承認はできません' }, { status: 403 })
       }
+      { const r = await breakCheck(); if (r) return r }
       const result = await approveDaysForSite(siteId, ym, days, worker.id)
       return NextResponse.json({ success: true, ...result })
     }
 
     // final_days: 最終承認は管理者・事業責任者だけ。職長承認済みの日だけ（PC の approve_final と同じ条件）
     if (!manager) return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+    { const r = await breakCheck(); if (r) return r }
     const approvedDays: number[] = []
     const skipped: { day: number; reason: string }[] = []
     for (const dd of days) {

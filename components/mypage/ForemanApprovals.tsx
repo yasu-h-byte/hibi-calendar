@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
+import { isBreakCheckResponse, confirmBreakCheck } from '@/lib/break-check-confirm'
 import { notify } from '@/lib/notify'
 
 // マイページの「承認すること」（2026-10-01 代表依頼）
@@ -76,11 +77,18 @@ export default function ForemanApprovals({ token, canApprove }: {
     if (!(await confirmDialog({ ...ask, confirmLabel: `${verb}する` }))) return
     setBusy(`${action}_${siteId}_${ym}`)
     try {
-      const res = await fetch('/api/mypage/approvals', {
+      const send = (ackBreakCheck: boolean) => fetch('/api/mypage/approvals', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, action, siteId, ym, days }),
+        body: JSON.stringify({ token, action, siteId, ym, days, ackBreakCheck }),
       })
-      const j = await res.json().catch(() => null)
+      let res = await send(false)
+      let j = await res.json().catch(() => null)
+      // 休憩チェックの打刻ミスの疑い（2026-10-15）。確認したら送り直す
+      if (res.status === 409 && isBreakCheckResponse(j)) {
+        if (!(await confirmBreakCheck(j.issues, Number(ym.slice(4, 6))))) return
+        res = await send(true)
+        j = await res.json().catch(() => null)
+      }
       if (!res.ok) { notify.failed(verb, j?.error || 'サーバが受け付けませんでした'); return }
       const skipped = (j?.skipped || []) as { day: number; reason: string }[]
       flash(`${j?.approvedDays?.length ?? 0}日分を${verb}しました${skipped.length ? `（${skipped.length}日は条件がそろっていないため承認していません）` : ''}`)

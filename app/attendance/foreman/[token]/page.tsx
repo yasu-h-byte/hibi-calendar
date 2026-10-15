@@ -5,6 +5,7 @@
 
 import { siteLeaderLabel } from '@/lib/companies'
 import { confirmDialog } from '@/lib/confirm-dialog'
+import { isBreakCheckResponse, confirmBreakCheck } from '@/lib/break-check-confirm'
 import { notify } from '@/lib/notify'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { todayJstIso } from '@/lib/date-utils'
@@ -196,7 +197,7 @@ export default function ForemanAttendancePage() {
     }))) return
     setSaving(true)
     try {
-      const res = await fetch('/api/attendance/foreman', {
+      const send = (ackBreakCheck: boolean) => fetch('/api/attendance/foreman', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -205,8 +206,18 @@ export default function ForemanAttendancePage() {
           year: data.date.year,
           month: data.date.month,
           day: data.date.day,
+          ackBreakCheck,
         }),
       })
+      let res = await send(false)
+      // 休憩チェックの打刻ミスの疑い（2026-10-15）。確認したら送り直す
+      if (res.status === 409) {
+        const j = await res.clone().json().catch(() => null)
+        if (isBreakCheckResponse(j)) {
+          if (!(await confirmBreakCheck(j.issues, data.date.month))) { fetchData(); return }
+          res = await send(true)
+        }
+      }
       // 失敗（ロック済み等）を必ず表示（2026-08-27 休暇届総点検）
       if (!res.ok) {
         const d = await res.json().catch(() => null)
@@ -283,16 +294,24 @@ export default function ForemanAttendancePage() {
     }))) return
     setBulkApproving(true)
     try {
-      const res = await fetch('/api/attendance/foreman', {
+      const send = (ackBreakCheck: boolean) => fetch('/api/attendance/foreman', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token, action: 'approve_bulk',
           year: data.date.year, month: data.date.month,
           days: bulkTargets.map(o => o.day),
+          ackBreakCheck,
         }),
       })
-      const d = await res.json().catch(() => null)
+      let res = await send(false)
+      let d = await res.json().catch(() => null)
+      // 休憩チェックの打刻ミスの疑い（2026-10-15）。確認したら送り直す
+      if (res.status === 409 && isBreakCheckResponse(d)) {
+        if (!(await confirmBreakCheck(d.issues, data.date.month))) { fetchData(); return }
+        res = await send(true)
+        d = await res.json().catch(() => null)
+      }
       if (!res.ok) {
         notify.failed('まとめて確認', d?.error || 'サーバが受け付けませんでした')
       } else if (d?.skipped?.length) {

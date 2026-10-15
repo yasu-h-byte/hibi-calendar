@@ -980,6 +980,12 @@ export async function POST(request: NextRequest) {
         const dateErr = approvalDateError(String(ym), day, todayJstIso())
         if (dateErr) return NextResponse.json({ error: dateErr }, { status: 400 })
       }
+      // 休憩チェックの打刻ミスの疑い（2026-10-15）。確認済み（ackBreakCheck）でなければ止めて一覧を返す
+      {
+        const { breakCheckResponse } = await import('@/lib/break-check.server')
+        const r = await breakCheckResponse(siteId, String(ym), [Number(day)], body.ackBreakCheck)
+        if (r) return r
+      }
       const { setForemanApprovalForDay } = await import('@/lib/attendance')
       // 承認者はログインした本人（2026-10-01。旧: 画面から送られた approvedBy をそのまま記録していた）
       const au = await getApiAuthUser(request)
@@ -1021,6 +1027,12 @@ export async function POST(request: NextRequest) {
       const existing = await getApprovalForDay(siteId, ym, day)
       if (!existing?.foreman) {
         return NextResponse.json({ error: '職長承認が先に必要です' }, { status: 400 })
+      }
+      // 休憩チェックの打刻ミスの疑い（2026-10-15）。最終承認でも同じ点検
+      {
+        const { breakCheckResponse } = await import('@/lib/break-check.server')
+        const r = await breakCheckResponse(siteId, String(ym), [Number(day)], body.ackBreakCheck)
+        if (r) return r
       }
       const { setFinalApprovalForDay } = await import('@/lib/attendance')
       // 承認者はログインした本人（職長承認と同じ・2026-10-01）
