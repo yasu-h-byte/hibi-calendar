@@ -1208,13 +1208,13 @@ export default function StaffAttendancePage() {
         ) : useTimeBased ? (
           /* Time-based input (202605~) */
           <div className="space-y-4">
-            {/* 正しい記録のお願い（2026-10-15 代表）。休憩チェックの付け忘れ・付けすぎで給料がずれるため、登録の前に目立つように出す */}
-            <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4" role="note">
-              <p className="font-bold text-amber-900 inline-flex items-center gap-1.5"><Icon name="alert" size={18} strokeWidth={2.2} />{STAFF_TEXT.recordNoticeTitle.ja}</p>
-              <p className="font-bold text-amber-900 text-sm">{STAFF_TEXT.recordNoticeTitle.vi}</p>
+            {/* 正しい記録のお願い（2026-10-15 代表）。休憩チェックの付け忘れ・付けすぎで給料がずれるため、登録の前に目立つように出す。
+                ベトナム語だけ（代表「スマホに出すのはベトナム語だけで良い」）。日本語は lib/labels.ts に残してある */}
+            <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4" role="note" lang="vi">
+              <p className="font-bold text-amber-900 inline-flex items-center gap-1.5"><Icon name="alert" size={18} strokeWidth={2.2} />{STAFF_TEXT.recordNoticeTitle.vi}</p>
               <ul className="mt-2 space-y-1.5 text-sm text-gray-800 list-disc pl-5">
                 {[STAFF_TEXT.recordNoticeStartEnd, STAFF_TEXT.recordNoticeBreakTaken, STAFF_TEXT.recordNoticeBreakSkipped, STAFF_TEXT.recordNoticeWhy].map((t, i) => (
-                  <li key={i}>{t.ja}<br /><span className="text-gray-600">{t.vi}</span></li>
+                  <li key={i}>{t.vi}</li>
                 ))}
               </ul>
             </div>
