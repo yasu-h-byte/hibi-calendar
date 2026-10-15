@@ -29,6 +29,9 @@ describe('休憩チェックの点検', () => {
     const r = checkBreaksForDay(14, [vn(201, {}), vn(202, {}), vn(203, { b3: 0 })])
     expect(r.map(x => [x.workerId, x.reasons])).toEqual([[203, ['missedAfternoon']]])
   })
+  test('残業が付かない日は出さない（IHI の 7:30〜15:30・昼休憩だけ・実働7h）', () => {
+    expect(checkBreaksForDay(14, [vn(201, { st: '07:30', et: '15:30', b1: 0, b3: 0 }), jp(2, {})])).toEqual([])
+  })
   test('有給・欠勤・現場都合休・時刻なしの日は見ない', () => {
     expect(checkBreaksForDay(14, [
       vn(201, { p: 1, b1: 0, b3: 0 }), vn(202, { r: 1, b1: 0, b3: 0 }), vn(203, { w: 0.6, b1: 0, b3: 0 }),

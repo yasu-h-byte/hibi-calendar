@@ -5,7 +5,9 @@
  * 休憩のチェックを付け忘れると、その分が残業になって払いすぎになり、取っていないのに付けると未払いになる。
  * 承認の前に、打刻ミスの疑いがある人を出す（止めはしない。確認してから承認できる）。
  *
- * 疑いの決まり（同じ現場・同じ日で見る。時刻の入った出勤の日だけ・夜勤のみの日は見ない）:
+ * 疑いの決まり（同じ現場・同じ日で見る。時刻の入った出勤の日だけ・夜勤のみの日は見ない）。
+ * **どれも、その人に残業が付いている（給料が増える）日だけ**出す（2026-10-15 本番のデータで確かめて絞った。
+ *   IHI は 7:30〜15:30・昼休憩だけ・実働7h の働き方で、午前・午後の休憩なしが正しい日が9月だけで約90件あった）:
  *   ① 午前・午後の休憩がどちらもチェックなし（その現場で任意の休憩が両方あるとき）
  *   ② 日本人（時刻の無い人）が出勤していて誰も残業が無いのに、ベトナム人に残業がある
  *   ③ 同じ日のほかのベトナム人の半数以上が取った休憩を、この人だけ取っていない
@@ -79,11 +81,13 @@ export function checkBreaksForDay(day: number, workers: BreakCheckWorker[], work
   for (const w of vn) {
     const e = w.entry as AttendanceEntry
     const ot = calcOvertimeHours(e, ws)
+    // 残業が付かない日は、給料に響かないので出さない（7:30〜15:30 で昼休憩だけ、など正しい働き方がある）
+    if (ot <= 0) continue
     const reasons: BreakIssueReason[] = []
     // ① 任意の休憩が両方あるのに、どちらもチェックなし
     if (morningOpt && afternoonOpt && !e.b1 && !e.b3) reasons.push('noBreaks')
     // ② 日本人が出勤して誰も残業していないのに、この人だけ残業
-    if (ot > 0 && jp.length > 0 && !jpAnyOt) reasons.push('otAlone')
+    if (jp.length > 0 && !jpAnyOt) reasons.push('otAlone')
     // ③ ほかのベトナム人の半数以上が取った休憩を取っていない（①に当たるときは重ねて出さない）
     if (!reasons.includes('noBreaks') && vn.length >= 2) {
       const others = vn.length - 1
