@@ -26,6 +26,7 @@
 
 import RestMismatchBanner from '../components/RestMismatchBanner'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
+import { isBreakCheckResponse, confirmBreakCheck } from '@/lib/break-check-confirm'
 import { notify } from '@/lib/notify'
 import { siteLeaderLabel } from '@/lib/companies'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -229,7 +230,15 @@ export default function ForemanMobilePage() {
       })
       if (res.status === 409) {
         const errData = await res.clone().json().catch(() => null)
-        if (errData?.code === 'LEAVE_OVERDRAFT') {
+        // 休憩チェックの打刻ミスの疑い（承認のとき・2026-10-15）。確認したら ackBreakCheck を付けて送り直す
+        if (isBreakCheckResponse(errData)) {
+          if (!(await confirmBreakCheck(errData.issues, Number(ym.slice(4, 6))))) { fetchGrid(); return false }
+          res = await fetch('/api/attendance/grid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+            body: JSON.stringify({ siteId, ym, ...body, ackBreakCheck: true }),
+          })
+        } else if (errData?.code === 'LEAVE_OVERDRAFT') {
           const b = errData.balance
           // 2026-09-14: 職長には残数超過の上書きを認めない（PC 出面画面・職長トークン画面と同じ）
           if (userRole === 'foreman') {

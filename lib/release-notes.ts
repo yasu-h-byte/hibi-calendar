@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261015_break_check',
+    title: '出面の承認のときに、休憩のチェックの打刻ミスの疑いを知らせるようにしました',
+    content:
+      'ベトナム人スタッフの「午前・午後の休憩がどちらもチェックなし」「日本人は残業なしなのに残業あり」「ほかの人は取った休憩を1人だけ取っていない」日を、出面入力の「確認すること」に出します。'
+      + '職長承認・最終承認のボタンを押したときも確認が出ます。打刻ミスなら時刻と休憩のチェックを直してから承認してください。',
+    category: 'new',
+    publishedAt: '2026-10-15T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', 'approver', 'owner', 'jimu'],
+  },
+  {
     id: 'rn_20261014_time_off',
     title: '「休みの予定」ができました（帰国・有給・欠勤届）',
     content:

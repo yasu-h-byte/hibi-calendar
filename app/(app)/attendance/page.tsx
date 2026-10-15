@@ -35,6 +35,8 @@ import { Icon } from '@/components/ui/Icon'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 import { todayJstIso, todayJstDate } from '@/lib/date-utils'
+import { checkBreaksForDay, breakIssuesMessage, BREAK_ISSUE_LABEL, type BreakIssue } from '@/lib/break-check'
+import type { AttendanceEntry } from '@/types'
 import { postJson } from '@/lib/api-client'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { CALENDAR_REMIND_FROM_DAY, CALENDAR_DEADLINE_DAY } from '@/lib/calendar'
@@ -966,7 +968,8 @@ export default function AttendanceGridPage() {
       const res = await fetch('/api/attendance/grid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action, siteId, ym, day, approvedBy: userId }),
+        // 休憩チェックの点検は送る前にこの画面で済ませている（confirmBreakIssues）ので、サーバーの点検は省く
+        body: JSON.stringify({ action, siteId, ym, day, approvedBy: userId, ackBreakCheck: true }),
       })
       if (res.ok) return null
       const j = await res.json().catch(() => ({}))
@@ -1015,20 +1018,57 @@ export default function AttendanceGridPage() {
       .filter(d => withInput.has(d) && isoOf(d) < todayIso && !localApprovals[d])
   }, [data, workerEntries, subconEntries, localApprovals])
 
+  // ── 休憩チェックの点検（2026-10-15・lib/break-check.ts）──
+  //   承認の前に、ベトナム人の休憩チェックの打刻ミスの疑いを出す。サーバー（承認の API）も同じ決まりで点検する
+  const breakIssuesFor = useCallback((days: number[]): BreakIssue[] => {
+    if (!data) return []
+    const out: BreakIssue[] = []
+    for (const d of days) {
+      const ws = data.workers.map(w => ({
+        workerId: w.id, name: w.name, visa: w.visa,
+        entry: workerEntries[String(w.id)]?.[d] as unknown as AttendanceEntry | undefined,
+      }))
+      out.push(...checkBreaksForDay(d, ws, data.site.workSchedule))
+    }
+    return out
+  }, [data, workerEntries])
+
+  /** 疑いがあれば確認窓を出す。承認してよければ true */
+  const confirmBreakIssues = useCallback(async (days: number[]): Promise<boolean> => {
+    const issues = breakIssuesFor(days)
+    if (issues.length === 0) return true
+    return confirmDialog({
+      title: `休憩のチェックに打刻ミスの疑いがあります（${issues.length}件）`,
+      description: `${breakIssuesMessage(issues, data?.month)}\n\n直す場合は「やめる」を押して、時刻と休憩のチェックを直してから承認してください。`,
+      confirmLabel: '確認したので承認する',
+    })
+  }, [breakIssuesFor, data?.month])
+
+  /** 「確認すること」に出す一覧: 今日までで、最終承認がまだの日 */
+  const breakIssuesMonth = useMemo(() => {
+    if (!data) return [] as BreakIssue[]
+    const todayIso = todayJstIso()
+    const isoOf = (d: number) => `${data.year}-${String(data.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const days = Array.from({ length: data.daysInMonth }, (_, i) => i + 1).filter(d => isoOf(d) <= todayIso && !localFinalApprovals[d])
+    return breakIssuesFor(days)
+  }, [data, breakIssuesFor, localFinalApprovals])
+
   const handleForemanApproveAll = useCallback(async () => {
     if (!data || foremanBulkDays.length === 0) return
     const target = foremanBulkDays
+    if (!(await confirmBreakIssues(target))) return
     setLocalApprovals(prev => { const next = { ...prev }; for (const d of target) next[d] = true; return next })
     const failed = await postApprovalDays('approve_foreman', target)
     if (failed.length > 0) {
       setLocalApprovals(prev => { const next = { ...prev }; for (const f of failed) delete next[f.day]; return next })
       alertApprovalFailures('承認', failed)
     }
-  }, [data, foremanBulkDays, postApprovalDays, alertApprovalFailures])
+  }, [data, foremanBulkDays, postApprovalDays, alertApprovalFailures, confirmBreakIssues])
 
   const handleToggleForemanApproval = useCallback(async (day: number) => {
     const approved = !!localApprovals[day]
     const hadFinal = !!localFinalApprovals[day]
+    if (!approved && !(await confirmBreakIssues([day]))) return
     setLocalApprovals(prev => ({ ...prev, [day]: !approved }))
     // 解除する場合は最終承認も画面上で消す（API側が連動して削除する）
     if (approved) {
@@ -1044,7 +1084,7 @@ export default function AttendanceGridPage() {
       if (approved && hadFinal) setLocalFinalApprovals(prev => ({ ...prev, [day]: true }))
       alertApprovalFailures(approved ? '承認を取り消し' : '承認', [{ day, error: err }])
     }
-  }, [localApprovals, localFinalApprovals, postApproval, alertApprovalFailures])
+  }, [localApprovals, localFinalApprovals, postApproval, alertApprovalFailures, confirmBreakIssues])
 
   const handleFinalApproveAll = useCallback(async () => {
     if (!data) return
@@ -1052,23 +1092,25 @@ export default function AttendanceGridPage() {
     const finalizableDays = Array.from({ length: data.daysInMonth }, (_, i) => i + 1)
       .filter(d => localApprovals[d] && !localFinalApprovals[d])
     if (finalizableDays.length === 0) return
+    if (!(await confirmBreakIssues(finalizableDays))) return
     setLocalFinalApprovals(prev => { const next = { ...prev }; for (const d of finalizableDays) next[d] = true; return next })
     const failed = await postApprovalDays('approve_final', finalizableDays)
     if (failed.length > 0) {
       setLocalFinalApprovals(prev => { const next = { ...prev }; for (const f of failed) delete next[f.day]; return next })
       alertApprovalFailures('最終承認', failed)
     }
-  }, [data, localApprovals, localFinalApprovals, postApprovalDays, alertApprovalFailures])
+  }, [data, localApprovals, localFinalApprovals, postApprovalDays, alertApprovalFailures, confirmBreakIssues])
 
   const handleToggleFinalApproval = useCallback(async (day: number) => {
     const finalApproved = !!localFinalApprovals[day]
+    if (!finalApproved && !(await confirmBreakIssues([day]))) return
     setLocalFinalApprovals(prev => ({ ...prev, [day]: !finalApproved }))
     const err = await postApproval(finalApproved ? 'unapprove_final' : 'approve_final', day)
     if (err) {
       setLocalFinalApprovals(prev => ({ ...prev, [day]: finalApproved }))
       alertApprovalFailures(finalApproved ? '最終承認を取り消し' : '最終承認', [{ day, error: err }])
     }
-  }, [localFinalApprovals, postApproval, alertApprovalFailures])
+  }, [localFinalApprovals, postApproval, alertApprovalFailures, confirmBreakIssues])
 
   // ── Computed: grouped workers ──
 
@@ -1399,6 +1441,7 @@ export default function AttendanceGridPage() {
   else if (nmSubmitted > 0) checkItems.push(`翌月の就業カレンダー 承認待ち ${nmSubmitted}件`)
   if (restDayWarnings.length > 0) checkItems.push(`休日の出勤 ${restDayWarnings.length}件`)
   if (workTypeWarnings.length > 0) checkItems.push(`工種の重複 ${workTypeWarnings.length}件`)
+  if (breakIssuesMonth.length > 0) checkItems.push(`休憩の確認 ${breakIssuesMonth.length}件`)
   if ((data?.restMismatch?.length || 0) > 0) checkItems.push(`休みの区別 ${data!.restMismatch!.length}件`)
   // 退職予定も、この現場の配置の人だけ（2026-10-02 点検: 他の現場の退職予定が全現場の「確認すること」に出ていた）
   const siteRetirements = (data?.upcomingRetirements || []).filter(r => (data?.workers || []).some(w => w.id === r.id && !w.offRoster))
@@ -1515,6 +1558,12 @@ export default function AttendanceGridPage() {
                 tone="orange"
               />
 
+              {/* 休憩チェックの打刻ミスの疑い（2026-10-15・lib/break-check.ts）。承認の前に時刻と休憩のチェックを確かめる */}
+              <AttendanceWarningBanner
+                title="休憩のチェックを確認してください（打刻ミスの疑い）"
+                items={breakIssuesMonth.map(i => ({ workerName: i.workerName, day: i.day, suffix: i.reasons.map(r => r === 'otAlone' ? `${BREAK_ISSUE_LABEL[r]} ${i.overtime}h` : BREAK_ISSUE_LABEL[r]).join('・') }))}
+                tone="warning"
+              />
               {/* 工種の重複（同じ人・同じ日が2つ以上の工種に入っている・2026-09-25） */}
               <AttendanceWarningBanner
                 title="工種の重複あり（両方に入力されています）"

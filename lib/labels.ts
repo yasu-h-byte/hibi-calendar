@@ -156,6 +156,12 @@ export const STAFF_TEXT = {
   breakAm: { ja: '午前休憩', vi: 'Nghỉ sáng' },
   breakPm: { ja: '午後休憩', vi: 'Nghỉ chiều' },
   breakNotTaken: { ja: '未取得', vi: 'Không nghỉ' },
+  // 正しい記録のお願い（2026-10-15 代表。休憩チェックの付け忘れ・付けすぎで給料がずれるため）
+  recordNoticeTitle: { ja: 'じっさいの時間を正しく入れてください', vi: 'Hãy nhập đúng giờ làm thực tế' },
+  recordNoticeStartEnd: { ja: '始業・終業は、じっさいに働きはじめた時間・終わった時間', vi: 'Giờ bắt đầu・kết thúc là giờ thực tế bắt đầu và kết thúc công việc' },
+  recordNoticeBreakTaken: { ja: '休憩を取った日は、かならずチェックを入れる', vi: 'Ngày có nghỉ giải lao thì nhất định phải đánh dấu' },
+  recordNoticeBreakSkipped: { ja: '休憩を取れなかった日だけ、チェックを外す', vi: 'Chỉ bỏ đánh dấu vào ngày không được nghỉ' },
+  recordNoticeWhy: { ja: 'まちがえると、給料がまちがいます', vi: 'Nếu nhập sai, tiền lương sẽ bị sai' },
   // 有給・帰国の申請
   chooseDate: { ja: '日付を選択してください', vi: 'Hãy chọn ngày' },
   expiry: { ja: '期限', vi: 'Hạn' },
