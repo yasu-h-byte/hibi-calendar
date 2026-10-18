@@ -9,6 +9,7 @@ import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot, type PayrollValidationIssue } from '@/lib/payroll-validator'
+import { isMonthEndedJst } from '@/lib/date-utils'
 import { summarizeOpenIssues, type PayNoteAck } from '@/lib/pay-note-ack'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import ConfirmReminder from './components/ConfirmReminder'
@@ -728,11 +729,14 @@ function MonthlyPageInner() {
   //   4月以前は compute が全員を旧ルールで計算するため、新ルール検算を当てると
   //   構成要素不一致・所定外労働¥0 等の誤検知が大量に出る（給与計算自体は正しい）。
   //   → ym < '202605'（旧ルール月）は検算対象外にして空結果を返す。
+  // 2026-10-18 代表: 自動検算・注意点は、月が終わって入力が出そろってから（翌月になってから）出す。
+  //   月の途中は、まだ入っていない日のせいで注意点が出て、判断できない（週の所定時間の押し上げ など）
+  const monthEnded = isMonthEndedJst(ym)
   const validationOnTab = useMemo(() => {
-    const targets = ym >= '202605' ? tabFilteredWorkers : []
+    const targets = ym >= '202605' && monthEnded ? tabFilteredWorkers : []
     // 「確認した」が付いた注意点は外す（acked に分けて持つ・2026-10-05）
     return summarizeOpenIssues(validatePayrolls(targets as unknown as PayrollSnapshot[]).issues, noteAcks)
-  }, [tabFilteredWorkers, ym, noteAcks])
+  }, [tabFilteredWorkers, ym, noteAcks, monthEnded])
 
   const filteredWorkers = useMemo(() => {
     if (!showAnomalyOnly) return tabFilteredWorkers
@@ -1177,7 +1181,7 @@ function MonthlyPageInner() {
             const confRows = Object.values(staffConfirms).filter(c => c.org === org)
             const confCount = (st: StaffConfirmInfo['state']) => confRows.filter(c => c.state === st).length
             const auditTargets = ws.filter(w => w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
-            const auditAll = ym >= '202605' ? summarizeOpenIssues(validatePayrolls(ws as unknown as PayrollSnapshot[]).issues, noteAcks) : null
+            const auditAll = ym >= '202605' && monthEnded ? summarizeOpenIssues(validatePayrolls(ws as unknown as PayrollSnapshot[]).issues, noteAcks) : null
             const diff = data.snapshotDiffs?.find(d => d.org === org)
             const ymLabel = `${Number(ym.slice(4, 6))}月分`
             return (
@@ -1195,7 +1199,8 @@ function MonthlyPageInner() {
                   stale: confCount('stale'), issue: confCount('issue'), waiting: confCount('waiting'), outside: confCount('outside'),
                   failed: staffConfirmsFailed,
                 }}
-                audit={auditAll ? { target: auditTargets.length, affected: auditAll.affectedWorkerIds.length } : null}
+                audit={auditAll ? { target: auditTargets.length, affected: auditAll.affectedWorkerIds.length }
+                  : ym >= '202605' && !monthEnded ? { target: auditTargets.length, affected: 0, notEnded: true } : null}
                 changedAfterLock={diff?.count || 0}
                 canClose={canResolveConfirm}
                 busy={lockToggling}
@@ -1344,7 +1349,7 @@ function MonthlyPageInner() {
       {/* 2026-06-12 (監査 Sprint2-C): 異常0件でも検算の実施状況を常時表示。
           旧: 異常時のみバナー → 「検算対象外（日本人・フン・完全月給）も含めて全員OK」と
           誤認するリスクがあった。対象/対象外の人数を明示する */}
-      {!loading && data && validationResult.total === 0 && view === 'table' && (() => {
+      {!loading && data && validationResult.total === 0 && view === 'table' && monthEnded && (() => {
         const targets = tabFilteredWorkers.filter(w =>
           w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
         const exempt = tabFilteredWorkers.length - targets.length

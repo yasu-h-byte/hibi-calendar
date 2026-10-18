@@ -146,3 +146,19 @@ describe('稼働日未入力の警告', () => {
     })
   })
 })
+
+describe('月が終わったか（自動検算・注意点を出すか・2026-10-18）', () => {
+  afterEach(() => { vi.useRealTimers() })
+  test('10/18 に開くと、9月は終わった月・10月は途中', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-18T03:00:00Z'))
+    const { isMonthEndedJst } = await import('@/lib/date-utils')
+    expect(isMonthEndedJst('202609')).toBe(true)
+    expect(isMonthEndedJst('202610')).toBe(false)
+    expect(isMonthEndedJst('2026-11')).toBe(false)
+  })
+  test('11/1 の日本時間 0時台（UTC ではまだ10/31）でも、10月は終わった月', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-31T16:30:00Z'))
+    const { isMonthEndedJst } = await import('@/lib/date-utils')
+    expect(isMonthEndedJst('202610')).toBe(true)
+  })
+})

@@ -41,26 +41,30 @@ export async function GET(request: NextRequest) {
       const prevYm = addMonthsSafe(todayIsoB, -1).slice(0, 7).replace('-', '')
       const prevClosed = isMonthLockedInLocks(main.locks, prevYm, 'hibi') && isMonthLockedInLocks(main.locks, prevYm, 'hfu')
       const checkYm = prevClosed ? ym : prevYm
-      const att = await getAttData(checkYm)
-      const prescribedDays = main.workDays[checkYm] || 0
-      const siteWorkDaysMap = main.siteWorkDays?.[checkYm] || {}
-      const hasCalendarData = Object.keys(siteWorkDaysMap).length > 0
-      const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
-      // 2026-08-27 修正（給与総点検）: /api/monthly と同じ引数（カレンダー・帰国情報）で
-      //   計算しないと、境界月でバッジ件数と月次画面のバナー件数が食い違う
-      const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
-      const { getAllActiveHomeLeaves } = await import('@/lib/homeLeave')
-      const cals = await getMonthlyCalendars(`${checkYm.slice(0, 4)}-${checkYm.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
-      const calendarDaysMap: Record<string, Record<string, string>> = {}
-      for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
-      const homeLeaves = await getAllActiveHomeLeaves()
-      const result = computeMonthly(main, att.d, att.sd, checkYm, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
-      const validation = validatePayrolls(result.workers as unknown as PayrollSnapshot[])
-      // 「確認した」が付いた注意点は数えない（2026-10-05・lib/pay-note-ack.ts。確認の記録は60秒キャッシュ）
-      const { summarizeOpenIssues } = await import('@/lib/pay-note-ack')
-      const { loadPayNoteAcks } = await import('@/lib/pay-note-ack-server')
-      const acks = validation.total > 0 ? await loadPayNoteAcks(checkYm).catch(() => []) : []
-      monthlyAnomalyCount = summarizeOpenIssues(validation.issues, acks).affectedWorkerIds.length
+      // 月の途中は数えない（月が終わって入力が出そろってから・2026-10-18 代表）。両社とも前月を締めたら、今月が終わるまで 0
+      const { isMonthEndedJst } = await import('@/lib/date-utils')
+      if (isMonthEndedJst(checkYm)) {
+        const att = await getAttData(checkYm)
+        const prescribedDays = main.workDays[checkYm] || 0
+        const siteWorkDaysMap = main.siteWorkDays?.[checkYm] || {}
+        const hasCalendarData = Object.keys(siteWorkDaysMap).length > 0
+        const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
+        // 2026-08-27 修正（給与総点検）: /api/monthly と同じ引数（カレンダー・帰国情報）で
+        //   計算しないと、境界月でバッジ件数と月次画面のバナー件数が食い違う
+        const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
+        const { getAllActiveHomeLeaves } = await import('@/lib/homeLeave')
+        const cals = await getMonthlyCalendars(`${checkYm.slice(0, 4)}-${checkYm.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
+        const calendarDaysMap: Record<string, Record<string, string>> = {}
+        for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
+        const homeLeaves = await getAllActiveHomeLeaves()
+        const result = computeMonthly(main, att.d, att.sd, checkYm, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
+        const validation = validatePayrolls(result.workers as unknown as PayrollSnapshot[])
+        // 「確認した」が付いた注意点は数えない（2026-10-05・lib/pay-note-ack.ts。確認の記録は60秒キャッシュ）
+        const { summarizeOpenIssues } = await import('@/lib/pay-note-ack')
+        const { loadPayNoteAcks } = await import('@/lib/pay-note-ack-server')
+        const acks = validation.total > 0 ? await loadPayNoteAcks(checkYm).catch(() => []) : []
+        monthlyAnomalyCount = summarizeOpenIssues(validation.issues, acks).affectedWorkerIds.length
+      }
     } catch (e) {
       console.warn('[sidebar-badges] monthly check failed:', e)
     }

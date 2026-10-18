@@ -135,6 +135,14 @@ export function currentYmJst(): string {
   return todayJstIso().slice(0, 7).replace('-', '')
 }
 
+/**
+ * その月（'YYYYMM'）が日本時間で終わったか（今日が翌月以降か）。
+ * 給与の自動検算・注意点は、入力が出そろった月だけ出す（2026-10-18 代表「当該月が全部入力終わる（翌月になってから）でよくない？」）
+ */
+export function isMonthEndedJst(ym: string): boolean {
+  return ym.replace('-', '') < currentYmJst()
+}
+
 /** 日本時間の今年（1/1 0〜9時に前年にならない） */
 export function currentYearJst(): number {
   return Number(todayJstIso().slice(0, 4))
