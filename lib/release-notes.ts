@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261018_monthly_notes_after_month',
+    title: '月次集計の「異常・注意点」と自動検算は、月が終わってから出すようにしました',
+    content:
+      '月の途中は入力が出そろっていないため、注意点が出ても判断できませんでした。今月を開いたときは「月が終わってから検算します」と出て、翌月になってから注意点の帯・自動検算・メニューの件数が出ます。',
+    category: 'info',
+    publishedAt: '2026-10-18T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261015_break_check',
     title: '出面の承認のときに、休憩のチェックの打刻ミスの疑いを知らせるようにしました',
     content:

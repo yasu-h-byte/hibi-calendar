@@ -92,7 +92,8 @@ export interface CloseCardProps {
   /** 本人確認の対象者の数と状態ごとの人数（状態はサーバが締めと同じ判定で決める） */
   confirm: { target: number; ok: number; none: number; stale: number; issue: number; waiting: number; outside: number; failed?: boolean }
   /** 自動検算の対象人数と、異常のある人数（null＝検算しない月） */
-  audit: { target: number; affected: number } | null
+  /** notEnded = 月の途中（自動検算は月が終わってから・2026-10-18） */
+  audit: { target: number; affected: number; notEnded?: boolean } | null
   /** 締めたあとに支給額が変わった人数 */
   changedAfterLock: number
   canClose: boolean
@@ -151,7 +152,9 @@ export function CloseCard(p: CloseCardProps) {
         ) : (
           <Check state="warn" label="本人確認" note={confirmNote} action="一覧で見る" onAction={p.onShowConfirm} />
         )}
-        {p.audit ? (
+        {p.audit?.notEnded ? (
+          <Check state="none" label="自動検算" note="月が終わってから検算します（月の途中は入力が出そろっていないため）" />
+        ) : p.audit ? (
           <Check
             state={p.audit.affected === 0 ? 'ok' : 'warn'}
             label="自動検算"
