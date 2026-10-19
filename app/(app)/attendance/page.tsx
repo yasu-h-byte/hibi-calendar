@@ -951,10 +951,12 @@ export default function AttendanceGridPage() {
 
   // ── Approval handlers（楽観的UI） ──
 
-  // 職長承認は「該当現場の職長」のみ操作可。adminは閲覧のみ。
+  // 職長承認は「該当現場の職長」が操作する。
   // 応援現場は事業責任者も職長承認できる（入力〜承認をまとめて見る・2026-09-30）
   //   職長でない人が職長に登録されている現場は、政仁さんが職長承認を代行する（その人には押させない・2026-10-01 代表）
+  //   職長の休みに備えて、事業責任者（と代表）は全現場で職長に代わって職長承認できる（2026-10-19 代表）
   const canForemanApprove = (userRole === 'foreman' && userForemanSites.includes(siteId) && !data?.proxyApproval)
+    || (!!userRole && userRole !== 'foreman' && roleCan(permRoleOf({ role: userRole }), 'attendance.foremanApprove'))
     || (!!data?.isSupportSite && !!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport'))
     || (!!data?.proxyApproval && !!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.foremanApproveProxy'))
   const canFinalize = userRole === 'admin' || userRole === 'approver'
