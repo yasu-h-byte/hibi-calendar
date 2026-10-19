@@ -114,3 +114,15 @@ describe('さかのぼり入力（2026-10-02 代表決定）', () => {
     expect(roleCan('officer', 'attendance.backfill')).toBe(false)
   })
 })
+
+describe('職長の休みの代わり（2026-10-19 代表）', () => {
+  test('事業責任者は全現場の出面の入力・変更と、職長に代わっての職長承認ができる', () => {
+    expect(roleCan('approver', 'attendance.input')).toBe(true)
+    expect(roleCan('approver', 'attendance.foremanApprove')).toBe(true)
+  })
+  test('役員（政仁さん以外）・事務は職長承認できない', () => {
+    expect(roleCan('officer', 'attendance.foremanApprove')).toBe(false)
+    expect(roleCan('officer', 'attendance.input')).toBe(false)
+    expect(roleCan('jimu', 'attendance.foremanApprove')).toBe(false)
+  })
+})

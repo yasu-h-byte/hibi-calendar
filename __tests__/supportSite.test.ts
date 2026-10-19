@@ -22,9 +22,9 @@ describe('応援現場の判定', () => {
   })
 })
 describe('応援現場の出面入力の権限', () => {
-  test('事業責任者は応援現場だけ入力できる（自社現場の入力権限は無い）', () => {
+  test('事業責任者は応援現場も自社現場も入力できる（2026-10-19 全現場に広げた）', () => {
     expect(roleCan('approver', 'attendance.inputSupport')).toBe(true)
-    expect(roleCan('approver', 'attendance.input')).toBe(false)
+    expect(roleCan('approver', 'attendance.input')).toBe(true)
     expect(roleCan('foreman', 'attendance.inputSupport')).toBe(false)
   })
 })

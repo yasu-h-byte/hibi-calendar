@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261019_approver_all_sites',
+    title: '政仁さんが、全現場の出面の入力と職長承認をできるようにしました',
+    content:
+      '職長が休みのときに、その現場の出面が入らない・承認できないことがないように、政仁さんは全現場で出面の入力・変更と、職長に代わっての職長承認ができます。PCの出面入力で現場を選ぶと、入力欄と職長承認の行が押せます。職長がいる日は、これまでどおり職長が行います。',
+    category: 'new',
+    publishedAt: '2026-10-19T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['approver', 'owner'],
+  },
+  {
     id: 'rn_20261018_monthly_notes_after_month',
     title: '月次集計の「異常・注意点」と自動検算は、月が終わってから出すようにしました',
     content:

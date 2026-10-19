@@ -60,11 +60,14 @@ export const CAPABILITIES = {
   'dashboard.view':          { group: '毎日', label: 'ダッシュボード', roles: ALL_OFFICE },
   'attendance.view':         { group: '毎日', label: '出面を見る', roles: ['foreman', ...ALL_OFFICE] },
   // 事務は入力漏れのフォローと過去日の修正（docs/manual-morita.md §3-1）。職長承認は職長が担当現場で行う
-  'attendance.input':        { group: '毎日', label: '出面の入力（職長は担当現場・事務は漏れのフォローと修正）', roles: ['foreman', 'jimu', 'owner'] },
-  'attendance.foremanApprove': { group: '毎日', label: '出面の職長承認（担当現場）', roles: ['foreman', 'owner'] },
+  // 2026-10-19 代表: 職長が長く休む（白戸職長の1週間の休みで IHI の入力・承認が止まった）ときのため、
+  //   事業責任者（政仁さん）は全現場の出面の入力・変更と、職長に代わっての職長承認ができる。
+  //   職長承認と最終承認の両方を政仁さんが押せるが、職長がいるときは職長が行う運用（代わりは休みのときだけ）
+  'attendance.input':        { group: '毎日', label: '出面の入力（職長は担当現場・事業責任者は全現場・事務は漏れのフォローと修正）', roles: ['foreman', 'jimu', 'approver', 'owner'] },
+  'attendance.foremanApprove': { group: '毎日', label: '出面の職長承認（職長は担当現場・事業責任者は職長に代わって全現場）', roles: ['foreman', 'approver', 'owner'] },
   // 2026-10-02 代表決定: 昨日までの日の出面を、さかのぼって入力・修正できる（代表と事業責任者＝政仁さん）。
   //   本人のスマホ入力が無い日の出勤も入れられる（外国人スタッフの「出勤は本人の申告から」canAdminEditEntry の例外）。
-  //   政仁さんは attendance.input を持たないが、昨日までの日なら入力のある日の上書き・削除もできる（同日 代表判断で広げた）。当日は本人と職長
+  //   2026-10-19 から政仁さんは attendance.input も持つ（全現場の入力・変更）。この権限は「本人の入力が無い日の出勤」を入れられる例外として残る
   'attendance.backfill':     { group: '毎日', label: '昨日までの出面を、さかのぼって入力・修正（本人の入力が無い日の出勤も）', roles: ['approver', 'owner'] },
   // 工種（鉄骨・仮設など）の決定は職長と事業責任者（代表決定 2026-09-28）。スタッフ本人には選ばせない
   'attendance.inputSupport': { group: '毎日', label: '応援現場の出面の入力・職長承認（一括入力・配置・運転の記録）', roles: ['approver', 'owner'] },
