@@ -11,7 +11,7 @@
  * クライアント側で 5分キャッシュする想定。
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { siteNeedsCalendar } from '@/lib/site-hierarchy'
+import { sitesNeedingCalendar } from '@/lib/site-hierarchy'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
@@ -71,18 +71,19 @@ export async function GET(request: NextRequest) {
 
     // ── カレンダー: 未承認の月数 (来月のみチェック) ──
     // 2026-06-XX 修正 (運用方針): 翌月分の確定は前月25日以降。
-    //   アラートは確定期限の 1週間前 = 18日 以降のみ表示。
+    //   アラートは翌月1日の1週間前 = 25日 以降のみ表示（2026-10-19 代表。旧は18日から）。
     //   それ以前は「まだ確定タイミングではない」ので静かに。
     let calendarPendingCount = 0
     try {
       const todayDay = now.getDate()
-      // 予告は 18日から（= 25日の期限の1週間前・lib/calendar.ts CALENDAR_REMIND_FROM_DAY）
+      // 25日から（翌月1日の1週間前・lib/calendar.ts CALENDAR_REMIND_FROM_DAY）
       const { CALENDAR_REMIND_FROM_DAY } = await import('@/lib/calendar')
       if (todayDay >= CALENDAR_REMIND_FROM_DAY) {
         const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
         const nextYm = `${nextMonth.getFullYear()}${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
         const nextSiteWorkDays = main.siteWorkDays?.[nextYm] || {}
-        const activeSites = (main.sites || []).filter(s => !s.archived && !(s as { parentId?: string }).parentId && siteNeedsCalendar(s as never, nextYm) && s.end >= `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`)
+        // 工期の終了（end）は見ない（終了が空欄の出光・川崎が数えられていなかった・2026-10-19）。通知ベルと同じ決まり
+        const activeSites = sitesNeedingCalendar(main.sites || [], nextYm)
         calendarPendingCount = activeSites.filter(s => !nextSiteWorkDays[s.id]).length
       }
     } catch (e) {
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest) {
       generatedAt: now.toISOString(),
       badges: {
         monthly: monthlyAnomalyCount,    // 月次集計: 検算違反スタッフ数
-        calendar: calendarPendingCount,  // カレンダー: 未承認サイト数 (18日以降のみ)
+        calendar: calendarPendingCount,  // カレンダー: 未承認サイト数 (25日以降のみ)
         leave: leaveAlertCount,           // 休暇管理: 常に 0 (アラート不要方針)
         feedback: feedbackUnread,         // 困ったこと・要望: 自分あての未読
       },

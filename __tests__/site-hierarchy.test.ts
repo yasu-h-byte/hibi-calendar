@@ -179,3 +179,25 @@ describe('siteBillingName（親現場の「工種を選ばない日の呼び方�
     expect(siteBillingName(sites, 'q')).toBe('笹塚')
   })
 })
+
+import { sitesNeedingCalendar, SPOT_CALENDAR_FROM } from '@/lib/site-hierarchy'
+import { CALENDAR_REMIND_FROM_DAY } from '@/lib/calendar'
+
+describe('翌月の就業カレンダーを数える現場（2026-10-19）', () => {
+  const all = [
+    { id: 'sasazuka', start: '2023-12', end: '2027-03' },
+    { id: 'idemitsu', start: '2026-10-01', end: '' },             // 終了が空欄でも数える（旧は外れていた）
+    { id: 'old', start: '2024-01', end: '2026-06' },              // 終了日は見ない（延長しても直されないため。終わったらアーカイブ）
+    { id: 'kasai', start: '2026-10-01', calendarFromYm: SPOT_CALENDAR_FROM }, // スポット現場は数えない
+    { id: 'kawasaki_tekko', start: '2026-10-01', parentId: 'kawasaki' },     // 工種サイトは親のカレンダー
+    { id: 'archived', start: '2023-01', archived: true },
+    { id: 'future', start: '2026-12-01' },                        // まだ始まっていない
+  ]
+  test('親現場・アーカイブ外・始まっている・スポットでない現場だけ', () => {
+    expect(sitesNeedingCalendar(all, '202611').map(s => s.id)).toEqual(['sasazuka', 'idemitsu', 'old'])
+    expect(sitesNeedingCalendar(all, '2026-11').map(s => s.id)).toEqual(['sasazuka', 'idemitsu', 'old'])
+  })
+  test('未承認のアラートは25日から（翌月1日の1週間前）', () => {
+    expect(CALENDAR_REMIND_FROM_DAY).toBe(25)
+  })
+})

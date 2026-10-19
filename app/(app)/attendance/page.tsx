@@ -245,7 +245,7 @@ export default function AttendanceGridPage() {
   // ym 切替には依存させず、今日の日付ベースで一度だけチェック。
   useEffect(() => {
     if (!password) return
-    // 予告は 18日から（サイドバーと同じ・lib/calendar.ts CALENDAR_REMIND_FROM_DAY）。日付は日本時間
+    // 25日から（サイドバーと同じ・lib/calendar.ts CALENDAR_REMIND_FROM_DAY・2026-10-19 代表。旧は18日）。日付は日本時間
     //   旧: 「月末まで7日」でブラウザの日付を使い、サイドバー（18日）・ベル（25日）とばらばらだった（2026-10-02 点検）
     const today = todayJstDate()
     if (today.getDate() < CALENDAR_REMIND_FROM_DAY) {
