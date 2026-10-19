@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261019_calendar_badge',
+    title: '就業カレンダーの「未承認」の件数は、25日から出すようにしました',
+    content:
+      '翌月のカレンダーが、翌月1日の1週間前（25日）を過ぎても承認まで済んでいない現場の数を、メニューとダッシュボードに出します。これまでは18日から出ていました。また、工期の終わりが空欄の現場（出光・川崎）が数えられていなかったのを直しました。スポット現場（葛西）はカレンダーを作らないので数えません。',
+    category: 'fix',
+    publishedAt: '2026-10-19T15:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261019_approver_all_sites',
     title: '政仁さんが、全現場の出面の入力と職長承認をできるようにしました',
     content:

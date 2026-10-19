@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { siteNeedsCalendar } from '@/lib/site-hierarchy'
+import { sitesNeedingCalendar } from '@/lib/site-hierarchy'
 import { checkApiAuth, getApiAuthUser, approvingForemenOfSite, callerCan } from '@/lib/auth'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { mergeAnnouncements } from '@/lib/release-notes'
@@ -458,7 +458,7 @@ export async function GET(request: NextRequest) {
 
         // 工種サイトは親現場のカレンダーを使うので、作成期限の対象から外す（2026-09-15）
         //   まだ始まっていない現場（工期の開始が翌月より後）も対象外（2026-09-21）
-        const activeSites = main.sites.filter(s => !s.archived && !(s as { parentId?: string }).parentId && siteNeedsCalendar(s as never, nextYmDashed))
+        const activeSites = sitesNeedingCalendar(main.sites, nextYmDashed)
         const calQ = query(
           collection(db, 'siteCalendar'),
           where('ym', '==', nextYmDashed)

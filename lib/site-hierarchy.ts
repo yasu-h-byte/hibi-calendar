@@ -73,6 +73,18 @@ export function siteNeedsCalendar(
   return !/^\d{6}$/.test(n) || n >= from
 }
 
+/**
+ * その月に就業カレンダーを作る現場（親現場だけ・アーカイブ除く・{@link siteNeedsCalendar}）。2026-10-19。
+ * サイドバーの件数（翌月の未承認）と通知ベル（作成期限）が同じ決まりで数えるための1か所。
+ * 工期の終了（end）は見ない（{@link isSiteStartedByMonth} の注記どおり。終わった現場はアーカイブで外す）。
+ *   旧: サイドバーの件数だけ `s.end >= 翌月` で絞っていて、終了が空欄の現場（出光・川崎）が数えられていなかった
+ */
+export function sitesNeedingCalendar<T extends { archived?: boolean; parentId?: string; start?: string; calendarFromYm?: string }>(
+  sites: T[], ym: string,
+): T[] {
+  return sites.filter(s => !s.archived && !s.parentId && siteNeedsCalendar(s, ym))
+}
+
 /** 親現場の工種サイト一覧（アーカイブを含むかは呼び出し側で絞る） */
 export function workTypeSitesOf<T extends HierarchySite>(sites: T[], parentId: string): T[] {
   return sites.filter(s => s.parentId === parentId)
