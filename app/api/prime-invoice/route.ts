@@ -28,7 +28,7 @@ import { signedReadUrl, deleteFile, deleteFilesWithPrefix, downloadFile, uploadB
 import { extractPdfLines } from '@/lib/pdf-text.server'
 import {
   PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_FILES, PRIME_INVOICE_DOC_ID_RE,
-  looksLikeGcStatement, looksLikeMemo, parseGcStatement, parseMemo, assembleSheets, aggregatePrimeManDays, comparePrimeManDays,
+  looksLikeGcStatement, looksLikeMemo, parseGcStatement, parseMemo, assembleSheets, aggregatePrimeManDays, checkPrimeOverall, memoManDayRows,
   maskPrimeBundleForViewer, sanitizeSheetEdit, recomputeSheet, primePeriodOf, parseRatioPercent, comparePrimeWithRemittance, PRIME_INVOICE_RATIO,
   type PrimeRemittanceComparison,
   type PrimeInvoiceFile, type PrimeInvoiceBundle, type PrimeSheet, type GcStatement, type MemoParsed,
@@ -81,9 +81,12 @@ async function buildCheck(main: MainData, b: PrimeInvoiceBundle) {
   const manDays = aggregatePrimeManDays(main, att.d, att.sd, familyIds, b.ym)
   const memoSheetIndex = b.sheets.findIndex(s => s.memo)
   const memo = memoSheetIndex >= 0 ? b.sheets[memoSheetIndex].memo : null
-  const rows = comparePrimeManDays(memo, manDays)
+  // 主役は全枚の合計 vs 出面の総人工 × 単価。控除計算書の内訳（手間契約1本分）は参考（2026-10-20 代表）
+  const overall = checkPrimeOverall(b.sheets, manDays)
+  const memoRows = memoManDayRows(memo)
+  const memoTrade = memoSheetIndex >= 0 ? b.sheets[memoSheetIndex].tradeName : ''
   const approval = await primeApprovalGap(main, b.siteId, manDays.activeDays)
-  return { manDays, rows, memoSheetIndex, approval }
+  return { manDays, overall, memoRows, memoTrade, memoSheetIndex, approval }
 }
 
 /** ファイルを読み取り、枚を組み立てる（commit・removeFile で共通） */

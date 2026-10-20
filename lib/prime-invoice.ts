@@ -684,43 +684,58 @@ export function aggregatePrimeManDays(
   return { period: { from: p.from, to: p.to }, activeDays, tobiDays, tobiOtH, dokoDays, dokoOtH, rows: list, rates, amount }
 }
 
-export interface PrimeCheckRow {
-  label: string
-  /** 山岡のメモ（大林組への請求額の内訳）の値 */
-  memo: number | null
-  /** 出面の値 */
-  dedura: number
-  diff: number | null
-  unit: '人' | 'H' | '円'
+/**
+ * 出面との検算（2026-10-20 代表: 控除計算書の人工は手間契約1本分だけなので、出面全体とは比べない）。
+ * 主役は「大林組への請求額の全枚の合計」と「出面の総人工 × 常用単価」の差。出来高払いの工種（足場など）は人工と1対1ではないので目安。
+ */
+export interface PrimeOverallCheck {
+  /** 大林組への請求額（今回請求金額計・税抜）の全枚の合計 */
+  gcTotal: number
+  sheetCount: number
+  /** 出面ベースの額（人工 × 常用単価 ＋ 残業h × 残業単価・税抜） */
+  deduraAmount: number
+  /** 出面 − 請求額 */
+  diff: number
+  /** diff ÷ 請求額（請求額が 0 なら null） */
+  diffRate: number | null
+  tobiDays: number
+  dokoDays: number
+  totalDays: number
+  tobiOtH: number
+  dokoOtH: number
+  /** 請求額合計 ÷ 総人工（総人工が 0 なら null） */
+  perManDay: number | null
+  /** ok = 3% 以内 ／ warn = 10% 以内 ／ bad = それ以上 ／ none = 比べられない */
+  tone: 'ok' | 'warn' | 'bad' | 'none'
 }
 
-/** メモの内訳（鳶工 182.25人・残業 8H・土工 214人・残業 120H）と出面の人工を並べる */
-export function comparePrimeManDays(memo: MemoParsed | null, agg: PrimeManDays): PrimeCheckRow[] {
-  const find = (item: string, unit: string, nth = 0) => {
-    const xs = (memo?.gcLines || []).filter(l => l.item === item && l.unit.toUpperCase() === unit.toUpperCase())
-    return xs[nth]
+export function checkPrimeOverall(sheets: { gcAmount: number }[], agg: PrimeManDays): PrimeOverallCheck {
+  const gcTotal = sheets.reduce((t, s) => t + Math.round(s.gcAmount), 0)
+  const totalDays = round2(agg.tobiDays + agg.dokoDays)
+  const diff = agg.amount - gcTotal
+  const diffRate = gcTotal > 0 ? diff / gcTotal : null
+  const tone: PrimeOverallCheck['tone'] = diffRate === null || totalDays <= 0 ? 'none' : Math.abs(diffRate) <= 0.03 ? 'ok' : Math.abs(diffRate) <= 0.10 ? 'warn' : 'bad'
+  return {
+    gcTotal, sheetCount: sheets.length, deduraAmount: agg.amount, diff, diffRate,
+    tobiDays: agg.tobiDays, dokoDays: agg.dokoDays, totalDays, tobiOtH: agg.tobiOtH, dokoOtH: agg.dokoOtH,
+    perManDay: totalDays > 0 ? Math.round(gcTotal / totalDays) : null, tone,
   }
-  // 残業は「鳶工の次」「土工の次」で並ぶ。順番で鳶/土工に割り当てる
-  const ot: MemoLine[] = []
+}
+
+/** 控除計算書の「大林組への請求額」の内訳（手間契約の分だけ・参考表示用）。残業は「鳶の次」「土工の次」の順で割り当てる */
+export interface PrimeMemoRow { label: string; qty: number; unit: '人' | 'H'; rate: number; amount: number }
+
+export function memoManDayRows(memo: MemoParsed | null): PrimeMemoRow[] {
+  if (!memo) return []
+  const rows: PrimeMemoRow[] = []
   let cur: '鳶' | '土工' | null = null
-  const otBy: Record<'鳶' | '土工', MemoLine | undefined> = { 鳶: undefined, 土工: undefined }
-  for (const l of memo?.gcLines || []) {
-    if (l.item === '鳶工' || l.item === '鳶') cur = '鳶'
-    else if (l.item === '土工') cur = '土工'
-    else if (l.item === '残業') { ot.push(l); if (cur && !otBy[cur]) otBy[cur] = l }
+  for (const l of memo.gcLines) {
+    if (l.item === '鳶工' || l.item === '鳶') { cur = '鳶'; rows.push({ label: '鳶 人工', qty: l.qty, unit: '人', rate: l.rate, amount: l.amount }) }
+    else if (l.item === '土工') { cur = '土工'; rows.push({ label: '土工 人工', qty: l.qty, unit: '人', rate: l.rate, amount: l.amount }) }
+    else if (l.item === '残業') rows.push({ label: `${cur || '鳶'} 残業`, qty: l.qty, unit: 'H', rate: l.rate, amount: l.amount })
+    else if (l.item.startsWith('値引')) rows.push({ label: '値引き', qty: 0, unit: '人', rate: 0, amount: l.amount })
   }
-  const tobi = find('鳶工', '人') || find('鳶', '人')
-  const doko = find('土工', '人')
-  const row = (label: string, m: number | null | undefined, d: number, unit: PrimeCheckRow['unit']): PrimeCheckRow => ({
-    label, memo: m ?? null, dedura: d, diff: m === null || m === undefined ? null : round2(d - m), unit,
-  })
-  return [
-    row('鳶 人工', tobi ? tobi.qty : null, agg.tobiDays, '人'),
-    row('鳶 残業', otBy['鳶'] ? otBy['鳶'].qty : null, agg.tobiOtH, 'H'),
-    row('土工 人工', doko ? doko.qty : null, agg.dokoDays, '人'),
-    row('土工 残業', otBy['土工'] ? otBy['土工'].qty : null, agg.dokoOtH, 'H'),
-    row('金額（税抜）', memo ? memo.gcTotal : null, agg.amount, '円'),
-  ]
+  return rows
 }
 
 // ─────────────────────────────────────────────
