@@ -9,6 +9,12 @@
 import type { PrimeInvoiceBundle, PrimeSheet } from '@/lib/prime-invoice'
 
 const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
+
+/** 今回請求額の字の大きさ。桁数（「¥」「,」込みの文字数）で縮める: 〜11文字は元の大きさ、12〜13文字は小、14文字〜は極小 */
+export function totalAmtClass(total: number): string {
+  const n = yen(total).length
+  return n >= 14 ? 'prime-total-amt prime-amt-xs' : n >= 12 ? 'prime-total-amt prime-amt-sm' : 'prime-total-amt'
+}
 const num = (v: number) => Math.round(v).toLocaleString()
 /** 令和の年・月・日（マス目に入れる） */
 function reiwaParts(iso: string): { y: string; m: string; d: string } {
@@ -71,7 +77,7 @@ export function PrimeInvoiceSheetPage({ b, s, pageNo, pages }: { b: PrimeInvoice
                 <span className="prime-date-cell">{reiwaParts(b.issueDate || b.invoiceDate).m}</span><span>月</span>
                 <span className="prime-date-cell">{reiwaParts(b.issueDate || b.invoiceDate).d}</span><span>日</span>
               </div>
-              <div className="prime-total-box"><span className="prime-total-label">今回請求額</span><span className="prime-total-amt">{yen(s.total)}</span></div>
+              <div className="prime-total-box"><span className="prime-total-label">今回請求額</span><span className={totalAmtClass(s.total)}>{yen(s.total)}</span></div>
             </div>
           </div>
 
@@ -185,100 +191,104 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         /* 元の請求書（山岡 2023.09版・A4横）を 96dpi で測った寸法に合わせる（2026-10-20 代表「余白や文字・枠の大きさも元に寄せる」）。
            左右の列: 左 169mm・間 9mm・右 98mm。上の余白 23mm・左 12.5mm・右 7mm。各枠の高さは px（印刷も 96dpi の px で同じ）。
            Chrome では td の height が行の高さそのもの（padding は足されない）。行の高さは元の罫線の間隔（明細 23.5px・税 24px・注文 20px など）に合わせる */
-        /* line-height は必ずここで決める（画面の親の 24px を継ぐと、枠の高さが指定より 6px ずつ伸びて A4 に収まらない） */
-        .prime-root { background: white; color: #111; font-family: -apple-system, "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic", sans-serif; font-size: 0.82rem; line-height: 1.25; }
+        /* line-height は必ずここで決める（画面の親の 24px を継ぐと、枠の高さが指定より 6px ずつ伸びて A4 に収まらない）。
+           字の大きさは rem でなく --pu（10pt・印刷の単位）基準: 画面の「大きい文字」（html 18px）で請求書が膨らまないように。1rem だった値 = --pu × 1.2 */
+        .prime-root { --pu: 10pt; background: white; color: #111; font-family: -apple-system, "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic", sans-serif; font-size: calc(var(--pu) * 0.984); line-height: 1.25; }
         .prime-page { position: relative; width: 100%; max-width: 297mm; min-height: 210mm; margin: 0 auto 16px; padding: 23mm 7mm 6mm 12.5mm; background: white; box-shadow: 0 1px 6px rgba(0,0,0,.12); box-sizing: border-box; }
-        .prime-watermark { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) rotate(-18deg); font-size: 4.5rem; font-weight: 900; color: rgba(200, 30, 30, .12); letter-spacing: .3em; pointer-events: none; white-space: nowrap; }
+        .prime-watermark { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) rotate(-18deg); font-size: calc(var(--pu) * 5.4); font-weight: 900; color: rgba(200, 30, 30, .12); letter-spacing: .3em; pointer-events: none; white-space: nowrap; }
         .prime-grid { display: grid; grid-template-columns: 1fr 98mm; gap: 9mm; }
         .prime-row-top { display: grid; grid-template-columns: 45% 1fr; gap: 8mm; align-items: start; min-height: 180px; }
         .prime-to { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; }
-        .prime-to-name { font-size: 1.3rem; font-weight: 700; text-decoration: underline; text-underline-offset: 5px; }
-        .prime-to-honor { font-size: .9rem; }
+        .prime-to-name { font-size: calc(var(--pu) * 1.56); font-weight: 700; text-decoration: underline; text-underline-offset: 5px; }
+        .prime-to-honor { font-size: calc(var(--pu) * 1.08); }
         .prime-me { line-height: 1.6; }
-        .prime-postal { display: inline-flex; align-items: center; gap: 3px; font-size: .84rem; margin: 0 0 10px 40px; }
-        .prime-postal-cell { display: inline-block; width: 20px; height: 20px; border: 1px solid #333; text-align: center; line-height: 20px; font-size: .84rem; }
+        .prime-postal { display: inline-flex; align-items: center; gap: 3px; font-size: calc(var(--pu) * 1.008); margin: 0 0 10px 40px; }
+        .prime-postal-cell { display: inline-block; width: 20px; height: 20px; border: 1px solid #333; text-align: center; line-height: 20px; font-size: calc(var(--pu) * 1.008); }
         .prime-me-line { display: flex; gap: 12px; align-items: baseline; margin-bottom: 8px; }
-        .prime-me-label { color: #333; font-size: .78rem; width: 44px; flex: none; }
-        .prime-me-company { font-size: 1.45rem; font-weight: 700; margin: 10px 0 12px; }
+        .prime-me-label { color: #333; font-size: calc(var(--pu) * 0.936); width: 44px; flex: none; }
+        .prime-me-company { font-size: calc(var(--pu) * 1.74); font-weight: 700; margin: 10px 0 12px; }
         .prime-title-col { text-align: center; }
         .prime-title-wrap { border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 26px; }
-        .prime-title { font-size: 2.1rem; font-weight: 700; letter-spacing: .55em; padding-left: .55em; }
-        .prime-date-box { border: 1px solid #333; height: 40px; box-sizing: border-box; padding: 0 8px 0 0; font-size: .86rem; margin-bottom: 20px; text-align: left; display: flex; align-items: center; gap: 4px; }
+        .prime-title { font-size: calc(var(--pu) * 2.52); font-weight: 700; letter-spacing: .55em; padding-left: .55em; }
+        .prime-date-box { border: 1px solid #333; height: 40px; box-sizing: border-box; padding: 0 8px 0 0; font-size: calc(var(--pu) * 1.032); margin-bottom: 20px; text-align: left; display: flex; align-items: center; gap: 4px; }
         .prime-date-label { margin-right: 8px; padding: 0 9px; border-right: 1px solid #333; white-space: nowrap; align-self: stretch; display: flex; align-items: center; }
         .prime-date-era { margin-right: 2px; }
         .prime-date-cell { display: inline-block; min-width: 24px; padding: 0 3px; border: 1px solid #333; text-align: center; line-height: 22px; margin: 0 2px; }
         .prime-total-box { border: 2px solid #333; height: 56px; box-sizing: border-box; padding: 0 12px 0 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .prime-total-label { font-size: .92rem; width: 92px; flex: none; box-sizing: border-box; padding: 0 10px; border-right: 1px solid #333; align-self: stretch; display: flex; align-items: center; white-space: nowrap; }
+        .prime-total-label { font-size: calc(var(--pu) * 1.104); width: 92px; flex: none; box-sizing: border-box; padding: 0 10px; border-right: 1px solid #333; align-self: stretch; display: flex; align-items: center; white-space: nowrap; }
         .prime-date-box span, .prime-total-amt { white-space: nowrap; }
-        .prime-total-amt { font-size: 1.95rem; font-weight: 800; letter-spacing: 0; }
+        /* 元の書式の字の大きさ（約 26px）。枠の中の幅は 215px なので、桁が増えたら字を縮める（2026-10-20 代表「桁が増えると崩れる」: 8桁 ¥11,571,127 が枠からはみ出た） */
+        .prime-total-amt { font-size: calc(var(--pu) * 1.98); font-weight: 800; letter-spacing: 0; overflow: hidden; }
+        .prime-total-amt.prime-amt-sm { font-size: calc(var(--pu) * 1.68); }
+        .prime-total-amt.prime-amt-xs { font-size: calc(var(--pu) * 1.38); }
         .prime-regno-wrap { margin-top: 20px; border: 1px solid #333; padding: 0 0 0; display: block; width: 59%; box-sizing: border-box; }
-        .prime-regno-title { text-align: center; font-size: .8rem; height: 18px; line-height: 18px; border-bottom: 1px solid #333; }
+        .prime-regno-title { text-align: center; font-size: calc(var(--pu) * 0.96); height: 18px; line-height: 18px; border-bottom: 1px solid #333; }
         .prime-regno { display: flex; }
-        .prime-regno-cell { display: inline-block; flex: 1; height: 36px; border-right: 1px solid #333; text-align: center; line-height: 36px; font-size: 1.35rem; font-weight: 700; }
+        .prime-regno-cell { display: inline-block; flex: 1; height: 36px; border-right: 1px solid #333; text-align: center; line-height: 36px; font-size: calc(var(--pu) * 1.62); font-weight: 700; }
         .prime-regno-cell:last-child { border-right: none; }
         .prime-table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-        .prime-table th, .prime-table td { border: 1px solid #333; padding: 2px 6px; font-size: .82rem; line-height: 1.2; vertical-align: middle; overflow: hidden; }
+        .prime-table th, .prime-table td { border: 1px solid #333; padding: 2px 6px; font-size: calc(var(--pu) * 0.984); line-height: 1.2; vertical-align: middle; overflow: hidden; }
         .prime-table th { font-weight: 600; background: #fff; text-align: center; white-space: nowrap; }
         .prime-site { margin-top: 20px; }
-        .prime-site th { width: 70px; font-size: .8rem; padding: 2px 4px; }
+        .prime-site th { width: 70px; font-size: calc(var(--pu) * 0.96); padding: 2px 4px; }
         .prime-site td { height: 47px; }
-        .prime-site-name { font-size: .92rem; }
-        .prime-site-trade { font-size: .84rem; width: 145px; }
+        .prime-site-name { font-size: calc(var(--pu) * 1.104); }
+        .prime-site-trade { font-size: calc(var(--pu) * 1.008); width: 145px; }
         .prime-site th + td + th { width: 70px; }
         .prime-lines { margin-top: 6px; }
         .prime-lines th { height: 23px; }
         .prime-lines td { height: 23px; }
         .prime-c-m { width: 22px; } .prime-c-d { width: 25px; }
-        .prime-c-qty { width: 80px; } .prime-c-unit { width: 44px; } .prime-c-rate { width: 90px; } .prime-c-amt { width: 110px; }
+        .prime-c-qty { width: 72px; } .prime-c-unit { width: 40px; } .prime-c-rate { width: 100px; } .prime-c-amt { width: 118px; } /* 9桁（100,000,000）まで収まる幅 */
         .prime-desc { text-align: center; }
         .prime-num { text-align: right; font-variant-numeric: tabular-nums; }
         .prime-ctr { text-align: center; }
         .prime-right { text-align: right; font-weight: 600; }
         .prime-sub td { height: 23px; }
-        .prime-bold { font-weight: 800; font-size: .95rem; }
+        .prime-bold { font-weight: 800; font-size: calc(var(--pu) * 1.14); }
         .prime-taxes { margin-top: 7px; }
         .prime-taxes th { height: 23px; }
         .prime-taxes td { height: 23px; }
-        .prime-taxes th, .prime-taxes td { font-size: .78rem; }
+        .prime-taxes th, .prime-taxes td { font-size: calc(var(--pu) * 0.936); }
         .prime-tax-h { width: 50%; }
-        .prime-tax-l { font-size: .78rem; }
+        .prime-tax-l { font-size: calc(var(--pu) * 0.936); }
         .prime-op { width: 16px; text-align: center; border-left: none !important; border-right: none !important; padding: 0 !important; }
         .prime-right-col { padding-top: 10px; } /* 元の書式は右の列が左より 10px ほど下から始まる */
         .prime-paykind { margin-top: 0; }
-        .prime-paykind td { font-size: .7rem; height: 18px; }
+        .prime-paykind td { font-size: calc(var(--pu) * 0.84); height: 18px; }
         .prime-paykind-h { width: 44px; }
         .prime-order { margin-top: 20px; }
-        .prime-order th { width: 108px; font-size: .76rem; text-align: center; padding: 2px 4px; }
-        .prime-order-th2 { font-size: .7rem !important; letter-spacing: -.02em; }
+        .prime-order th { width: 108px; font-size: calc(var(--pu) * 0.912); text-align: center; padding: 2px 4px; }
+        .prime-order-th2 { font-size: calc(var(--pu) * 0.84) !important; letter-spacing: -.02em; }
         .prime-order td { height: 17px; }
         .prime-bank { margin-top: 10px; }
-        .prime-bank th { width: 108px; font-size: .78rem; }
+        .prime-bank th { width: 108px; font-size: calc(var(--pu) * 0.936); }
         .prime-bank td { height: 18px; padding: 1px 6px; text-align: center; }
         .prime-branch { display: inline-block; min-width: 60%; }
-        .prime-branch-suffix { float: right; font-size: .74rem; }
-        .prime-no { font-size: .66rem; float: left; }
-        .prime-orderer { font-size: .72rem; margin-top: 12px; white-space: nowrap; }
+        .prime-branch-suffix { float: right; font-size: calc(var(--pu) * 0.888); }
+        .prime-no { font-size: calc(var(--pu) * 0.792); float: left; }
+        .prime-orderer { font-size: calc(var(--pu) * 0.864); margin-top: 12px; white-space: nowrap; }
         .prime-circled { display: inline-block; border: 1.5px solid #333; border-radius: 50%; padding: 0 3px; font-weight: 700; }
         .prime-other { display: inline-block; min-width: 28px; }
         .prime-codes { margin-top: 10px; }
-        .prime-codes th { width: 108px; font-size: .76rem; }
+        .prime-codes th { width: 108px; font-size: calc(var(--pu) * 0.912); }
         .prime-codes td { height: 22px; }
         .prime-code-cells { display: flex; gap: 2px; align-items: center; }
         .prime-code-cells span { display: inline-block; width: 15px; height: 17px; border: 1px solid #555; }
         .prime-code-cells .prime-dash { border: none; width: auto; height: auto; line-height: 1; }
         .prime-costs { margin-top: 0; }
-        .prime-costs th { height: 23px; font-size: .78rem; }
+        .prime-costs th { height: 23px; font-size: calc(var(--pu) * 0.936); }
         .prime-costs td { height: 23px; }
         .prime-direct { margin-top: 0; }
-        .prime-direct th { width: 48%; font-size: .82rem; }
+        .prime-direct th { width: 48%; font-size: calc(var(--pu) * 0.984); }
         .prime-direct td { height: 45px; vertical-align: top; }
-        .prime-small { font-size: .66rem; color: #444; }
+        .prime-small { font-size: calc(var(--pu) * 0.792); color: #444; }
         .prime-sign { margin-top: 20px; }
-        .prime-sign th { font-size: .8rem; height: 21px; }
+        .prime-sign th { font-size: calc(var(--pu) * 0.96); height: 21px; }
         .prime-sign-s { width: 20%; }
         .prime-sign-w { width: 40%; }
         .prime-sign td { height: 57px; }
-        .prime-ver { text-align: right; font-size: .7rem; color: #444; margin-top: 8px; }
+        .prime-ver { text-align: right; font-size: calc(var(--pu) * 0.84); color: #444; margin-top: 8px; }
         @media (prefers-color-scheme: dark) { .prime-root, .prime-page { color: #111; } }
       `}</style>
     </div>
