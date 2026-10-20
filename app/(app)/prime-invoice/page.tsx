@@ -543,7 +543,7 @@ function UploadModal({ companies, sites, ym, fixed, onClose, onDone }: {
 
   const busy = phase !== 'idle'
   return (
-    <Modal open onClose={onClose} title={fixed ? 'ファイルを足す' : '大林組の控えを入れて作る'} sub={`${ymLabelOf(ym)}。控えは工種ごとに1枚（5枚前後）。借受職人の控除計算書（山岡のメモ）があれば一緒に入れると、切り出しと給与の控除も自動で計算します`} size="lg" dirty={files.length > 0}
+    <Modal open onClose={onClose} title={fixed ? 'ファイルを足す' : '大林組の控えを入れて作る'} sub={`${ymLabelOf(ym)}。控えは契約（工種）ごとに1枚で、枚数は現場によります（笹塚は5枚前後、IHI は1枚）。その現場の全部の枚と、借受職人の控除計算書（山岡のメモ）があれば一緒に入れると、切り出しと給与の控除も自動で計算します`} size="lg" dirty={files.length > 0}
       footer={<><CancelButton onClick={onClose} disabled={busy} /><PrimaryButton onClick={submit} disabled={busy}>{phase === 'uploading' ? 'アップロードしています…' : phase === 'reading' ? 'PDF を読み取っています…' : fixed ? '足して読み直す' : '読み取って下書きを作る'}</PrimaryButton></>}>
       <div className="space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
