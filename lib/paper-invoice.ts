@@ -70,6 +70,29 @@ export interface PaperInvoice {
   uploadedByName?: string
 }
 
+/**
+ * 紙の控え（応援の請求書）の税抜を、その会社の応援現場（工種サイトを含む）へ割り振る（2026-10-20）。
+ * 原価・収益の「現場の請求額」に自動で入れるため。比は出面からの見込み（lib/peer-statement の billing 行）。
+ * 端数は見込みがいちばん大きい現場に寄せ、合計が税抜と1円までそろうようにする。見込みが無ければ割り振れない（空）。
+ */
+export function allocatePaperToSites(exTax: number, draftLines: { siteId: string; amount: number }[]): { siteId: string; amount: number }[] {
+  const lines = draftLines.filter(l => l.amount > 0)
+  const total = lines.reduce((t, l) => t + l.amount, 0)
+  if (!(exTax > 0) || total <= 0) return []
+  const out = lines.map(l => ({ siteId: l.siteId, amount: Math.round(exTax * l.amount / total) }))
+  const diff = Math.round(exTax) - out.reduce((t, l) => t + l.amount, 0)
+  if (diff !== 0) {
+    const biggest = out.reduce((b, l, i) => (lines[i].amount > lines[b].amount ? i : b), 0)
+    out[biggest].amount += diff
+  }
+  return out
+}
+
+/** 紙の控え（同じ会社・同じ月の全部）の税抜の合計。税抜小計が無い枚は 税込 ÷ 1.1 */
+export function paperExTaxTotal(papers: Pick<PaperInvoice, 'subtotal' | 'total'>[]): number {
+  return papers.reduce((t, p) => t + (typeof p.subtotal === 'number' ? p.subtotal : Math.round(p.total / 1.1)), 0)
+}
+
 /** 一次への請求書（同じ現場・同じ月の全部）と DEDURA＋ の現場の請求額の見比べ */
 export interface PrimeSiteComparison {
   siteId: string
