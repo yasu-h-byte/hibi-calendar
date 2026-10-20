@@ -64,6 +64,25 @@ export async function fileMeta(path: string): Promise<{ exists: boolean; size: n
   return { exists: true, size: Number(meta.size || 0), contentType: String(meta.contentType || '') }
 }
 
+/**
+ * サーバーからファイルを置く（一次への請求書・2026-10-20）。
+ * 置き場の CORS は本番の URL からの直接 PUT しか許可していないので、Vercel の Preview では署名つきURLへの PUT が止められる。
+ * 一次への請求書の PDF は小さい（数KB〜数百KB）ので、ブラウザ → API（4MBまで）→ ここで置く。
+ */
+export async function uploadBuffer(path: string, data: Buffer, contentType: string): Promise<void> {
+  const bucket = getStaffDocsBucket()
+  if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
+  await bucket.file(path).save(data, { contentType, resumable: false })
+}
+
+/** ファイルの中身を読む（一次への請求書: 大林組の控え・山岡の控除計算書の PDF をサーバで読み取る・2026-10-20） */
+export async function downloadFile(path: string): Promise<Buffer> {
+  const bucket = getStaffDocsBucket()
+  if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
+  const [buf] = await bucket.file(path).download()
+  return buf as Buffer
+}
+
 export async function deleteFile(path: string): Promise<void> {
   const bucket = getStaffDocsBucket()
   if (!bucket) throw new Error('STORAGE_UNAVAILABLE')

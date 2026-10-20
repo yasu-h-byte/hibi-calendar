@@ -662,6 +662,37 @@ export async function GET(request: NextRequest) {
       } catch (e) {
         console.error('Pending invoice check error:', e)
       }
+      // 一次（山岡建設工業など）への請求書の承認待ち（2026-10-20）
+      try {
+        const { listPendingPrimeInvoices } = await import('@/lib/prime-invoice-store')
+        const all = await listPendingPrimeInvoices()
+        // 確認1待ち（pending）は事業責任者・代表に、確認2待ち（checked）は代表だけに（承認ルート: 格納→確認1（政仁さん）→確認2（代表））
+        const label = (xs: typeof all) => xs.map(i => `${i.siteName} ${parseInt(i.ym.slice(4, 6), 10)}月分`).join('・')
+        const pending1 = all.filter(i => i.status === 'pending')
+        if (pending1.length > 0) {
+          notifications.push({
+            id: 'pending-prime-invoices',
+            icon: 'receipt',
+            message: `山岡への請求書の確認1待ち ${pending1.length}件（${label(pending1)}）`,
+            type: 'info',
+            count: pending1.length,
+            href: `/prime-invoice?ym=${pending1[0].ym}&id=${pending1[0].id}`,
+          })
+        }
+        const pending2 = all.filter(i => i.status === 'checked')
+        if (pending2.length > 0 && role === 'admin') {
+          notifications.push({
+            id: 'pending-prime-invoices-final',
+            icon: 'receipt',
+            message: `山岡への請求書の確認2待ち（代表の発行） ${pending2.length}件（${label(pending2)}）`,
+            type: 'warning',
+            count: pending2.length,
+            href: `/prime-invoice?ym=${pending2[0].ym}&id=${pending2[0].id}`,
+          })
+        }
+      } catch (e) {
+        console.error('Pending prime invoice check error:', e)
+      }
     }
 
     // 8d. 本人からの出面の連絡（スマホの確認で「まちがいがある」・未対応。2026-09-30）

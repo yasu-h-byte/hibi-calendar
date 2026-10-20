@@ -7,12 +7,14 @@ import Link from 'next/link'
  * 旧: 「請求書・支払」「応援の請求書」「紙で出した請求書」と名前がばらばらで、どれが一覧でどれで作るか分かりにくかった。
  * メニューの項目は「請求・支払」の1つ。開いた画面の上にこのタブを出し、役割が名前で分かるようにする。
  */
-export type InvoiceScreen = 'list' | 'create' | 'paper' | 'received'
+export type InvoiceScreen = 'list' | 'create' | 'paper' | 'received' | 'prime'
 
 const TABS: { key: InvoiceScreen; label: string; href: string }[] = [
   { key: 'list', label: '請求・支払の一覧', href: '/peer-statement' },
   // 2026-10-15 代表: 「請求書を作る」のタブは外す。会社を選ばずに開くと空の画面になるため。
   // 請求書は一覧の会社ごとの「請求書を作る」から開く（開いている間は「一覧」のタブを選んだ状態にする）
+  // 2026-10-20: 一次（山岡建設工業）への請求書。大林組の控え PDF から自動で作る
+  { key: 'prime', label: '山岡への請求書', href: '/prime-invoice' },
   { key: 'paper', label: '紙の請求書の控え', href: '/paper-invoice' },
   // 2026-10-05: 外注から届いた請求書（出した請求書と同じ場所で扱う）
   { key: 'received', label: '受け取った請求書', href: '/subcon-invoice' },
