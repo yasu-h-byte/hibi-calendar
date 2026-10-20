@@ -41,7 +41,10 @@ export const PRIME_INVOICE_TAX_RATE = 0.10
 /** 人工の締め日（前月21日〜当月20日） */
 export const PRIME_CUTOFF_DAY = 20
 export const PRIME_INVOICE_ALLOWED_TYPES = ['application/pdf']
-export const PRIME_INVOICE_MAX_FILE_BYTES = 20 * 1024 * 1024
+/** 1ファイルの上限。ブラウザ → API → Storage と通す（Vercel の API は本文 4.5MB まで）。控えは数KB・控除計算書は数百KB */
+export const PRIME_INVOICE_MAX_FILE_BYTES = 4 * 1024 * 1024
+/** 1回の送信にまとめる上限（これを超えるときは何回かに分けて送る） */
+export const PRIME_INVOICE_MAX_REQUEST_BYTES = 3.5 * 1024 * 1024
 export const PRIME_INVOICE_MAX_FILES = 12
 export const PRIME_INVOICE_DOC_ID_RE = /^[0-9a-f-]{36}$/
 /** 請求書番号の接頭辞に足す印（応援の請求書 HC-202609-01 と番号を混ぜない → HCP-202609-01） */

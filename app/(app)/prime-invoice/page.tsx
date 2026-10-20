@@ -23,7 +23,7 @@ import InvoiceNav from '@/components/invoice/InvoiceNav'
 import PrimeInvoiceDocument from '@/components/invoice/PrimeInvoiceDocument'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import {
-  PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_FILES, parseMoneyToken,
+  PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_REQUEST_BYTES, PRIME_INVOICE_MAX_FILES, parseMoneyToken,
   type PrimeInvoiceBundle, type PrimeSheet, type PrimeManDays, type PrimeCheckRow, type PrimeInvoiceStatus,
 } from '@/lib/prime-invoice'
 
@@ -466,7 +466,7 @@ function UploadModal({ companies, sites, ym, fixed, onClose, onDone }: {
     const next = [...files]
     for (const f of Array.from(list)) {
       if (!PRIME_INVOICE_ALLOWED_TYPES.includes(contentTypeOf(f))) { setFieldErr(`PDF だけ入れられます: ${f.name}`); continue }
-      if (f.size > PRIME_INVOICE_MAX_FILE_BYTES) { setFieldErr(`大きすぎます（20MBまで）: ${f.name}`); continue }
+      if (f.size > PRIME_INVOICE_MAX_FILE_BYTES) { setFieldErr(`大きすぎます（4MBまで）: ${f.name}`); continue }
       if (!next.some(x => x.name === f.name && x.size === f.size)) next.push(f)
     }
     if ((fixed?.existing || 0) + next.length > PRIME_INVOICE_MAX_FILES) { setFieldErr(`ファイルは1か月につき${PRIME_INVOICE_MAX_FILES}個までです`); return }
@@ -479,32 +479,38 @@ function UploadModal({ companies, sites, ym, fixed, onClose, onDone }: {
     if (!siteId) { setFieldErr('現場を選んでください'); return }
     if (files.length === 0) { setFieldErr('大林組の控えのPDFを選んでください（控除計算書があれば一緒に）'); return }
     setPhase('uploading')
-    let docId: string | null = null
-    const isNew = !fixed
+    // 置き場の CORS は本番の URL からの直接 PUT しか許していない（Preview で止まる）ので、API 経由で置く。
+    // 1回の送信は 3.5MB まで（Vercel の API は本文 4.5MB まで）。超えるときは何回かに分け、2回目からは docId を付けて足す
+    const batches: File[][] = []
+    for (const f of files) {
+      const last = batches[batches.length - 1]
+      if (last && last.reduce((t, x) => t + x.size, 0) + f.size <= PRIME_INVOICE_MAX_REQUEST_BYTES) last.push(f)
+      else batches.push([f])
+    }
+    let docId: string | undefined = fixed?.docId
+    let rec: Bundle | null = null
     try {
-      const prep = await postJson<{ docId: string; uploads: { path: string; name: string; contentType: string; size: number; url: string }[] }>('/api/prime-invoice', {
-        action: 'prepare', companyId, siteId, ym, docId: fixed?.docId, files: files.map(f => ({ name: f.name, contentType: contentTypeOf(f), size: f.size })),
-      })
-      if (!prep.ok || !prep.data) throw new Error(prep.error || '準備に失敗しました')
-      docId = prep.data.docId
-      const uploads = prep.data.uploads
-      for (let i = 0; i < files.length; i++) {
-        const res = await fetch(uploads[i].url, { method: 'PUT', headers: { 'Content-Type': uploads[i].contentType }, body: files[i] })
-        if (!res.ok) throw new Error(`アップロードに失敗しました: ${files[i].name}`)
+      for (let i = 0; i < batches.length; i++) {
+        if (i === batches.length - 1) setPhase('reading')
+        const fd = new FormData()
+        fd.set('action', 'upload'); fd.set('companyId', companyId); fd.set('siteId', siteId); fd.set('ym', ym)
+        if (docId) fd.set('docId', docId)
+        for (const f of batches[i]) fd.append('files', f, f.name)
+        const res = await fetchWithAuth('/api/prime-invoice', { method: 'POST', body: fd })
+        const j = await res.json().catch(() => null)
+        if (!res.ok || !j?.record) throw new Error(j?.error || `読み取りに失敗しました（${res.status}）`)
+        rec = j.record as Bundle
+        docId = rec.id
       }
-      setPhase('reading')
-      const commit = await postJson<{ ok: boolean; record: Bundle }>('/api/prime-invoice', {
-        action: 'commit', docId, companyId, siteId, ym, files: uploads.map(u => ({ path: u.path, name: u.name, contentType: u.contentType })),
-      })
-      if (!commit.ok || !commit.data) throw new Error(commit.error || '読み取りに失敗しました')
-      const rec = commit.data.record
+      if (!rec) throw new Error('読み取りに失敗しました')
       const nWarn = rec.warnings.length + rec.sheets.reduce((s, x) => s + x.warnings.length, 0)
       notify.success(`${rec.sheets.length}枚を読み取りました（税込 ${yen(rec.total)}）`, nWarn > 0 ? `注意が${nWarn}件あります。内容を確かめてください` : undefined)
       await onDone(rec.id)
     } catch (e) {
-      if (isNew && docId) await postJson('/api/prime-invoice', { action: 'discard', docId }).catch(() => null)
       notify.failed('読み取り', e)
       setPhase('idle')
+      // 途中まで入った（2回目以降で失敗した）ときは、できた下書きを開いて残りを足せるようにする
+      if (rec && !fixed) await onDone(rec.id)
     }
   }
 

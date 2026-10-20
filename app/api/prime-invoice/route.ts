@@ -4,9 +4,9 @@
  * GET  ?ym=YYYYMM                 → その月の請求書（会社×現場ごと）＋ 選べる一次の会社と現場 ＋ 月の一覧
  * GET  ?id=ID                     → 1件（下書き・申請中は 出面との検算 と 承認の有無 も）
  * GET  ?open=ID&i=N               → ファイルを見る署名つきURL（15分）。控除計算書（給与の内訳）は pay.view の人だけ
- * POST { action:'prepare', companyId, siteId, ym, files:[{name,contentType,size}], docId? } → 置き場のパスと署名つきURL
- * POST { action:'commit', docId, files, companyId, siteId, ym }  → ファイルを読み取り、下書きを作る（docId が下書きなら足して読み直す）
- * POST { action:'discard', docId }                                 → 登録できなかったアップロードの後片付け
+ * POST multipart/form-data { action:'upload', companyId, siteId, ym, docId?, files[] }
+ *      → PDF をサーバーで置き場に置き、読み取って下書きを作る（docId が下書きなら足して読み直す）。
+ *        置き場の CORS は本番の URL からの直接 PUT しか許可していないので（Preview で止まる）、この機能は API 経由（1回 4MB まで。画面が分けて送る）
  * POST { action:'update', id, sheets?, invoiceDate? }              → 下書きの数字を手で直す（枚の index ごと）
  * POST { action:'removeFile', id, path }                            → 下書きからファイルを外して読み直す
  * POST { action:'request' | 'withdraw' | 'delete', id }            → 申請・取り下げ・下書きの削除（invoice.request）
@@ -21,7 +21,7 @@ import { getMainData, getMultiMonthAttData, type MainData } from '@/lib/compute'
 import { safeFileName } from '@/lib/staff-docs'
 import { hasRole, resolveSiteParties, type CompanyLike } from '@/lib/companies'
 import { isWorkTypeSite, parentAndWorkTypeSiteIds } from '@/lib/site-hierarchy'
-import { signedUploadUrl, signedReadUrl, fileMeta, deleteFile, deleteFilesWithPrefix, downloadFile, getStaffDocsBucket } from '@/lib/storage-admin'
+import { signedReadUrl, deleteFile, deleteFilesWithPrefix, downloadFile, uploadBuffer, getStaffDocsBucket } from '@/lib/storage-admin'
 import { extractPdfLines } from '@/lib/pdf-text.server'
 import {
   PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_FILES, PRIME_INVOICE_DOC_ID_RE,
@@ -170,12 +170,31 @@ export async function GET(request: NextRequest) {
   }
 }
 
-const REQUEST_ACTIONS = new Set(['prepare', 'commit', 'discard', 'update', 'removeFile', 'request', 'withdraw', 'delete'])
+const REQUEST_ACTIONS = new Set(['upload', 'update', 'removeFile', 'request', 'withdraw', 'delete'])
 const APPROVE_ACTIONS = new Set(['approve', 'issue', 'reject', 'void'])
 
+/** multipart（upload）か JSON か */
+async function readBody(request: NextRequest): Promise<{ body: Record<string, unknown>; files: File[] } | null> {
+  const ct = request.headers.get('content-type') || ''
+  if (ct.includes('multipart/form-data')) {
+    try {
+      const fd = await request.formData()
+      const body: Record<string, unknown> = {}
+      const files: File[] = []
+      fd.forEach((v, k) => {
+        if (typeof v === 'string') body[k] = v
+        else if (k === 'files') files.push(v)
+      })
+      return { body, files }
+    } catch { return null }
+  }
+  try { return { body: await request.json(), files: [] } } catch { return null }
+}
+
 export async function POST(request: NextRequest) {
-  let body: Record<string, unknown>
-  try { body = await request.json() } catch { return NextResponse.json({ error: 'invalid json' }, { status: 400 }) }
+  const read = await readBody(request)
+  if (!read) return NextResponse.json({ error: 'invalid body' }, { status: 400 })
+  const { body, files: formFiles } = read
   const action = String(body.action || '')
   if (!REQUEST_ACTIONS.has(action) && !APPROVE_ACTIONS.has(action)) return NextResponse.json({ error: 'unknown action' }, { status: 400 })
   const denied = await requireCap(request, APPROVE_ACTIONS.has(action) ? 'invoice.approve' : 'invoice.request')
@@ -185,68 +204,48 @@ export async function POST(request: NextRequest) {
   try {
     const main = await getMainData()
 
-    if (action === 'prepare') {
+    if (action === 'upload') {
       const t = parseTarget(body, main)
       if (!t.ok) return NextResponse.json({ error: t.error }, { status: 400 })
-      const files = Array.isArray(body.files) ? body.files as { name?: string; contentType?: string; size?: number }[] : []
-      if (files.length === 0) return NextResponse.json({ error: 'ファイルを選んでください' }, { status: 400 })
+      if (formFiles.length === 0) return NextResponse.json({ error: 'ファイルを選んでください' }, { status: 400 })
+      if (!getStaffDocsBucket()) return storageUnavailable()
+      let cur: PrimeInvoiceBundle | null = null
       let docId: string
-      let existingCount = 0
-      if (body.docId !== undefined) {
+      if (typeof body.docId === 'string' && body.docId) {
         if (!isDocId(body.docId)) return badDocId()
-        const cur = await getPrimeBundle(body.docId)
+        cur = await getPrimeBundle(body.docId)
         if (!cur) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
         if (cur.status !== 'draft') return NextResponse.json({ error: '下書きのときだけファイルを足せます' }, { status: 400 })
+        if (cur.companyId !== t.companyId || cur.siteId !== t.siteId || cur.ym !== t.ym) return NextResponse.json({ error: '会社・現場・月が下書きと違います' }, { status: 400 })
         docId = cur.id
-        existingCount = cur.files.length
       } else {
         docId = randomUUID()
       }
-      if (existingCount + files.length > PRIME_INVOICE_MAX_FILES) return NextResponse.json({ error: `ファイルは1か月につき${PRIME_INVOICE_MAX_FILES}個までです` }, { status: 400 })
-      for (const f of files) {
-        if (!PRIME_INVOICE_ALLOWED_TYPES.includes(String(f.contentType))) return NextResponse.json({ error: `PDF だけ入れられます: ${f.name}` }, { status: 400 })
-        if (!(Number(f.size) > 0) || Number(f.size) > PRIME_INVOICE_MAX_FILE_BYTES) return NextResponse.json({ error: `ファイルが大きすぎます: ${f.name}（20MBまで）` }, { status: 400 })
+      if ((cur?.files.length || 0) + formFiles.length > PRIME_INVOICE_MAX_FILES) return NextResponse.json({ error: `ファイルは1か月につき${PRIME_INVOICE_MAX_FILES}個までです` }, { status: 400 })
+      for (const f of formFiles) {
+        const type = f.type || (f.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '')
+        if (!PRIME_INVOICE_ALLOWED_TYPES.includes(type)) return NextResponse.json({ error: `PDF だけ入れられます: ${f.name}` }, { status: 400 })
+        if (!(f.size > 0) || f.size > PRIME_INVOICE_MAX_FILE_BYTES) return NextResponse.json({ error: `ファイルが大きすぎます: ${f.name}（4MBまで）` }, { status: 400 })
       }
-      if (!getStaffDocsBucket()) return storageUnavailable()
-      const stamp = Date.now().toString(36)
-      const uploads = await Promise.all(files.map(async (f, i) => {
-        const name = safeFileName(String(f.name))
-        const path = `${STORAGE_PREFIX}/${docId}/${stamp}-${i}-${name}`
-        return { path, name, contentType: String(f.contentType), size: Number(f.size), url: await signedUploadUrl(path, String(f.contentType)) }
-      }))
-      return NextResponse.json({ docId, uploads })
-    }
-
-    if (action === 'discard') {
-      if (!isDocId(body.docId)) return badDocId()
-      const cur = await getPrimeBundle(body.docId)
-      if (cur) return NextResponse.json({ error: 'この請求書は登録済みのため、後片付けの対象ではありません' }, { status: 409 })
-      if (!getStaffDocsBucket()) return storageUnavailable()
-      const n = await deleteFilesWithPrefix(`${STORAGE_PREFIX}/${body.docId}/`)
-      return NextResponse.json({ ok: true, deleted: n })
-    }
-
-    if (action === 'commit') {
-      if (!isDocId(body.docId)) return badDocId()
-      const docId = body.docId
-      const t = parseTarget(body, main)
-      if (!t.ok) return NextResponse.json({ error: t.error }, { status: 400 })
       const prefix = `${STORAGE_PREFIX}/${docId}/`
-      const reqFiles = Array.isArray(body.files) ? body.files as { path?: string; name?: string; contentType?: string }[] : []
-      if (reqFiles.length === 0 || reqFiles.some(f => typeof f.path !== 'string' || !f.path.startsWith(prefix))) return NextResponse.json({ error: 'ファイルの指定が不正です' }, { status: 400 })
-      if (!getStaffDocsBucket()) return storageUnavailable()
-      const cur = await getPrimeBundle(docId)
-      if (cur && cur.status !== 'draft') return NextResponse.json({ error: '下書きのときだけファイルを足せます' }, { status: 400 })
-      if (cur && (cur.companyId !== t.companyId || cur.siteId !== t.siteId || cur.ym !== t.ym)) return NextResponse.json({ error: '会社・現場・月が下書きと違います' }, { status: 400 })
+      const stamp = Date.now().toString(36)
       const added: PrimeInvoiceFile[] = []
-      for (const f of reqFiles) {
-        const m = await fileMeta(f.path as string)
-        if (!m.exists) return NextResponse.json({ error: `アップロードが完了していません: ${f.name}` }, { status: 409 })
-        if (m.size > PRIME_INVOICE_MAX_FILE_BYTES || !PRIME_INVOICE_ALLOWED_TYPES.includes(m.contentType)) {
-          await deleteFile(f.path as string).catch(() => undefined)
-          return NextResponse.json({ error: `${f.name} は入れられません（PDF・20MBまで）` }, { status: 400 })
+      try {
+        for (let i = 0; i < formFiles.length; i++) {
+          const f = formFiles[i]
+          const name = safeFileName(f.name)
+          const path = `${prefix}${stamp}-${i}-${name}`
+          const buf = Buffer.from(await f.arrayBuffer())
+          // 中身が PDF か（拡張子だけ偽っても読まない）
+          if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') return NextResponse.json({ error: `PDF ではありません: ${f.name}` }, { status: 400 })
+          await uploadBuffer(path, buf, 'application/pdf')
+          added.push({ path, name, contentType: 'application/pdf', size: buf.length, kind: 'other' })
         }
-        added.push({ path: f.path as string, name: safeFileName(String(f.name)), contentType: m.contentType, size: m.size, kind: 'other' })
+      } catch (e) {
+        console.error('[prime-invoice] upload failed', docId, e)
+        if (!cur) await deleteFilesWithPrefix(prefix).catch(() => undefined)
+        else await Promise.all(added.map(a => deleteFile(a.path).catch(() => undefined)))
+        return NextResponse.json({ error: 'ファイルを置けませんでした（置き場に接続できません）' }, { status: 503 })
       }
       const all = [...(cur?.files || []), ...added]
       const parsed = await parseFiles(all, { companyName: t.companyName, siteName: t.siteName })
@@ -257,7 +256,7 @@ export async function POST(request: NextRequest) {
       }
       const r = await createPrimeDraft({ main, docId, ...t, sheets: parsed.sheets, files: parsed.files, warnings: parsed.warnings, actor, actorName: actorName || main.workers.find(w => String(w.id) === actor)?.name || '' })
       if (!r.ok) {
-        await deleteFilesWithPrefix(prefix).catch(e => console.error('[prime-invoice] commit cleanup failed', docId, e))
+        await deleteFilesWithPrefix(prefix).catch(e => console.error('[prime-invoice] upload cleanup failed', docId, e))
         return NextResponse.json({ error: r.error }, { status: 400 })
       }
       return NextResponse.json({ ok: true, record: await maybeMask(request, r.record) })

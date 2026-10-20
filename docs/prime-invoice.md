@@ -81,7 +81,10 @@ tax         = floor(amount × 10%)、total = amount + tax
 ## データの置き場所
 
 - `primeInvoices/{docId}`: 1件 = 一次会社 × 現場 × 対象月（`lib/prime-invoice.ts` の `PrimeInvoiceBundle`）。日次バックアップの対象（`primeinv_*`）
-- ファイル本体: Firebase Storage `prime-invoices/{docId}/{stamp}-{i}-{name}`（書類庫と同じバケット・署名つきURL）。バックアップの対象外
+- ファイル本体: Firebase Storage `prime-invoices/{docId}/{stamp}-{i}-{name}`（書類庫と同じバケット）。バックアップの対象外
+- アップロードは **API 経由**（ブラウザ → `/api/prime-invoice` upload → サーバーが Storage に置く）。置き場の CORS は本番の URL からの
+  直接 PUT しか許可していないので、書類庫・紙の控えと同じ「署名つきURLへ直接 PUT」だと Vercel の Preview で止まる（2026-10-20 に Preview で判明）。
+  この機能の PDF は小さい（控え 数KB・控除計算書 数百KB）ので API 経由でよい。1ファイル 4MB・1回の送信 3.5MB まで（超えると画面が分けて送る）
 - 自社情報（宛名・登録番号・振込先）は発行時に `issuer` に凍結（下書きの間は作成時の内容）
 
 ## 経営コックピットとの連携
