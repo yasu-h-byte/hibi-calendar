@@ -57,13 +57,12 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: '休みの予定', icon: 'plane', href: '/time-off', section: '出面・勤怠（毎日）', cap: 'timeOff.view' },
   { label: '休暇管理', icon: 'umbrella', href: '/leave', section: '出面・勤怠（毎日）', cap: 'leave.view' },
   { label: '就業カレンダー', icon: 'calendar', href: '/calendar', section: '出面・勤怠（毎日）', cap: 'calendar.view' },
-  // ── 締め・請求（毎月）: 月締め → 請求書・原価 → 経営コックピット ──
+  // ── 締め・請求（毎月）: 月締め → 請求書・原価 ──
   { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '締め・請求（毎月）', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
   // 「帳票出力」のメニュー項目は 2026-10-03 に廃止（月次集計・締めのタブだけに。検索からは引ける）
   // 2026-10-20 代表: 「請求・支払」と「原価・収益」を1つの画面（3タブ: 現場ごと／出す請求書／受け取る）に統合
   { label: '請求・原価', icon: 'receipt', href: '/billing', section: '締め・請求（毎月）', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice', '/prime-invoice'] },
-  // 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）
-  { label: '経営コックピット', icon: 'trend', external: 'https://keieidashboard.vercel.app/genba', section: '締め・請求（毎月）', cap: 'cockpit.view' },
+  // 経営コックピット（別サイト）へのリンクは 2026-10-20 にメニューから外した（代表「いらないかも」。ブックマークで開く）
   // ── 人・書類（ときどき）: 人員 → 道具代（月に数回）→ 書類庫（入社・更新のとき）──
   { label: '人員マスタ', icon: 'users', href: '/workers', section: '人・書類', cap: 'workers.view' },
   { label: '道具代管理', icon: 'wrench', href: '/tool-budget', section: '人・書類', cap: 'toolBudget.view' },
