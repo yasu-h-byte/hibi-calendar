@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261020_prime_invoice',
+    title: '「山岡への請求書」ができました（大林組の控えを入れると自動で作ります）',
+    content:
+      'メニュー「請求・支払」→「山岡への請求書」で、大林組の請求書（控え）のPDFと、山岡の借受職人の控除計算書のPDFをまとめて入れると、工種ごとの請求額（85%・他社借受の切り出し・給与の控除）を計算して、山岡のフォーマットで印刷できます。金額は手で写しません。'
+      + '出面との検算（前月21日〜当月20日の人工）も同じ画面に出ます。申請は事務、承認して発行は政仁さんです。',
+    category: 'new',
+    publishedAt: '2026-10-20T18:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261019_calendar_badge',
     title: '就業カレンダーの「未承認」の件数は、25日から出すようにしました',
     content:

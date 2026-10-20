@@ -37,7 +37,12 @@ const nextConfig = {
     // 【サーバ側】firebase-admin（Node 専用・ネイティブ依存多数）を外部パッケージ扱いに。
     // サーバ関数バンドルには含めず、node_modules ごと依存トレースして同梱する。
     // これが無いと require('firebase-admin') が Vercel 上で "Cannot find module" になる。
-    serverComponentsExternalPackages: ['firebase-admin'],
+    // pdfjs-dist（一次への請求書: 大林組の控え PDF の読み取り・lib/pdf-text.server.ts）も ESM のまま実行時に読む
+    serverComponentsExternalPackages: ['firebase-admin', 'pdfjs-dist'],
+    // pdfjs が実行時にファイルとして読む CMap（日本語フォント）と標準フォントを、API の関数に同梱する
+    outputFileTracingIncludes: {
+      '/api/prime-invoice': ['./node_modules/pdfjs-dist/cmaps/**', './node_modules/pdfjs-dist/standard_fonts/**', './node_modules/pdfjs-dist/legacy/build/pdf.mjs'],
+    },
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

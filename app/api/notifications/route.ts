@@ -662,6 +662,23 @@ export async function GET(request: NextRequest) {
       } catch (e) {
         console.error('Pending invoice check error:', e)
       }
+      // 一次（山岡建設工業など）への請求書の承認待ち（2026-10-20）
+      try {
+        const { listPendingPrimeInvoices } = await import('@/lib/prime-invoice-store')
+        const pendingPrime = await listPendingPrimeInvoices()
+        if (pendingPrime.length > 0) {
+          notifications.push({
+            id: 'pending-prime-invoices',
+            icon: 'receipt',
+            message: `山岡への請求書の発行承認待ち ${pendingPrime.length}件（${pendingPrime.map(i => `${i.siteName} ${parseInt(i.ym.slice(4, 6), 10)}月分`).join('・')}）`,
+            type: 'info',
+            count: pendingPrime.length,
+            href: `/prime-invoice?ym=${pendingPrime[0].ym}&id=${pendingPrime[0].id}`,
+          })
+        }
+      } catch (e) {
+        console.error('Pending prime invoice check error:', e)
+      }
     }
 
     // 8d. 本人からの出面の連絡（スマホの確認で「まちがいがある」・未対応。2026-09-30）

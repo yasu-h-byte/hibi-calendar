@@ -259,6 +259,30 @@ workSchedule?: {
 | `uploadedAt` / `uploadedBy` / `uploadedByName` / `updatedAt` | | 登録・修正の記録（`uploadedByName` は画面と経営コックピットに出す名前） |
 | `docType` | string? | `invoice`（無いときも）= 外注の請求書 / `remittance` = 一次から届いた支払内訳書（`total` は振込額・0 のことがある） |
 
+### primeInvoices/{docId}
+一次（山岡建設工業）への請求書（2026-10-20・`docs/prime-invoice.md`・`lib/prime-invoice.ts` の `PrimeInvoiceBundle`）。
+1件 = 一次会社 × 現場 × 対象月。大林組の控え PDF と山岡の控除計算書 PDF から読み取った枚（工種ごと）を持ち、下書きも保存する。
+ファイルは Firebase Storage `prime-invoices/{docId}/{stamp}-{i}-{name}`。日次バックアップの対象（`primeinv_*`・ファイル本体は対象外）。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `companyId` / `companyName` | string | 請求先の一次（取引先マスタの roles に prime） |
+| `siteId` / `siteName` | string | 自社現場（親現場） |
+| `ym` | string | 対象月 YYYYMM |
+| `period` | `{from,to}` | 人工の期間（前月21日〜当月20日・出面との検算に使う） |
+| `billingPeriod` | `{from,to}` | 請求書に印字する期間（対象月の1日〜末日） |
+| `invoiceDate` / `issueDate` | string | 請求年月日（控えの帳票年月日・翌月15日）／発行時に確定した日付 |
+| `ratio` / `taxRate` | number | 85% / 10%（計算に使った値を凍結） |
+| `sheets` | 配列 | 工種ごとの枚 `PrimeSheet`（`tradeName,docNo,gcAmount,borrowed[],wageDeductions[],base,ratioAmount,amount,tax,total,memo,source,warnings,…`）。**`wageDeductions[].amount` と `memo` は個人の給与**（API は pay.view の無い人に伏せる） |
+| `files` | 配列 | `{path,name,contentType,size,kind,parseError}`。`kind` = `statement`（大林組の控え）/ `memo`（控除計算書）/ `other` |
+| `warnings` | string[] | 読み取り全体の注意 |
+| `subtotal` / `tax` / `total` | number | 全枚の合計（税抜・消費税・税込） |
+| `issuer` | `CompanyProfile` | 自社情報（申請・発行時に凍結） |
+| `status` | string | `draft` → `pending` → `issued` → `void`。差し戻し・取り下げは `draft` に戻す（`rejectReason` に記録） |
+| `no` | string | `${接頭辞}P-${ym}-${連番}`（例 `HCP-202609-01`）。発行で付く。応援の請求書と混ぜない |
+| `issuedAt` / `issuedBy` / `requestedAt` / `requestedBy` / `requestedByName` / `rejectedAt` / `rejectedBy` / `rejectReason` / `voidedAt` / `voidedBy` / `voidReason` | | 申請・承認・差し戻し・取り消しの記録 |
+| `createdAt` / `createdBy` / `createdByName` / `updatedAt` | | 作成・更新の記録 |
+
 ### peerInvoices/{auto}
 応援の請求書（2026-09-25・`docs/peer-invoice.md`）。「発行」した瞬間の金額・出面明細・宛先・
 自社情報をまるごと凍結したスナップショット。`demmen/main` には入れない独立コレクション。

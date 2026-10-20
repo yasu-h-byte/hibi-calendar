@@ -64,6 +64,14 @@ export async function fileMeta(path: string): Promise<{ exists: boolean; size: n
   return { exists: true, size: Number(meta.size || 0), contentType: String(meta.contentType || '') }
 }
 
+/** ファイルの中身を読む（一次への請求書: 大林組の控え・山岡の控除計算書の PDF をサーバで読み取る・2026-10-20） */
+export async function downloadFile(path: string): Promise<Buffer> {
+  const bucket = getStaffDocsBucket()
+  if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
+  const [buf] = await bucket.file(path).download()
+  return buf as Buffer
+}
+
 export async function deleteFile(path: string): Promise<void> {
   const bucket = getStaffDocsBucket()
   if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
