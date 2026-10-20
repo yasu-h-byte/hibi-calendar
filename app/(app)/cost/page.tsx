@@ -21,6 +21,10 @@ interface SiteProfit {
   billingLocked?: Record<string, { no: string }>
   /** 請求先が一次（山岡建設工業など）の自社現場。請求額は「山岡への請求書」で発行すると自動で入る */
   primeBilled?: boolean
+  /** 山岡への請求書（取り消し以外）の状態と税抜（ym → …） */
+  invoiceByMonth?: Record<string, { status: string; subtotal: number; no: string; id: string }>
+  /** 下書き・確認待ちの請求書から売上に入れた額 */
+  invoiceBilling?: number
   cost: number; costRaw?: number; subCost: number; totalCost: number
   profit: number; profitRate: number; workDays: number; subWorkDays: number
   tobiEquiv: number; tobiRate: number; tobiBase: number
@@ -299,11 +303,17 @@ export default function CostPage() {
   const LOW_RATE = 15
   //   請求額が入っていない現場の売上は、API が「人工 × 過去の平均単価」の見込み額で埋めている。
   //   billing だけ見ると入力済みに見えるので、入力した額（billingRaw）で判定する
-  const noBilling = (s: SiteProfit) => (s.billingRaw ?? 0) === 0 && (s.totalCost > 0 || s.billing > 0)
+  //   2026-10-20: 山岡への請求書の下書き・確認待ちの税抜（invoiceBilling）も「入っている」扱い（見込みではない）
+  const entered = (s: SiteProfit) => (s.billingRaw ?? 0) + (s.invoiceBilling ?? 0)
+  const noBilling = (s: SiteProfit) => entered(s) === 0 && (s.totalCost > 0 || s.billing > 0)
   const isEstimate = (s: SiteProfit) => noBilling(s) && s.billing > 0
   //   複数月の期間で「入れた月」と「まだの月」が混ざる現場は、billing = 入力額 ＋ まだの月の見込み額。
   //   入力済みの確定額に見えないよう「見込み込み」と表示する（判定・計算は変えない）
-  const estPart = (s: SiteProfit) => noBilling(s) ? 0 : Math.max(0, s.billing - (s.billingRaw ?? 0))
+  const estPart = (s: SiteProfit) => noBilling(s) ? 0 : Math.max(0, s.billing - entered(s))
+  /** 山岡への請求書の状態の短い言い方 */
+  const invStatusLabel = (st: string) => st === 'issued' ? '発行済み' : st === 'pending' ? '確認1待ち' : st === 'checked' ? '確認2待ち' : '下書き'
+  /** 1か月表示で、その月の売上が山岡への請求書（下書き・確認待ち）から来ているか */
+  const invoiceOf = (s: SiteProfit, m: string) => s.invoiceByMonth?.[m]
   const hasEstPart = (s: SiteProfit) => estPart(s) >= 1
   const lowProfit = (s: SiteProfit) => !noBilling(s) && s.billing > 0 && s.profitRate < LOW_RATE
   const sites = data?.sites || []
@@ -339,6 +349,24 @@ export default function CostPage() {
     const rows = billingEdits[key] || [0]
     const ver = billingRowsVersion[key] || 0
     const lock = s.billingLocked?.[ym]
+    const inv = s.invoiceByMonth?.[ym]
+    // 自社現場（請求先が一次）の 2026年9月分以降は手入力欄を出さない: 売上は山岡への請求書（下書き→確認→発行）とつながっている（2026-10-20 代表）
+    if (s.primeBilled && ym >= '202609' && !lock) {
+      return (
+        <div className="space-y-2">
+          {inv ? (
+            <div className="rounded-[10px] bg-hibi-bg dark:bg-gray-700/40 px-4 py-3">
+              <div className="flex items-center gap-2 flex-wrap"><Chip tone={inv.status === 'pending' || inv.status === 'checked' ? 'blue' : 'gray'}>山岡への請求書 {invStatusLabel(inv.status)}</Chip><span className="text-base font-bold tabular-nums">{fmtYen(inv.subtotal)}</span><span className="text-xs text-hibi-sub dark:text-gray-400">（税抜・全枚の合計）</span></div>
+              <p className="text-xs text-hibi-sub dark:text-gray-400 mt-1">この額を売上に使っています。発行すると請求額として確定します。<a href={`/prime-invoice?ym=${ym}&id=${inv.id}`} className="font-bold text-hibi-navy dark:text-blue-300 hover:underline ml-1">請求書を開く</a></p>
+            </div>
+          ) : (
+            <div className="rounded-[10px] bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-[0.8125rem] text-amber-900 dark:text-amber-200">
+              この現場の請求額は <a href={`/prime-invoice?ym=${ym}`} className="font-bold underline">山岡への請求書</a> で大林組の控えを入れて作ります（下書きの段階から売上に入ります）。ここでは手で入れません
+            </div>
+          )}
+        </div>
+      )
+    }
     // 山岡への請求書が発行済みの月: 請求書の税抜（工種ごと）が自動で入っている。手で変えない（直すときは請求書を取り消して作り直す）
     if (lock) {
       return (
@@ -492,6 +520,8 @@ export default function CostPage() {
                   <span className="col-span-2 lg:col-span-1 text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">{s.name}</span>
                   <span className="lg:text-right text-base font-bold">{isEstimate(s)
                     ? <span className="text-gray-400 dark:text-gray-500" title="請求額が入るまでは、人工 × 過去の平均単価の見込み額です"><span className="text-2xs font-normal mr-1">見込み</span>{fmtYen(s.billing)}</span>
+                    : !isMultiMonth && invoiceOf(s, ym) && invoiceOf(s, ym)!.status !== 'issued'
+                      ? <span title={`山岡への請求書（${invStatusLabel(invoiceOf(s, ym)!.status)}）の税抜。発行すると確定します`}><span className="text-2xs font-normal text-hibi-navy dark:text-blue-300 mr-1">請求書（{invStatusLabel(invoiceOf(s, ym)!.status)}）</span>{fmtYen(s.billing)}</span>
                     : s.billing > 0
                       ? (hasEstPart(s)
                         ? <span title={`入力した請求額 ${fmtYen(s.billingRaw ?? 0)} ＋ 請求額まだの月の見込み ${fmtYen(estPart(s))}`}><span className="text-2xs font-normal text-gray-400 dark:text-gray-500 mr-1">見込み込み</span>{fmtYen(s.billing)}</span>
@@ -635,7 +665,7 @@ export default function CostPage() {
                     const sum = rows.reduce((a: number, b: number) => a + b, 0)
                     return (
                       <div key={m} className="flex justify-between px-3 py-2 border-t first:border-t-0 border-hibi-line dark:border-gray-700 tabular-nums">
-                        <span>{ymLabel(m)}{openSite.billingLocked?.[m] && <span className="ml-2 text-2xs text-hibi-sub dark:text-gray-400">請求書 {openSite.billingLocked[m].no}</span>}</span><span className={sum > 0 ? 'font-bold' : 'text-gray-400'}>{sum > 0 ? fmtYen(sum) : 'まだ'}</span>
+                        <span>{ymLabel(m)}{openSite.billingLocked?.[m] && <span className="ml-2 text-2xs text-hibi-sub dark:text-gray-400">請求書 {openSite.billingLocked[m].no}</span>}{!openSite.billingLocked?.[m] && openSite.invoiceByMonth?.[m] && <span className="ml-2 text-2xs text-hibi-navy dark:text-blue-300">請求書（{invStatusLabel(openSite.invoiceByMonth[m].status)}）</span>}</span><span className={sum > 0 || openSite.invoiceByMonth?.[m] ? 'font-bold' : 'text-gray-400'}>{sum > 0 ? fmtYen(sum) : openSite.invoiceByMonth?.[m] ? fmtYen(openSite.invoiceByMonth[m].subtotal) : 'まだ'}</span>
                       </div>
                     )
                   })}
@@ -654,13 +684,8 @@ export default function CostPage() {
                   {isEstimate(openSite) && (
                     <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">いまは見込み <b className="tabular-nums text-gray-700 dark:text-gray-200">{fmtYen(openSite.billing)}</b>（人工 × 過去の平均単価）で計算しています。請求額を入れると置き換わります</p>
                   )}
-                  {openSite.primeBilled && !openSite.billingLocked?.[ym] && (
-                    <p className="text-[0.8125rem] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
-                      この現場の請求額は、<a href={`/prime-invoice?ym=${ym}`} className="font-bold underline">山岡への請求書</a>を発行すると自動で入ります（大林組の控えから計算）。ここで手で入れるのは、請求書をまだ作れないときだけにしてください
-                    </p>
-                  )}
                   {billingInputs(openSite)}
-                  {!openSite.billingLocked?.[ym] && <p className="text-xs text-hibi-sub dark:text-gray-400">入れると自動で保存し、粗利を計算し直します。出向中スタッフの分は差し引いた額を入れてください</p>}
+                  {!openSite.billingLocked?.[ym] && !(openSite.primeBilled && ym >= '202609') && <p className="text-xs text-hibi-sub dark:text-gray-400">入れると自動で保存し、粗利を計算し直します。出向中スタッフの分は差し引いた額を入れてください</p>}
                 </>
               )}
             </section>

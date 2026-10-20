@@ -136,6 +136,15 @@ export async function GET(request: NextRequest) {
     const allAttD = { ...att.d, ...lookbackAtt.d }
     const allAttSD = { ...att.sd, ...lookbackAtt.sd }
 
+    // 山岡への請求書（lib/prime-invoice.ts・2026-10-20）: 自社現場の売上は請求書とつなぐ（代表「原価・収益のこの部分は連携」）。
+    //   発行済み → 現場の請求額に自動で入っている（billing）。下書き・確認待ち → その税抜を売上に使う（見込みより正確）。取り消しは無視
+    const primeByKey = new Map<string, { status: string; subtotal: number; no: string; id: string }>()
+    for (const m of ymRange) {
+      for (const b of await listPrimeBundlesForYm(m)) if (b.status !== 'void') primeByKey.set(`${b.siteId}_${m}`, { status: b.status, subtotal: Math.round(b.subtotal), no: b.no, id: b.id })
+    }
+    /** 現場ごとの「請求書の下書き・確認待ち」から入れた売上（手入力でも見込みでもない） */
+    const invoiceBillingBySite = new Map<string, number>()
+
     // ═══ Billing totals per site across all months (with estimation) ═══
     const siteBillingMap = new Map<string, number>()
     let totalBillingAll = 0
@@ -146,6 +155,14 @@ export async function GET(request: NextRequest) {
       for (const site of allSites) {
         if (siteFilter !== 'all' && site.id !== siteFilter) continue
         const actualBill = getBillTotal(main, site.id, ymStr)
+        const pb = primeByKey.get(`${site.id}_${ymStr}`)
+        if (actualBill <= 0 && pb && pb.status !== 'issued' && pb.subtotal > 0) {
+          // 山岡への請求書が下書き・確認待ち: その税抜を売上に（見込みにしない）
+          siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + pb.subtotal)
+          invoiceBillingBySite.set(site.id, (invoiceBillingBySite.get(site.id) || 0) + pb.subtotal)
+          totalBillingAll += pb.subtotal
+          continue
+        }
         if (actualBill > 0) {
           siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + actualBill)
           totalBillingAll += actualBill
@@ -171,9 +188,7 @@ export async function GET(request: NextRequest) {
 
     // 山岡への請求書（lib/prime-invoice.ts・2026-10-20）: 発行済みの月は、現場の請求額が請求書から自動で入るので手で変えない（画面は読み取り専用・POST も止める）
     const primeLocks = new Map<string, { no: string }>()
-    for (const m of ymRange) {
-      for (const b of await listPrimeBundlesForYm(m)) if (b.status === 'issued') primeLocks.set(`${b.siteId}_${m}`, { no: b.no })
-    }
+    for (const [k, v] of primeByKey) if (v.status === 'issued') primeLocks.set(k, { no: v.no })
     const companiesForParties = (main.subcons || []) as unknown as CompanyLike[]
     /** 請求先が一次（山岡建設工業など）の自社現場か（工種サイトは親で判定） */
     const billsToPrime = (siteId: string) => {
@@ -194,6 +209,7 @@ export async function GET(request: NextRequest) {
       let billingRaw = 0
       const billingByMonth: Record<string, number[]> = {}
       const billingLocked: Record<string, { no: string }> = {}
+      const invoiceByMonth: Record<string, { status: string; subtotal: number; no: string; id: string }> = {}
       for (const m of ymRange) {
         const billingKey = `${rawSite.id}_${m}`
         const billingArr = main.billing[billingKey] || []
@@ -201,8 +217,11 @@ export async function GET(request: NextRequest) {
         billingRaw += getBillTotal(main, rawSite.id, m)
         const lock = primeLocks.get(billingKey)
         if (lock) billingLocked[m] = lock
+        const pb = primeByKey.get(billingKey)
+        if (pb) invoiceByMonth[m] = pb
       }
       const primeBilled = billsToPrime(rawSite.id)
+      const invoiceBilling = invoiceBillingBySite.get(rawSite.id) || 0
 
       // 出向控除: 人件費のみ差引（売上は既に控除済みの値が入力されているためそのまま）
       const dispatchDeduction = sd.dispatchDeduction || 0
@@ -228,6 +247,10 @@ export async function GET(request: NextRequest) {
         billingLocked,
         // 請求先が一次（山岡建設工業など）の自社現場。請求額は「山岡への請求書」で発行すると自動で入る
         primeBilled,
+        // 山岡への請求書（取り消し以外）の状態と税抜（ym → status/subtotal/no/id）
+        invoiceByMonth,
+        // 下書き・確認待ちの請求書から売上に入れた額（手入力でも見込みでもない）
+        invoiceBilling: Math.round(invoiceBilling),
         cost: Math.round(cost),
         costRaw: Math.round(sd.cost),
         dispatchDeduction: Math.round(dispatchDeduction),
