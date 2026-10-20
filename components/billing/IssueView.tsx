@@ -175,7 +175,12 @@ export default function IssueView({ ym }: { ym: string }) {
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
               <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">出す請求書（{ymLabel}分）</h2>
-              <a href={`/paper-invoice?ym=${ym}`} className="ml-auto text-xs text-hibi-navy dark:text-blue-300 hover:underline">紙で出した控え（応援）</a>
+              <span className="text-xs text-hibi-sub dark:text-gray-400">応援の請求書は手作りで出したら「紙で出した控え」に入れます</span>
+              {canRequest && (
+                <a href={`/paper-invoice?ym=${ym}`} className="ml-auto inline-flex items-center h-9 px-3.5 rounded-[9px] text-[0.8125rem] font-bold whitespace-nowrap border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+                  紙で出した請求書（応援）を入れる
+                </a>
+              )}
             </div>
             <div className="hidden lg:grid grid-cols-[90px_minmax(0,1fr)_170px_150px_170px] gap-3.5 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
               <span>種類</span><span>宛先・現場</span><span className="text-right">金額</span><span>状態</span><span />
@@ -193,13 +198,19 @@ export default function IssueView({ ym }: { ym: string }) {
                   {r.amount && r.amountLabel ? <span className="block lg:inline text-2xs font-normal text-hibi-sub dark:text-gray-400 lg:ml-1">{r.amountLabel}</span> : null}
                 </span>
                 <span><Chip tone={STATE[r.state].tone}>{STATE[r.state].label}</Chip></span>
-                <span className="lg:text-right">
+                <span className="lg:text-right flex lg:justify-end gap-2 flex-wrap">
                   {(canRequest || r.state !== 'none') && (
                     <a href={r.href} className={`inline-flex items-center h-9 px-3.5 rounded-[9px] text-[0.8125rem] font-bold whitespace-nowrap ${
                       r.state === 'none' || r.state === 'draft' || r.state === 'returned' ? 'bg-hibi-navy text-white hover:bg-hibi-light'
                       : r.state === 'pending' || r.state === 'checked' ? 'bg-green-700 text-white hover:bg-green-800'
                       : 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'}`}>
-                      {r.action}
+                      {r.kind === '応援' && (r.state === 'none' || r.state === 'returned') ? 'システムで作る' : r.action}
+                    </a>
+                  )}
+                  {/* 応援の請求書はしばらく手作り（2026-10-02 代表）。手作りで出したら紙の控えを入れる入口をここにも */}
+                  {canRequest && r.kind === '応援' && (r.state === 'none' || r.state === 'returned') && (
+                    <a href={`/paper-invoice?ym=${ym}`} className="inline-flex items-center h-9 px-3.5 rounded-[9px] text-[0.8125rem] font-bold whitespace-nowrap border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+                      紙の控えを入れる
                     </a>
                   )}
                 </span>
