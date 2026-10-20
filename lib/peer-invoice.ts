@@ -200,7 +200,8 @@ export function buildSiteDetail(
     if (!row) { row = { key, label: w.name, isSubcon: false, cells: {}, total: 0 }; rows.set(key, row) }
     // 残業h は時刻から数え直す（保存済みの o が古い・無い日でも請求がずれない。calcOvertimeHours が唯一の決まり）
     const ot = calcOvertimeHours(v, siteWs)
-    row.cells[day] = { md, ot: ot || undefined, night: !!v.ns }
+    // undefined を値に入れない（Firestore は undefined を含む書き込みを拒否する。2026-10-21 発行が 500 になった原因）
+    row.cells[day] = { md, ...(ot ? { ot } : {}), night: !!v.ns }
     row.total = Math.round((row.total + md) * 100) / 100
   }
 
@@ -215,7 +216,7 @@ export function buildSiteDetail(
     const key = `s${sc.id}`
     let row = rows.get(key)
     if (!row) { row = { key, label: `${sc.name}（外注）`, isSubcon: true, cells: {}, total: 0 }; rows.set(key, row) }
-    row.cells[day] = { md: v.n, ot: v.on || undefined }
+    row.cells[day] = { md: v.n, ...(v.on ? { ot: v.on } : {}) }
     row.total = Math.round((row.total + v.n) * 100) / 100
   }
 

@@ -131,7 +131,7 @@ export async function createPrimeDraft(args: {
     sheets: args.sheets, files: args.files, warnings: args.warnings, ...sums,
     issuer: main.companyProfile || null,
     status: 'draft', no: '', issueDate: '', issuedAt: '', issuedBy: '',
-    createdAt: now, createdBy: args.actor, createdByName: args.actorName || undefined, updatedAt: now,
+    createdAt: now, createdBy: args.actor, ...(args.actorName ? { createdByName: args.actorName } : {}), updatedAt: now,
   }
   const ref = doc(db, COLLECTION, docId)
   const written = await withInvoiceMonthLock(ym, async (tx) => {
