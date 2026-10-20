@@ -138,9 +138,23 @@ export async function GET(request: NextRequest) {
 
     // 山岡への請求書（lib/prime-invoice.ts・2026-10-20）: 自社現場の売上は請求書とつなぐ（代表「原価・収益のこの部分は連携」）。
     //   発行済み → 現場の請求額に自動で入っている（billing）。下書き・確認待ち → その税抜を売上に使う（見込みより正確）。取り消しは無視
+    //   読む月は、表示の範囲だけでなく「月ごとの推移（決算期）」と前月比の前月も（2026-10-20 推移だけ下書きを見ておらず 9月が −116% に見えた）
     const primeByKey = new Map<string, { status: string; subtotal: number; no: string; id: string }>()
-    for (const m of ymRange) {
+    const prevYmDate0 = new Date(baseY, baseM - 2, 1)
+    const primeMonths = [...new Set([...ymRange, ...buildYMList('fy', baseY, baseM).map(x => ymKey(x.y, x.m)), ymKey(prevYmDate0.getFullYear(), prevYmDate0.getMonth() + 1)])]
+    for (const m of primeMonths) {
       for (const b of await listPrimeBundlesForYm(m)) if (b.status !== 'void') primeByKey.set(`${b.siteId}_${m}`, { status: b.status, subtotal: Math.round(b.subtotal), no: b.no, id: b.id })
+    }
+    /**
+     * 現場×月の売上（税抜）。手入力・発行済みの請求額（billing）があればそれ、無ければ山岡への請求書の下書き・確認待ちの税抜。
+     * 上の合計・現場の行・月ごとの推移・前月比の全部でこの1つを使う（場所ごとに違う数字を出さない）
+     */
+    const billFor = (siteId: string, ymStr: string): { amount: number; source: 'billing' | 'draft' | 'none' } => {
+      const actual = getBillTotal(main, siteId, ymStr)
+      if (actual > 0) return { amount: actual, source: 'billing' }
+      const pb = primeByKey.get(`${siteId}_${ymStr}`)
+      if (pb && pb.status !== 'issued' && pb.subtotal > 0) return { amount: pb.subtotal, source: 'draft' }
+      return { amount: 0, source: 'none' }
     }
     /** 現場ごとの「請求書の下書き・確認待ち」から入れた売上（手入力でも見込みでもない） */
     const invoiceBillingBySite = new Map<string, number>()
@@ -154,15 +168,15 @@ export async function GET(request: NextRequest) {
     for (const ymStr of ymRange) {
       for (const site of allSites) {
         if (siteFilter !== 'all' && site.id !== siteFilter) continue
-        const actualBill = getBillTotal(main, site.id, ymStr)
-        const pb = primeByKey.get(`${site.id}_${ymStr}`)
-        if (actualBill <= 0 && pb && pb.status !== 'issued' && pb.subtotal > 0) {
+        const bill = billFor(site.id, ymStr)
+        if (bill.source === 'draft') {
           // 山岡への請求書が下書き・確認待ち: その税抜を売上に（見込みにしない）
-          siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + pb.subtotal)
-          invoiceBillingBySite.set(site.id, (invoiceBillingBySite.get(site.id) || 0) + pb.subtotal)
-          totalBillingAll += pb.subtotal
+          siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + bill.amount)
+          invoiceBillingBySite.set(site.id, (invoiceBillingBySite.get(site.id) || 0) + bill.amount)
+          totalBillingAll += bill.amount
           continue
         }
+        const actualBill = bill.amount
         if (actualBill > 0) {
           siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + actualBill)
           totalBillingAll += actualBill
@@ -373,7 +387,7 @@ export async function GET(request: NextRequest) {
         pWork += sd.work
         pSubWork += sd.subWork
         pCostSum += sd.cost + sd.subCost
-        pBill += getBillTotal(main, site.id, prevYm)
+        pBill += billFor(site.id, prevYm).amount
       }
       prevTotalManDays = pWork + pSubWork
       prevBilling = pBill
@@ -491,7 +505,7 @@ export async function GET(request: NextRequest) {
           mSubDays += sd.subWork
           mDispatchDeduction += sd.dispatchDeduction || 0
         }
-        mBilling += getBillTotal(main, site.id, mStr)
+        mBilling += billFor(site.id, mStr).amount  // 上の合計と同じ決まり（下書きの請求書も売上に）
       }
       // 売上はそのまま（出向控除は人件費のみ）
       mCostVal = Math.max(0, mCostVal - mDispatchDeduction)
