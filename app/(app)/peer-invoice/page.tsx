@@ -144,9 +144,9 @@ function PeerInvoicePageInner() {
 
   const post = async (payload: Record<string, unknown>, action: string) => {
     setBusy(true)
-    const res = await postJson<{ error?: string }>('/api/peer-invoice', payload)
+    const res = await postJson<{ error?: string; detail?: string }>('/api/peer-invoice', payload)
     setBusy(false)
-    if (!res.ok) { notify.failed(action, res.error || res.data?.error || 'サーバが受け付けませんでした'); return }
+    if (!res.ok) { notify.failed(action, [res.error || res.data?.error || 'サーバが受け付けませんでした', res.data?.detail].filter(Boolean).join('：')); return }
     load()
   }
 

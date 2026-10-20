@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261021_peer_invoice_issue_fix',
+    title: '応援の請求書・HFU → 日比建設 の請求書が「発行できませんでした（Server error）」になるのを直しました',
+    content:
+      '出面明細の「残業なし」の印の持ち方が原因で、発行（保存）のときだけ失敗していました。下書きの表示は正しく、金額にも影響はありません。'
+      + '直したあとは、そのまま「この内容で発行」「発行を申請」ができます。万一また失敗したときは、お知らせに理由が出るようにしました。',
+    category: 'fix',
+    publishedAt: '2026-10-21T09:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261020_prime_invoice_a4',
     title: '山岡への請求書: 印刷が A4 横 1枚に収まらず 2ページに割れていたのを直しました',
     content:

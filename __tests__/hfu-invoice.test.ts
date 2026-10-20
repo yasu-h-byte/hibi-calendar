@@ -65,6 +65,15 @@ const attD: Record<string, AttendanceEntry> = {
 describe('buildHfuInvoiceDraft', () => {
   const draft = buildHfuInvoiceDraft(main, attD, ym)!
 
+  test('Firestore に書ける形（値に undefined を含まない。2026-10-21 発行が 500 になった回帰）', () => {
+    // toStrictEqual は「undefined の項目がある」と「項目が無い」を区別する。JSON を通すと undefined は消えるので、
+    // 元と一致しなければ undefined が混ざっている（Firestore Admin SDK は undefined を含む書き込みを例外にする）
+    expect(JSON.parse(JSON.stringify(draft))).toStrictEqual(draft)
+    const cells = draft.detail.flatMap(d => d.rows.flatMap(r => Object.values(r.cells)))
+    expect(cells.length).toBeGreaterThan(0)
+    for (const c of cells) expect(Object.values(c)).not.toContain(undefined)
+  })
+
   test('宛先は日比建設・kind は hfu', () => {
     expect(draft.kind).toBe('hfu')
     expect(draft.companyId).toBe(HFU_INVOICE_COMPANY_ID)

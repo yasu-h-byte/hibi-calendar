@@ -113,7 +113,9 @@ export function getAdminDb(): AdminFirestore | null {
     //     （Sparkプランの日次上限）で、gRPC/REST どちらでも RESOURCE_EXHAUSTED になることを確認済み。
     //     根本対策は Blaze 化＋読み取り量削減。preferRest はサーバレス安定性のため維持する。
     try {
-      adminDb.settings({ preferRest: true })
+      // ignoreUndefinedProperties: 値が undefined の項目は書かずに飛ばす（JSON と同じ）。無いと undefined 1つで書き込み全体が例外になり
+      //   500 になる（2026-10-21 応援・HFU の請求書の発行が出面明細の ot: undefined で落ちていた）。上流でも undefined を作らないのが本筋
+      adminDb.settings({ preferRest: true, ignoreUndefinedProperties: true })
     } catch { /* 既に設定済み/操作後なら無視 */ }
     // cached.admin には firestore モジュールを保持（getAdminFieldValue が FieldValue を使う）
     cached = { db: adminDb, admin: firestoreMod }

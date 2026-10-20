@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: 'draft', draft, issuer, history, paper, approval: await approvalOf(draft.detail) })
   } catch (e) {
     console.error('[peer-invoice] GET error', e)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error', detail: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }
 
@@ -123,6 +123,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (e) {
     console.error('[peer-invoice] POST error', e)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error', detail: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }
