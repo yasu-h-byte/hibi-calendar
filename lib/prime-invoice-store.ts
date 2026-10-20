@@ -5,8 +5,10 @@
  * 保存先は `primeInvoices` コレクション。1件 = 一次会社 × 現場 × 対象月（中に工種ごとの枚 sheets[]）。
  * 応援の請求書（peerInvoices）と違い、下書き（draft）も保存する（控え・メモのファイルを持つため）。
  *
- * 状態: draft（下書き・直せる）→ pending（事務が申請・内容を凍結）→ issued（事業責任者・管理者が承認して発行・番号が付く）→ void（取り消し・番号は欠番）
- *   差し戻し・取り下げは draft に戻す（ファイルも直した内容も残る。番号は消費しない）。
+ * 状態（2026-10-20 代表決定の承認ルート: 格納（森田さん）→ 確認1（政仁さん）→ 確認2（代表）→ 発行）:
+ *   draft（下書き・直せる）→ pending（事務が申請・内容を凍結・確認1待ち）→ checked（事業責任者が確認1・確認2待ち）
+ *   → issued（代表が確認2して発行・番号が付く）→ void（取り消し・番号は欠番）
+ *   確認1と確認2は別の人（同じ人が両方はできない）。差し戻し（確認1・確認2のどちらでも）・取り下げは draft に戻す（ファイルも直した内容も残る。番号は消費しない）。
  * 番号は `${invoicePrefix}P-${ym}-${NN}`（例 HCP-202609-01）。応援の請求書（HC-202609-01）と混ぜない。
  * 同じ月の採番・申請・承認は応援の請求書と同じ合図（withInvoiceMonthLock）で直列にする。
  */
@@ -54,9 +56,9 @@ export async function getPrimeBundle(id: string): Promise<PrimeInvoiceBundle | n
   return { ...(snap.data() as Omit<PrimeInvoiceBundle, 'id'>), id }
 }
 
-/** 承認待ち（通知ベル用） */
+/** 確認待ち（通知ベル用）: pending = 確認1待ち（事業責任者）／ checked = 確認2待ち（代表）。status の IN クエリ1回 */
 export async function listPendingPrimeInvoices(): Promise<PrimeInvoiceBundle[]> {
-  return snapToList(await getDocs(query(collection(db, COLLECTION), where('status', '==', 'pending'))))
+  return snapToList(await getDocs(query(collection(db, COLLECTION), where('status', 'in', ['pending', 'checked']))))
 }
 
 /** 同じ会社・現場・月で生きているもの（void 以外）があればその理由 */
@@ -64,7 +66,7 @@ function activeBundleError(existing: PrimeInvoiceBundle[], exceptId?: string): s
   const live = existing.filter(b => b.id !== exceptId && b.status !== 'void')
   if (live.length === 0) return null
   const b = live[0]
-  const s = b.status === 'issued' ? '発行済み' : b.status === 'pending' ? '承認待ち' : '下書き'
+  const s = b.status === 'issued' ? '発行済み' : b.status === 'pending' ? '確認1待ち' : b.status === 'checked' ? '確認2待ち' : '下書き'
   return `この会社・この現場・この月は${s}の請求書があります（${b.no || '番号なし'}）。作り直す場合は、そちらを開いて直すか、取り消し・削除してから入れ直してください`
 }
 
@@ -177,7 +179,7 @@ async function readinessError(main: MainData, b: PrimeInvoiceBundle, approvalMes
   return null
 }
 
-/** 事務が「発行を申請」する（draft → pending）。内容はこの時点で凍結（自社情報も） */
+/** 事務が「発行を申請」する（draft → pending・確認1待ち）。内容はこの時点で凍結（自社情報も） */
 export async function requestPrimeInvoice(args: { main: MainData; id: string; actor: string; approvalMessage: string | null }): Promise<PrimeResult | PrimeError> {
   const { main, id, actor } = args
   const cur = await getPrimeBundle(id)
@@ -189,31 +191,49 @@ export async function requestPrimeInvoice(args: { main: MainData; id: string; ac
   const upd = {
     status: 'pending' as const, issuer: main.companyProfile as CompanyProfile,
     requestedAt: now, requestedBy: actor, requestedByName: main.workers.find(w => String(w.id) === actor)?.name || actor,
+    checkedAt: '', checkedBy: '', checkedByName: '',
     rejectedAt: '', rejectedBy: '', rejectReason: '', updatedAt: now,
   }
   await updateDoc(doc(db, COLLECTION, id), upd)
-  await logActivity(actor, 'primeInvoice.request', `${labelOf(cur)} 一次への請求書（税込 ¥${cur.total.toLocaleString()}）の発行を申請`)
+  await logActivity(actor, 'primeInvoice.request', `${labelOf(cur)} 一次への請求書（税込 ¥${cur.total.toLocaleString()}）の発行を申請（確認1待ち）`)
+  return { ok: true, record: { ...cur, ...upd } }
+}
+
+/** 確認1（事業責任者・政仁さん）: pending → checked。内容は申請時に凍結したまま。発行は確認2（代表）で */
+export async function checkPrimeInvoice(args: { main: MainData; id: string; actor: string; approvalMessage: string | null }): Promise<PrimeResult | PrimeError> {
+  const { main, id, actor } = args
+  const cur = await getPrimeBundle(id)
+  if (!cur) return { ok: false, error: '請求書が見つかりません' }
+  if (cur.status !== 'pending') return { ok: false, error: '確認1待ちではありません（すでに処理済みです）' }
+  if (cur.requestedBy === actor) return { ok: false, error: '申請した人は確認1をできません（別の人が確かめます）' }
+  const err = await readinessError(main, cur, args.approvalMessage)
+  if (err) return { ok: false, error: err }
+  const now = new Date().toISOString()
+  const upd = { status: 'checked' as const, checkedAt: now, checkedBy: actor, checkedByName: main.workers.find(w => String(w.id) === actor)?.name || (actor === 'super-admin' ? '代表' : actor), updatedAt: now }
+  await updateDoc(doc(db, COLLECTION, id), upd)
+  await logActivity(actor, 'primeInvoice.check', `${labelOf(cur)} 一次への請求書（税込 ¥${cur.total.toLocaleString()}）を確認1（確認2待ち）`)
   return { ok: true, record: { ...cur, ...upd } }
 }
 
 /**
- * 承認して発行（pending → issued）、または下書きから直接発行（draft → issued・事業責任者・管理者）。
+ * 確認2して発行（checked → issued・代表だけ・lib/permissions.ts invoice.issuePrime）。確認1をした人とは別の人。
  * 番号はここで付く。採番と「同じ会社・現場・月に発行済みが無いか」は同じ月の処理を直列にした中で読み直す。
  */
 export async function issuePrimeInvoice(args: { main: MainData; id: string; actor: string; approvalMessage: string | null }): Promise<PrimeResult | PrimeError> {
   const { main, id, actor } = args
   const cur = await getPrimeBundle(id)
   if (!cur) return { ok: false, error: '請求書が見つかりません' }
-  if (cur.status !== 'draft' && cur.status !== 'pending') return { ok: false, error: '発行できる状態ではありません（すでに発行・取り消し済みです）' }
+  if (cur.status !== 'checked') return { ok: false, error: cur.status === 'pending' ? '確認1（事業責任者）がまだです。確認1のあとに確認2で発行します' : '発行できる状態ではありません（下書き・発行済み・取り消し済み）' }
+  if (cur.checkedBy && cur.checkedBy === actor) return { ok: false, error: '確認1をした人は確認2をできません（別の人が確かめます）' }
   const err = await readinessError(main, cur, args.approvalMessage)
   if (err) return { ok: false, error: err }
-  const issuer = (cur.status === 'pending' && cur.issuer) ? cur.issuer : (main.companyProfile as CompanyProfile)
+  const issuer = cur.issuer || (main.companyProfile as CompanyProfile)
   const prefix = `${issuer.invoicePrefix?.trim() || 'HC'}${PRIME_INVOICE_NO_SUFFIX}`
   const ref = doc(db, COLLECTION, id)
   const done = await withInvoiceMonthLock(cur.ym, async (tx) => {
     const fresh = await tx.get(ref)
     const st = fresh.exists() ? (fresh.data() as { status?: string }).status : undefined
-    if (st !== 'draft' && st !== 'pending') return { ok: false as const, error: '発行できる状態ではありません（すでに処理済みです）' }
+    if (st !== 'checked') return { ok: false as const, error: '発行できる状態ではありません（すでに処理済みです）' }
     const all = await listPrimeBundlesForYm(cur.ym)
     if (all.some(b => b.id !== id && b.companyId === cur.companyId && b.siteId === cur.siteId && b.status === 'issued')) {
       return { ok: false as const, error: 'この会社・この現場・この月はすでに発行済みです。先に取り消してください' }
@@ -224,21 +244,22 @@ export async function issuePrimeInvoice(args: { main: MainData; id: string; acto
     return { ok: true as const, update }
   })
   if (!done.ok) return done
-  await logActivity(actor, cur.status === 'pending' ? 'primeInvoice.approve' : 'primeInvoice.issue',
-    `${labelOf(cur)} 一次への請求書 ${done.update.no}（${cur.sheets.length}枚・税込 ¥${cur.total.toLocaleString()}）を${cur.status === 'pending' ? `承認して発行（申請: ${cur.requestedByName || cur.requestedBy || '—'}）` : '発行'}`)
+  await logActivity(actor, 'primeInvoice.issue',
+    `${labelOf(cur)} 一次への請求書 ${done.update.no}（${cur.sheets.length}枚・税込 ¥${cur.total.toLocaleString()}）を確認2して発行（申請: ${cur.requestedByName || cur.requestedBy || '—'}・確認1: ${cur.checkedByName || cur.checkedBy || '—'}）`)
   return { ok: true, record: { ...cur, ...done.update } }
 }
 
-/** 申請の差し戻し（事業責任者・管理者）または取り下げ（事務）。下書きに戻す（ファイル・内容は残る） */
+/** 差し戻し（確認1・確認2のどちらの段でも。事業責任者・代表）または取り下げ（事務・確認1待ちの間だけ）。下書きに戻す（ファイル・内容は残る） */
 export async function rejectPrimeInvoice(args: { id: string; actor: string; reason?: string; withdraw?: boolean }): Promise<PrimeResult | PrimeError> {
   const { id, actor, reason, withdraw } = args
   const cur = await getPrimeBundle(id)
   if (!cur) return { ok: false, error: '請求書が見つかりません' }
-  if (cur.status !== 'pending') return { ok: false, error: '承認待ちの申請ではありません（すでに処理済みです）' }
+  if (withdraw && cur.status !== 'pending') return { ok: false, error: cur.status === 'checked' ? '確認1が済んでいるので取り下げられません（差し戻しを頼んでください）' : '確認1待ちの申請ではありません（すでに処理済みです）' }
+  if (!withdraw && cur.status !== 'pending' && cur.status !== 'checked') return { ok: false, error: '確認待ちの申請ではありません（すでに処理済みです）' }
   const now = new Date().toISOString()
-  const upd = { status: 'draft' as const, rejectedAt: now, rejectedBy: actor, rejectReason: withdraw ? `取り下げ${reason ? `: ${reason}` : ''}` : (reason || '差し戻し'), updatedAt: now }
+  const upd = { status: 'draft' as const, checkedAt: '', checkedBy: '', checkedByName: '', rejectedAt: now, rejectedBy: actor, rejectReason: withdraw ? `取り下げ${reason ? `: ${reason}` : ''}` : (reason || '差し戻し'), updatedAt: now }
   await updateDoc(doc(db, COLLECTION, id), upd)
-  await logActivity(actor, withdraw ? 'primeInvoice.withdraw' : 'primeInvoice.reject', `${labelOf(cur)} 一次への請求書の申請を${withdraw ? '取り下げ' : '差し戻し'}${reason ? `（${reason}）` : ''}`)
+  await logActivity(actor, withdraw ? 'primeInvoice.withdraw' : 'primeInvoice.reject', `${labelOf(cur)} 一次への請求書の申請を${withdraw ? '取り下げ' : `差し戻し（${cur.status === 'checked' ? '確認2' : '確認1'}の段）`}${reason ? `（${reason}）` : ''}`)
   return { ok: true, record: { ...cur, ...upd } }
 }
 
@@ -247,7 +268,7 @@ export async function voidPrimeInvoice(args: { id: string; actor: string; reason
   const cur = await getPrimeBundle(id)
   if (!cur) return { ok: false, error: '請求書が見つかりません' }
   if (cur.status === 'void') return { ok: false, error: 'すでに取り消し済みです' }
-  if (cur.status !== 'issued') return { ok: false, error: '発行済みの請求書ではありません（申請中は差し戻し・取り下げ、下書きは削除で処理してください）' }
+  if (cur.status !== 'issued') return { ok: false, error: '発行済みの請求書ではありません（確認待ちは差し戻し・取り下げ、下書きは削除で処理してください）' }
   const now = new Date().toISOString()
   const upd = { status: 'void' as const, voidedAt: now, voidedBy: actor, voidReason: reason || '', updatedAt: now }
   await updateDoc(doc(db, COLLECTION, id), upd)

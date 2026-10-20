@@ -46,7 +46,7 @@ export function PrimeInvoiceSheetPage({ b, s, pageNo, pages }: { b: PrimeInvoice
   const gcIsObayashi = /大林/.test(s.projectName) || true
   const ordererOther = ''
   const taxRatePct = Math.round((b.taxRate ?? 0.1) * 100)
-  const watermark = b.status === 'void' ? '取り消し' : b.status === 'issued' ? '' : b.status === 'pending' ? '承認待ち' : '下書き'
+  const watermark = b.status === 'void' ? '取り消し' : b.status === 'issued' ? '' : b.status === 'pending' ? '確認1待ち' : b.status === 'checked' ? '確認2待ち' : '下書き'
   return (
     <section className="prime-page">
       {watermark && <div className="prime-watermark">{watermark}</div>}

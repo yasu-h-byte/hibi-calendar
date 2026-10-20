@@ -278,7 +278,8 @@ workSchedule?: {
 | `warnings` | string[] | 読み取り全体の注意 |
 | `subtotal` / `tax` / `total` | number | 全枚の合計（税抜・消費税・税込） |
 | `issuer` | `CompanyProfile` | 自社情報（申請・発行時に凍結） |
-| `status` | string | `draft` → `pending` → `issued` → `void`。差し戻し・取り下げは `draft` に戻す（`rejectReason` に記録） |
+| `status` | string | `draft` → `pending`（確認1待ち）→ `checked`（確認2待ち）→ `issued` → `void`。差し戻し・取り下げは `draft` に戻す（`rejectReason` に記録） |
+| `checkedAt` / `checkedBy` / `checkedByName` | | 確認1（事業責任者）の記録。確認2（代表）は `issuedAt` / `issuedBy` |
 | `no` | string | `${接頭辞}P-${ym}-${連番}`（例 `HCP-202609-01`）。発行で付く。応援の請求書と混ぜない |
 | `issuedAt` / `issuedBy` / `requestedAt` / `requestedBy` / `requestedByName` / `rejectedAt` / `rejectedBy` / `rejectReason` / `voidedAt` / `voidedBy` / `voidReason` | | 申請・承認・差し戻し・取り消しの記録 |
 | `createdAt` / `createdBy` / `createdByName` / `updatedAt` | | 作成・更新の記録 |

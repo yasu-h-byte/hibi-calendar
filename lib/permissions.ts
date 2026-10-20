@@ -95,6 +95,8 @@ export const CAPABILITIES = {
   // 2026-10-02 総合点検: 代表・事業責任者も申請できる（直接発行できる人が申請を止められる理由が無い。API の実装と表をそろえた）
   'invoice.request':         { group: '毎月', label: '請求書の発行を申請・取り下げ', roles: ['jimu', 'approver', 'owner'] },
   'invoice.approve':         { group: '毎月', label: '請求書の承認・発行・取り消し', roles: ['approver', 'owner'] },
+  // 2026-10-20 代表: 山岡への請求書は 格納（森田さん）→ 確認1（政仁さん）→ 確認2（代表）で発行。確認2＝発行は代表だけ（lib/prime-invoice-store.ts）
+  'invoice.issuePrime':      { group: '毎月', label: '山岡への請求書の確認2（発行）', roles: ['owner'] },
   // 2026-10-02 代表: 応援の請求書はしばらく手作り。手作りの請求書を入れて、システムの計算と見比べる（lib/paper-invoice.ts）。削除は invoice.approve
   'invoice.paper':           { group: '毎月', label: '紙（手作り）で出した請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },
   // 2026-10-05 代表: 外注から紙で届く請求書を DEDURA＋ に入れて共有する（今は代表、数か月後から森田さん。lib/subcon-invoice.ts）。削除は invoice.approve

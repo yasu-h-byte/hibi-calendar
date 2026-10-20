@@ -51,7 +51,8 @@ const pct = (r: number) => `${Math.round(r * 100)}%`
 
 const STATUS: Record<PrimeInvoiceStatus, { label: string; tone: ChipTone }> = {
   draft: { label: '下書き', tone: 'gray' },
-  pending: { label: '承認待ち', tone: 'blue' },
+  pending: { label: '確認1待ち（政仁さん）', tone: 'blue' },
+  checked: { label: '確認2待ち（代表）', tone: 'cyan' },
   issued: { label: '発行済み', tone: 'green' },
   void: { label: '取り消し', tone: 'red' },
   rejected: { label: '差し戻し', tone: 'amber' },
@@ -69,7 +70,8 @@ const INPUT = 'w-full h-10 px-3 rounded-[10px] border border-gray-300 dark:borde
 export default function PrimeInvoicePage() {
   const { user, ready } = useAuthPassword()
   const canRequest = can(user, 'invoice.request')
-  const canApprove = can(user, 'invoice.approve')
+  const canApprove = can(user, 'invoice.approve')     // 確認1・差し戻し・取り消し（事業責任者・代表）
+  const canIssue = can(user, 'invoice.issuePrime')   // 確認2して発行（代表だけ）
   const [ym, setYm] = useState(() => {
     if (typeof window === 'undefined') return shiftYm(currentYmJst(), -1)
     const q = new URLSearchParams(window.location.search).get('ym')
@@ -145,17 +147,22 @@ export default function PrimeInvoicePage() {
 
   const handleRequest = async () => {
     if (!rec) return
-    const ok = await confirmDialog({ title: `${rec.siteName} ${ymLabelOf(rec.ym)} の請求書の発行を申請しますか？`, description: `税込 ${yen(rec.total)}（${rec.sheets.length}枚）。申請した内容は凍結され、事業責任者・管理者が承認すると番号が付いて発行されます。`, confirmLabel: '申請する' })
-    if (ok) await act({ action: 'request', id: rec.id }, '申請', '発行を申請しました。承認をお待ちください')
+    const ok = await confirmDialog({ title: `${rec.siteName} ${ymLabelOf(rec.ym)} の請求書の発行を申請しますか？`, description: `税込 ${yen(rec.total)}（${rec.sheets.length}枚）。申請した内容は凍結され、政仁さんの確認1 → 代表の確認2 で番号が付いて発行されます。`, confirmLabel: '申請する' })
+    if (ok) await act({ action: 'request', id: rec.id }, '申請', '発行を申請しました。確認1（政仁さん）をお待ちください')
   }
-  const handleIssue = async (approve: boolean) => {
+  const handleCheck = async () => {
     if (!rec) return
-    const ok = await confirmDialog({ title: approve ? 'この内容で承認して発行しますか？' : 'この内容で発行しますか？', description: `税込 ${yen(rec.total)}（${rec.sheets.length}枚）。発行すると番号が付き、内容は変えられなくなります（作り直すときは取り消し）。`, confirmLabel: approve ? '承認して発行する' : '発行する' })
-    if (ok) await act({ action: approve ? 'approve' : 'issue', id: rec.id }, '発行', '請求書を発行しました')
+    const ok = await confirmDialog({ title: '確認1: この内容で間違いありませんか？', description: `税込 ${yen(rec.total)}（${rec.sheets.length}枚）。確認1のあと、代表の確認2で番号が付いて発行されます。`, confirmLabel: '確認1を済ませる' })
+    if (ok) await act({ action: 'check', id: rec.id }, '確認1', '確認1を済ませました。代表の確認2をお待ちください')
+  }
+  const handleIssue = async () => {
+    if (!rec) return
+    const ok = await confirmDialog({ title: '確認2: この内容で発行しますか？', description: `税込 ${yen(rec.total)}（${rec.sheets.length}枚）。発行すると番号が付き、内容は変えられなくなります（作り直すときは取り消し）。`, confirmLabel: '確認2して発行する' })
+    if (ok) await act({ action: 'issue', id: rec.id }, '発行', '請求書を発行しました')
   }
   const handleReject = async () => {
     if (!rec) return
-    const reason = await confirmWithReason({ title: 'この申請を差し戻しますか？', description: '下書きに戻ります。申請した人が直して、もう一度申請できます。', confirmLabel: '差し戻す', reason: { label: '差し戻しの理由', placeholder: '例: 控除計算書が先月のものです', required: true } })
+    const reason = await confirmWithReason({ title: 'この申請を差し戻しますか？', description: '下書きに戻ります（確認1も取り消されます）。申請した人が直して、もう一度申請できます。', confirmLabel: '差し戻す', reason: { label: '差し戻しの理由', placeholder: '例: 控除計算書が先月のものです', required: true } })
     if (reason !== null) await act({ action: 'reject', id: rec.id, reason }, '差し戻し', '差し戻しました')
   }
   const handleWithdraw = async () => {
@@ -188,7 +195,7 @@ export default function PrimeInvoicePage() {
   }
 
   const records = data?.records || []
-  const nPending = records.filter(r => r.status === 'pending').length
+  const nPending = records.filter(r => r.status === 'pending' || r.status === 'checked').length
   const nDraft = records.filter(r => r.status === 'draft').length
   const nIssued = records.filter(r => r.status === 'issued').length
   const noCompanies = !!data && data.companies.length === 0
@@ -223,7 +230,7 @@ export default function PrimeInvoicePage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <TodoCard icon="receipt" tone={nDraft > 0 ? 'info' : 'ok'} title="下書き" big={`${nDraft}件`} sub="控えを入れた。数字を確かめて申請へ" />
-          <TodoCard icon="bell" tone={nPending > 0 ? 'warn' : 'ok'} title="承認待ち" big={`${nPending}件`} sub="事業責任者・管理者が承認すると発行" />
+          <TodoCard icon="bell" tone={nPending > 0 ? 'warn' : 'ok'} title="確認待ち" big={`${nPending}件`} sub="確認1（政仁さん）→ 確認2（代表）で発行" />
           <TodoCard icon="check" tone="ok" title="発行済み" big={`${nIssued}件`} sub="番号が付いた請求書。印刷して送る" />
           <TodoCard icon="yen" tone="info" title="この月の請求額（税込）" big={yen(records.filter(r => r.status === 'issued' || r.status === 'pending' || r.status === 'draft').reduce((s, r) => s + r.total, 0))} sub="下書き・承認待ちも含む見込み" />
         </div>
@@ -297,14 +304,23 @@ export default function PrimeInvoicePage() {
             <div className="flex items-center gap-2 flex-wrap">
               <button onClick={() => window.print()} className={BTN_GHOST}><Icon name="download" size={15} />印刷 / PDF保存（{rec.sheets.length}枚）</button>
               {rec.status === 'draft' && canRequest && <button onClick={() => setModal({ mode: 'addFiles', rec })} disabled={busy} className={BTN_GHOST}><Icon name="folder" size={15} />ファイルを足す</button>}
-              {rec.status === 'draft' && canRequest && <button onClick={handleRequest} disabled={busy || approvalBlocked} className={BTN_MAIN}>{approvalBlocked && <Icon name="lock" size={14} />}発行を申請（承認へ回す）</button>}
-              {rec.status === 'draft' && canApprove && <button onClick={() => handleIssue(false)} disabled={busy || approvalBlocked} className={BTN_OK}>{approvalBlocked && <Icon name="lock" size={14} />}この内容で発行</button>}
-              {rec.status === 'pending' && canApprove && <button onClick={() => handleIssue(true)} disabled={busy || approvalBlocked} className={BTN_OK}>{approvalBlocked && <Icon name="lock" size={14} />}承認して発行</button>}
-              {rec.status === 'pending' && canApprove && <button onClick={handleReject} disabled={busy} className={BTN_DANGER}>差し戻し</button>}
+              {(rec.status === 'pending' || rec.status === 'checked' || rec.status === 'issued') && (
+                <span className="text-xs text-hibi-sub dark:text-gray-400">
+                  申請 {rec.requestedByName || '—'}{rec.requestedAt ? `（${jpDate(rec.requestedAt)}）` : ''}
+                  {rec.checkedAt ? ` → 確認1 ${rec.checkedByName || '—'}（${jpDate(rec.checkedAt)}）` : ''}
+                  {rec.status === 'issued' ? ` → 確認2・発行（${jpDate(rec.issuedAt)}）` : ''}
+                </span>
+              )}
+              {rec.status === 'draft' && canRequest && <button onClick={handleRequest} disabled={busy || approvalBlocked} className={BTN_MAIN}>{approvalBlocked && <Icon name="lock" size={14} />}発行を申請（確認1へ回す）</button>}
+              {rec.status === 'pending' && canApprove && <button onClick={handleCheck} disabled={busy || approvalBlocked} className={BTN_OK}>{approvalBlocked && <Icon name="lock" size={14} />}確認1を済ませる</button>}
+              {rec.status === 'checked' && canIssue && <button onClick={handleIssue} disabled={busy || approvalBlocked} className={BTN_OK}>{approvalBlocked && <Icon name="lock" size={14} />}確認2して発行</button>}
+              {(rec.status === 'pending' || rec.status === 'checked') && canApprove && <button onClick={handleReject} disabled={busy} className={BTN_DANGER}>差し戻し</button>}
               {rec.status === 'pending' && canRequest && <button onClick={handleWithdraw} disabled={busy} className={BTN_GHOST}>申請を取り下げ</button>}
               {rec.status === 'issued' && canApprove && <button onClick={handleVoid} disabled={busy} className={BTN_DANGER}>取り消し</button>}
               {rec.status === 'draft' && canRequest && <button onClick={handleDelete} disabled={busy} className={BTN_DANGER}>下書きを削除</button>}
-              {rec.status === 'draft' && !canRequest && !canApprove && <span className="text-xs text-hibi-sub">発行の申請は事務、承認は事業責任者・管理者が行います</span>}
+              {rec.status === 'pending' && !canApprove && <span className="text-xs text-hibi-sub">確認1は政仁さん（事業責任者）が行います</span>}
+              {rec.status === 'checked' && !canIssue && <span className="text-xs text-hibi-sub">確認1済み（{rec.checkedByName || '—'}）。確認2と発行は代表が行います</span>}
+              {rec.status === 'draft' && !canRequest && !canApprove && <span className="text-xs text-hibi-sub">格納と申請は事務、確認1は政仁さん、確認2（発行）は代表が行います</span>}
             </div>
 
             {/* 枚の一覧 */}

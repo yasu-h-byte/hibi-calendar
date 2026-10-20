@@ -177,7 +177,11 @@ export interface PrimeSheet {
   memoFile: string | null
 }
 
-export type PrimeInvoiceStatus = 'draft' | 'pending' | 'issued' | 'void' | 'rejected' | 'withdrawn'
+/**
+ * draft（下書き・森田さんが格納）→ pending（確認1待ち・政仁さん）→ checked（確認2待ち・代表）→ issued（発行・番号）→ void（取り消し）
+ * 差し戻し・取り下げは draft に戻す（rejected / withdrawn は使わない・型の互換のため残す）
+ */
+export type PrimeInvoiceStatus = 'draft' | 'pending' | 'checked' | 'issued' | 'void' | 'rejected' | 'withdrawn'
 
 export interface PrimeInvoiceBundle {
   id: string
@@ -211,6 +215,10 @@ export interface PrimeInvoiceBundle {
   requestedAt?: string
   requestedBy?: string
   requestedByName?: string
+  /** 確認1（政仁さん）。確認2（代表）は issuedAt / issuedBy */
+  checkedAt?: string
+  checkedBy?: string
+  checkedByName?: string
   rejectedAt?: string
   rejectedBy?: string
   rejectReason?: string

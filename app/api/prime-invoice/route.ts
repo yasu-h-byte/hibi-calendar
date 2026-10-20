@@ -9,8 +9,10 @@
  *        置き場の CORS は本番の URL からの直接 PUT しか許可していないので（Preview で止まる）、この機能は API 経由（1回 4MB まで。画面が分けて送る）
  * POST { action:'update', id, sheets?, invoiceDate? }              → 下書きの数字を手で直す（枚の index ごと）
  * POST { action:'removeFile', id, path }                            → 下書きからファイルを外して読み直す
- * POST { action:'request' | 'withdraw' | 'delete', id }            → 申請・取り下げ・下書きの削除（invoice.request）
- * POST { action:'approve' | 'issue' | 'reject' | 'void', id, reason? } → 承認して発行・直接発行・差し戻し・取り消し（invoice.approve）
+ * POST { action:'request' | 'withdraw' | 'delete', id }            → 申請（確認1待ちへ）・取り下げ・下書きの削除（invoice.request）
+ * POST { action:'check' | 'reject' | 'void', id, reason? }          → 確認1・差し戻し・取り消し（invoice.approve・事業責任者/代表）
+ * POST { action:'issue', id }                                        → 確認2して発行（invoice.issuePrime・代表だけ。確認1と同じ人は不可）
+ * 承認ルート（2026-10-20 代表決定）: 格納（森田さん）→ 確認1（政仁さん）→ 確認2（代表）→ 発行
  *
  * 給与の鍵: 控除の給与額（個人の給与）は pay.view の無い人には伏せて返す（maskPrimeBundleForViewer）。
  */
@@ -31,7 +33,7 @@ import {
 } from '@/lib/prime-invoice'
 import {
   listPrimeBundlesForYm, listPrimeBundlesSummary, getPrimeBundle, createPrimeDraft, updatePrimeDraft,
-  requestPrimeInvoice, issuePrimeInvoice, rejectPrimeInvoice, voidPrimeInvoice, deletePrimeDraft, primeApprovalGap,
+  requestPrimeInvoice, checkPrimeInvoice, issuePrimeInvoice, rejectPrimeInvoice, voidPrimeInvoice, deletePrimeDraft, primeApprovalGap,
 } from '@/lib/prime-invoice-store'
 
 export const dynamic = 'force-dynamic'
@@ -153,7 +155,7 @@ export async function GET(request: NextRequest) {
       const b = await getPrimeBundle(id)
       if (!b) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
       const main = await getMainData()
-      const check = (b.status === 'draft' || b.status === 'pending') ? await buildCheck(main, b) : null
+      const check = (b.status === 'draft' || b.status === 'pending' || b.status === 'checked') ? await buildCheck(main, b) : null
       return NextResponse.json({ record: await maybeMask(request, b), check, storageReady: !!getStaffDocsBucket() })
     }
 
@@ -173,7 +175,8 @@ export async function GET(request: NextRequest) {
 }
 
 const REQUEST_ACTIONS = new Set(['upload', 'update', 'removeFile', 'request', 'withdraw', 'delete'])
-const APPROVE_ACTIONS = new Set(['approve', 'issue', 'reject', 'void'])
+const APPROVE_ACTIONS = new Set(['check', 'reject', 'void'])
+const ISSUE_ACTIONS = new Set(['issue'])
 
 /** multipart（upload）か JSON か */
 async function readBody(request: NextRequest): Promise<{ body: Record<string, unknown>; files: File[] } | null> {
@@ -198,8 +201,8 @@ export async function POST(request: NextRequest) {
   if (!read) return NextResponse.json({ error: 'invalid body' }, { status: 400 })
   const { body, files: formFiles } = read
   const action = String(body.action || '')
-  if (!REQUEST_ACTIONS.has(action) && !APPROVE_ACTIONS.has(action)) return NextResponse.json({ error: 'unknown action' }, { status: 400 })
-  const denied = await requireCap(request, APPROVE_ACTIONS.has(action) ? 'invoice.approve' : 'invoice.request')
+  if (!REQUEST_ACTIONS.has(action) && !APPROVE_ACTIONS.has(action) && !ISSUE_ACTIONS.has(action)) return NextResponse.json({ error: 'unknown action' }, { status: 400 })
+  const denied = await requireCap(request, ISSUE_ACTIONS.has(action) ? 'invoice.issuePrime' : APPROVE_ACTIONS.has(action) ? 'invoice.approve' : 'invoice.request')
   if (denied) return denied
   const { actor, name: actorName } = await actorOf(request)
 
@@ -318,14 +321,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, record: await maybeMask(request, r.record) })
     }
 
-    if (action === 'request' || action === 'issue' || action === 'approve') {
+    if (action === 'request' || action === 'check' || action === 'issue') {
       const cur = await getPrimeBundle(id)
       if (!cur) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
       const check = await buildCheck(main, cur)
       const approvalMessage = check.approval.required && (check.approval.foremanMissing || check.approval.finalMissing) ? check.approval.message : null
       const r = action === 'request'
         ? await requestPrimeInvoice({ main, id, actor, approvalMessage })
-        : await issuePrimeInvoice({ main, id, actor, approvalMessage })
+        : action === 'check'
+          ? await checkPrimeInvoice({ main, id, actor, approvalMessage })
+          : await issuePrimeInvoice({ main, id, actor, approvalMessage })
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
       return NextResponse.json({ ok: true, record: await maybeMask(request, r.record) })
     }
