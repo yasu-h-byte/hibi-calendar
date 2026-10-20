@@ -18,8 +18,7 @@ import { shiftYm } from '@/lib/month-nav'
 import { can } from '@/lib/permissions'
 import { currentYmJst } from '@/lib/date-utils'
 import { Icon } from '@/components/ui/Icon'
-import { PageHeader, TodoCard, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
-import InvoiceNav from '@/components/invoice/InvoiceNav'
+import { TodoCard, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { parsePaperNumber, isBlankNumberInput } from '@/lib/paper-invoice'
@@ -74,16 +73,15 @@ function resultChip(cmp: (SubconComparison & { count?: number }) | undefined) {
   return <Chip tone="red">差 {signedYen(cmp.diff)}{suffix}</Chip>
 }
 
-export default function SubconInvoicePage() {
+/**
+ * 受け取った請求書・支払内訳書。2026-10-20 に「請求・原価」（app/(app)/billing）のタブ③「受け取る（支払・入金）」になった。
+ * 月は親が持つ。旧 /subcon-invoice は /billing?tab=receive に転送。
+ */
+export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange: (ym: string) => void }) {
   const { user, ready } = useAuthPassword()
   const canEdit = can(user, 'invoice.subcon')
   const canDelete = can(user, 'invoice.approve')
-  const [ym, setYm] = useState(() => {
-    if (typeof window === 'undefined') return shiftYm(currentYmJst(), -1)
-    const q = new URLSearchParams(window.location.search).get('ym')
-    // 既定は前月（請求書は月が明けてから届くので）
-    return q && /^\d{6}$/.test(q) ? q : shiftYm(currentYmJst(), -1)
-  })
+  const setYm = onYmChange
   const [data, setData] = useState<MonthData | null>(null)
   const [allMonths, setAllMonths] = useState<{ ym: string; n: number }[]>([])
   const [err, setErr] = useState('')
@@ -98,7 +96,7 @@ export default function SubconInvoicePage() {
     let res: Response, allRes: Response
     try {
       ;[res, allRes] = await Promise.all([
-        fetchWithAuth(`/api/subcon-invoice?ym=${ym}`, { signal: req.signal }),
+        fetchWithAuth(`/api/billing?tab=receive&ym=${ym}`, { signal: req.signal }),
         fetchWithAuth('/api/subcon-invoice?all=1', { signal: req.signal }),
       ])
     } catch (e) {
@@ -156,34 +154,16 @@ export default function SubconInvoicePage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
-      <PageHeader
-        group="請求・原価"
-        title="受け取った請求書"
-        sub="外注・同業者から届いた請求書と、山岡建設工業などから届く支払内訳書（紙はスキャンか写真）を入れます。請求書は出面 × 単価と見比べます。入れたものは経営コックピットが毎朝読み、支払・入金の予定と帳簿の照合に使います"
-        actions={
-          <>
-            <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
-              <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
-                className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
-                <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
-              </button>
-              <span className="px-1.5 text-[0.9375rem] font-bold tabular-nums">{ymLabelOf(ym)}</span>
-              <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
-                className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
-                <Icon name="chevronRight" size={18} strokeWidth={2.2} />
-              </button>
-            </div>
-            {canEdit && (
-              <button type="button" onClick={() => setModal({ mode: 'add' })} disabled={!data?.storageReady}
-                className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[0.9375rem] font-bold hover:bg-hibi-light disabled:opacity-40">
-                請求書を入れる
-              </button>
-            )}
-          </>
-        }
-      />
-      <InvoiceNav current="received" />
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="text-sm text-hibi-sub dark:text-gray-400">外注・同業者から届いた請求書と、山岡建設工業などから届く支払内訳書（紙はスキャンか写真）を入れます。請求書は出面 × 単価と見比べ、支払内訳書は発行した山岡への請求書と見比べます。入れたものは経営コックピットが毎朝読み、支払・入金の予定と帳簿の照合に使います</p>
+        {canEdit && (
+          <button type="button" onClick={() => setModal({ mode: 'add' })} disabled={!data?.storageReady}
+            className="ml-auto h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[0.9375rem] font-bold hover:bg-hibi-light disabled:opacity-40 whitespace-nowrap">
+            請求書・支払内訳書を入れる
+          </button>
+        )}
+      </div>
 
       {err && <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{err}</div>}
       {!data && !err && <div className="text-center py-12 text-gray-400">読み込み中...</div>}

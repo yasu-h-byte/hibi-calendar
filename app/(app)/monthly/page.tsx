@@ -1083,7 +1083,7 @@ function MonthlyPageInner() {
             {t.label}
           </button>
         ))}
-        <a href="/cost" className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-hibi-navy underline">外注の人工・金額は「原価・収益」へ →</a>
+        <a href="/billing?tab=sites" className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-hibi-navy underline">外注の人工・金額は「原価・収益」へ →</a>
 
         {/* 所定日数: カレンダーデータがある月は自動取得、ない月は手入力。
             2026-06-12 (監査 Sprint2): 旧ルール継続者（フン）が在籍する月は、カレンダーが

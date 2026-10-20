@@ -21,6 +21,10 @@ const nextConfig = {
       { source: '/export', destination: '/monthly?tab=export', permanent: true },
       { source: '/evaluation/raise-history', has: [{ type: 'query', key: 'worker', value: '(?<wid>.*)' }], destination: '/workers?tab=raise-history&worker=:wid', permanent: true },
       { source: '/evaluation/raise-history', destination: '/workers?tab=raise-history', permanent: true },
+      // 2026-10-20 請求と原価の画面を「請求・原価」（/billing・3タブ）に統合。旧 URL は該当のタブへ（?ym= などの問い合わせはそのまま付く）
+      { source: '/cost', destination: '/billing?tab=sites', permanent: false },
+      { source: '/peer-statement', destination: '/billing?tab=issue', permanent: false },
+      { source: '/subcon-invoice', destination: '/billing?tab=receive', permanent: false },
     ]
   },
   async headers() {

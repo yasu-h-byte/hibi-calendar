@@ -54,8 +54,8 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
   // 「帳票出力」のメニュー項目は 2026-10-03 に廃止（月次集計・締めのタブだけに。検索からは引ける）
   // ── 請求・原価 ──
-  { label: '請求・支払', icon: 'receipt', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice', '/subcon-invoice', '/prime-invoice'] },
-  { label: '原価・収益', icon: 'yen', href: '/cost', section: '請求・原価', cap: 'cost.view' },
+  // 2026-10-20 代表: 「請求・支払」と「原価・収益」を1つの画面（3タブ: 現場ごと／出す請求書／受け取る）に統合
+  { label: '請求・原価', icon: 'receipt', href: '/billing', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice', '/prime-invoice'] },
   // 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）
   { label: '経営コックピット', icon: 'trend', external: 'https://keieidashboard.vercel.app/genba', section: '請求・原価', cap: 'cockpit.view' },
   // ── 人・書類 ──
@@ -129,14 +129,14 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '帰国情報', where: '休暇管理 → 帰国', href: '/leave?tab=homeleave', cap: 'leave.view', keywords: 'きこく 一時帰国 長期' },
   { label: '有給の手動付与・時季指定・買取', where: '休暇管理 → 有給 → 行を押して右のパネル', href: '/leave', cap: 'leave.manage', keywords: 'ふよ かいとり じきしてい' },
   // 請求
-  { label: '応援の請求書（同業者へ）', where: '請求・支払 → 請求・支払の一覧', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
-  { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求・支払 → 紙の請求書の控え', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
-  { label: '受け取った外注の請求書（保管・出面との見比べ）', where: '請求・支払 → 受け取った請求書', href: '/subcon-invoice', cap: 'invoice.view', keywords: 'うけとった 外注 請求書 紙 写真 スキャン 支払 見比べ' },
-  { label: '山岡への請求書（大林組の控えから自動作成・85%）', where: '請求・支払 → 山岡への請求書', href: '/prime-invoice', cap: 'invoice.view', keywords: 'やまおか 一次 大林 控え 85 控除 借受 笹塚 IHI 請求書' },
-  { label: 'HFU → 日比建設 の請求書', where: '請求・支払 → 一覧 → HFU の「請求書を作る」', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
+  { label: '応援の請求書（同業者へ）', where: '請求・原価 → 出す請求書', href: '/billing?tab=issue', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者 請求 支払' },
+  { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求・原価 → 出す請求書 → 紙で出した控え', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
+  { label: '受け取った外注の請求書・支払内訳書（保管・見比べ）', where: '請求・原価 → 受け取る（支払・入金）', href: '/billing?tab=receive', cap: 'invoice.view', keywords: 'うけとった 外注 請求書 紙 写真 スキャン 支払 入金 支払内訳書 見比べ' },
+  { label: '山岡への請求書（大林組の控えから自動作成・85%）', where: '請求・原価 → 出す請求書 → 山岡への請求書', href: '/prime-invoice', cap: 'invoice.view', keywords: 'やまおか 一次 大林 控え 85 控除 借受 笹塚 IHI 請求書' },
+  { label: 'HFU → 日比建設 の請求書', where: '請求・原価 → 出す請求書 → HFU の行', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
   { label: '請求書の自社情報・振込先', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: '登録番号 インボイス 口座 振込' },
   // 経営
-  { label: '現場の請求額の入力', where: '原価・収益 → 現場別', href: '/cost', cap: 'cost.edit', keywords: 'せいきゅうがく 売上 粗利' },
+  { label: '現場ごとの売上・原価・粗利（請求額）', where: '請求・原価 → 現場ごと', href: '/billing?tab=sites', cap: 'cost.view', keywords: 'げんか しゅうえき せいきゅうがく 売上 粗利 原価 収益' },
   // 人・賃金
   { label: '電話URL・QR（スタッフのスマホ）', where: '人員マスタ → 編集', href: '/workers', cap: 'workers.edit', keywords: 'とーくん url qr マイページ' },
   { label: '昇給履歴', where: '賃金・評価 → 昇給履歴（人員マスタのタブ）', href: '/workers?tab=raise-history', cap: 'wage.view', keywords: 'しょうきゅう りれき' },

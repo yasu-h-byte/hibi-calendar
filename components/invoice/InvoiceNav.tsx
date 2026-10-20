@@ -9,15 +9,13 @@ import Link from 'next/link'
  */
 export type InvoiceScreen = 'list' | 'create' | 'paper' | 'received' | 'prime'
 
+// 2026-10-20 代表: 請求と原価の画面を「請求・原価」（/billing・3タブ）に統合。請求書の画面の上には、一覧（出す請求書）へ戻るタブと
+//   請求書の種類のタブを出す。「受け取る」は /billing のタブ③
 const TABS: { key: InvoiceScreen; label: string; href: string }[] = [
-  { key: 'list', label: '請求・支払の一覧', href: '/peer-statement' },
-  // 2026-10-15 代表: 「請求書を作る」のタブは外す。会社を選ばずに開くと空の画面になるため。
-  // 請求書は一覧の会社ごとの「請求書を作る」から開く（開いている間は「一覧」のタブを選んだ状態にする）
-  // 2026-10-20: 一次（山岡建設工業）への請求書。大林組の控え PDF から自動で作る
+  { key: 'list', label: '← 出す請求書（一覧）', href: '/billing?tab=issue' },
   { key: 'prime', label: '山岡への請求書', href: '/prime-invoice' },
-  { key: 'paper', label: '紙の請求書の控え', href: '/paper-invoice' },
-  // 2026-10-05: 外注から届いた請求書（出した請求書と同じ場所で扱う）
-  { key: 'received', label: '受け取った請求書', href: '/subcon-invoice' },
+  { key: 'paper', label: '紙で出した控え', href: '/paper-invoice' },
+  { key: 'received', label: '受け取る（支払・入金）', href: '/billing?tab=receive' },
 ]
 
 export function INVOICE_SCREEN_TITLE(key: InvoiceScreen): string {

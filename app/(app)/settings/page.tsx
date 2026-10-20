@@ -879,7 +879,7 @@ export default function SettingsPage() {
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">請求書の自社情報</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              「応援の請求書」（同業者へ送る請求書。/peer-statement から作成）に印字する発行者情報です。
+              「応援の請求書」（同業者へ送る請求書。請求・原価 → 出す請求書 から作成）に印字する発行者情報です。
               住所・登録番号・振込先は未入力のままにしています。届いた請求書を見ながらご自身で入力してください。
             </p>
             <CompanyProfileFields value={companyProfile} onChange={setCompanyProfile} />

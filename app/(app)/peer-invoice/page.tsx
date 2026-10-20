@@ -8,7 +8,7 @@
  * ブラウザの印刷（Cmd+P）で PDF 化する。
  *
  * URL: /peer-invoice?company=<取引先id>&ym=YYYYMM
- * 入口は /peer-statement（同業者との請求・支払）の各社カードから。
+ * 入口は /billing?tab=issue（請求・原価 → 出す請求書）の各行から。
  *
  * 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
  *
@@ -213,7 +213,7 @@ function PeerInvoicePageInner() {
   if (!companyId) {
     return (
       <div className="max-w-2xl mx-auto py-10 text-center text-sm text-gray-500">
-        会社が指定されていません。<a href="/peer-statement" className="text-hibi-navy underline">同業者との請求・支払</a> のページから開いてください。
+        会社が指定されていません。<a href="/billing?tab=issue" className="text-hibi-navy underline">同業者との請求・支払</a> のページから開いてください。
       </div>
     )
   }
@@ -247,7 +247,7 @@ function PeerInvoicePageInner() {
         {/* 2026-10-01 改修: 見出し・状態・操作をほかの画面と同じ見た目に（請求書の本文＝印刷部分は変えない）
             2026-10-03: 見出しを共通の PageHeader「請求書を作る」に（請求の3画面は InvoiceNav で行き来。
             どの請求書か（会社名・HFU → 日比建設）と状態の札は sub、月の送りは actions） */}
-        <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 hover:text-hibi-navy inline-flex items-center gap-1">
+        <a href={`/billing?tab=issue${ym ? `&ym=${ym}` : ''}`} className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 hover:text-hibi-navy inline-flex items-center gap-1">
           <Icon name="chevronLeft" size={14} />請求・支払の一覧へ戻る
         </a>
         <PageHeader
