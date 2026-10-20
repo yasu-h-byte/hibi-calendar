@@ -611,7 +611,7 @@ function RatioModal({ rec, onClose, onSaved }: { rec: Bundle; onClose: () => voi
     } finally { setSaving(false) }
   }
   return (
-    <Modal open onClose={onClose} title="この請求書の割合を変える" sub="ふだんは大林組への請求額の 85% です。事情があって違う割合で請求する月は、ここで変えると全部の枚を計算し直します（この請求書だけ。ほかの月・現場には影響しません）" size="md" dirty
+    <Modal open onClose={onClose} title="この請求書の割合を変える" sub="ふだんは大林組への請求額の 85% です。事情があって違う割合で請求する月は、ここで変えると全部の枚を計算し直します（この請求書だけ。ほかの月・現場には影響しません）" size="md" dirty={pctText !== String(Math.round(rec.ratio * 1000) / 10) || note !== (rec.ratioNote || '')}
       footer={<><CancelButton onClick={onClose} disabled={saving} /><PrimaryButton onClick={save} disabled={saving}>{saving ? '保存しています…' : '計算し直す'}</PrimaryButton></>}>
       <div className="space-y-3 text-sm">
         <label className="block"><span className="text-xs font-bold text-hibi-sub">割合（%）</span>
