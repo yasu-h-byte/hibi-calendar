@@ -7,7 +7,7 @@ import type { MainData } from '@/lib/compute'
 import {
   parseMoneyToken, parseGcStatement, parseMemo, looksLikeGcStatement, looksLikeMemo, computeSheetAmounts, buildSheet, recomputeSheet,
   assembleSheets, matchMemoToSheet, sumSheets, primePeriodOf, primeBillingPeriodOf, defaultPrimeInvoiceDate, reiwaDate, primeOtRate,
-  aggregatePrimeManDays, comparePrimeManDays, maskPrimeBundleForViewer, sanitizeSheetEdit, PRIME_INVOICE_RATIO,
+  aggregatePrimeManDays, comparePrimeManDays, maskPrimeBundleForViewer, sanitizeSheetEdit, parseRatioPercent, PRIME_INVOICE_RATIO,
   type GcStatement, type MemoParsed, type PrimeInvoiceBundle,
 } from '@/lib/prime-invoice'
 
@@ -142,6 +142,26 @@ describe('請求額の計算（85%・切り出し・控除）', () => {
       .toEqual({ base: 9716000, ratioAmount: 8258600, amount: 7818600, tax: 781860, total: 8600460 })
     // 端数は切り捨て（1,000円単位の85%は50円単位なので通常は出ない）
     expect(computeSheetAmounts({ gcAmount: 1001, borrowed: [], wageDeductions: [] })).toMatchObject({ ratioAmount: 850, amount: 850, tax: 85 })
+  })
+  test('割合は発行ごとに変えられる（IHI の 90% の月。2026-10-20 代表）', () => {
+    expect(computeSheetAmounts({ gcAmount: 9032000, borrowed: [], wageDeductions: [] }, 0.9)).toEqual({ base: 9032000, ratioAmount: 8128800, amount: 8128800, tax: 812880, total: 8941680 })
+    expect(parseRatioPercent('90')).toBe(0.9)
+    expect(parseRatioPercent('85')).toBe(0.85)
+    expect(parseRatioPercent('87.5')).toBe(0.875)
+    expect(parseRatioPercent('0')).toBeNull()
+    expect(parseRatioPercent('101')).toBeNull()
+    expect(parseRatioPercent('abc')).toBeNull()
+    const st = (parseGcStatement(gcLines({ amount: '¥9,788,000', tax: '¥978,800', total: '¥10,766,800' })) as { ok: true; statement: GcStatement }).statement
+    const memo = (parseMemo(memoLines()) as { ok: true; memo: MemoParsed }).memo
+    // 90% で組むと、メモ（85%）とは合わない注意が出て、85% の差の注意は出ない
+    const s90 = assembleSheets([{ st, file: 'a' }], [{ memo, file: 'm' }], 0.9).sheets[0]
+    expect(s90.amount).toBe(Math.floor((9788000 - 72000) * 0.9) - 440000)
+    expect(s90.warnings.some(w => w.includes('割合が 90%'))).toBe(true)
+    expect(s90.warnings.some(w => w.includes('円の差があります'))).toBe(false)
+    // 85% に戻すと注意が消える
+    const back = recomputeSheet(s90, 0.85)
+    expect(back.amount).toBe(7818600)
+    expect(back.warnings).toEqual([])
   })
   test('控えとメモからの1枚: メモの支払額と一致すれば注意なし', () => {
     const st = (parseGcStatement(gcLines({ amount: '¥9,788,000', tax: '¥978,800', total: '¥10,766,800' })) as { ok: true; statement: GcStatement }).statement

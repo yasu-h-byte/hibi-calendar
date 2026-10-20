@@ -7,7 +7,7 @@
  * POST multipart/form-data { action:'upload', companyId, siteId, ym, docId?, files[] }
  *      → PDF をサーバーで置き場に置き、読み取って下書きを作る（docId が下書きなら足して読み直す）。
  *        置き場の CORS は本番の URL からの直接 PUT しか許可していないので（Preview で止まる）、この機能は API 経由（1回 4MB まで。画面が分けて送る）
- * POST { action:'update', id, sheets?, invoiceDate? }              → 下書きの数字を手で直す（枚の index ごと）
+ * POST { action:'update', id, sheets?, invoiceDate?, ratioPercent?, ratioNote? } → 下書きの数字を手で直す（枚の index ごと）・割合（発行ごと・既定 85%）を変える
  * POST { action:'removeFile', id, path }                            → 下書きからファイルを外して読み直す
  * POST { action:'request' | 'withdraw' | 'delete', id }            → 申請（確認1待ちへ）・取り下げ・下書きの削除（invoice.request）
  * POST { action:'check' | 'reject' | 'void', id, reason? }          → 確認1・差し戻し・取り消し（invoice.approve・事業責任者/代表）
@@ -29,7 +29,7 @@ import { extractPdfLines } from '@/lib/pdf-text.server'
 import {
   PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_FILES, PRIME_INVOICE_DOC_ID_RE,
   looksLikeGcStatement, looksLikeMemo, parseGcStatement, parseMemo, assembleSheets, aggregatePrimeManDays, comparePrimeManDays,
-  maskPrimeBundleForViewer, sanitizeSheetEdit, recomputeSheet, primePeriodOf,
+  maskPrimeBundleForViewer, sanitizeSheetEdit, recomputeSheet, primePeriodOf, parseRatioPercent, PRIME_INVOICE_RATIO,
   type PrimeInvoiceFile, type PrimeInvoiceBundle, type PrimeSheet, type GcStatement, type MemoParsed,
 } from '@/lib/prime-invoice'
 import {
@@ -83,7 +83,7 @@ async function buildCheck(main: MainData, b: PrimeInvoiceBundle) {
 }
 
 /** ファイルを読み取り、枚を組み立てる（commit・removeFile で共通） */
-async function parseFiles(files: PrimeInvoiceFile[], ctx: { companyName: string; siteName: string }): Promise<{ sheets: PrimeSheet[]; files: PrimeInvoiceFile[]; warnings: string[] }> {
+async function parseFiles(files: PrimeInvoiceFile[], ctx: { companyName: string; siteName: string; ratio: number }): Promise<{ sheets: PrimeSheet[]; files: PrimeInvoiceFile[]; warnings: string[] }> {
   const statements: { st: GcStatement; file: string }[] = []
   const memos: { memo: MemoParsed; file: string }[] = []
   const out: PrimeInvoiceFile[] = []
@@ -119,7 +119,7 @@ async function parseFiles(files: PrimeInvoiceFile[], ctx: { companyName: string;
     }
     out.push({ ...f, kind: 'other', parseError: '大林組の控えでも山岡の控除計算書でもない PDF です（添付として残します）' })
   }
-  const a = assembleSheets(statements, memos)
+  const a = assembleSheets(statements, memos, ctx.ratio)
   return { sheets: a.sheets, files: out, warnings: [...warnings, ...a.warnings] }
 }
 
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ファイルを置けませんでした（置き場に接続できません）' }, { status: 503 })
       }
       const all = [...(cur?.files || []), ...added]
-      const parsed = await parseFiles(all, { companyName: t.companyName, siteName: t.siteName })
+      const parsed = await parseFiles(all, { companyName: t.companyName, siteName: t.siteName, ratio: cur?.ratio ?? PRIME_INVOICE_RATIO })
       if (cur) {
         const r = await updatePrimeDraft({ id: docId, actor, patch: { sheets: parsed.sheets, files: parsed.files, warnings: parsed.warnings } })
         if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
@@ -276,7 +276,14 @@ export async function POST(request: NextRequest) {
       const cur = await getPrimeBundle(id)
       if (!cur) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
       if (cur.status !== 'draft') return NextResponse.json({ error: '下書きのときだけ直せます' }, { status: 400 })
-      const patch: { sheets?: PrimeSheet[]; invoiceDate?: string } = {}
+      const patch: { sheets?: PrimeSheet[]; invoiceDate?: string; ratio?: number; ratioNote?: string } = {}
+      if (body.ratioPercent !== undefined) {
+        const r = parseRatioPercent(body.ratioPercent)
+        if (r === null) return NextResponse.json({ error: '割合は 1〜100 の % で入れてください（例: 85・90）' }, { status: 400 })
+        patch.ratio = r
+        patch.ratioNote = typeof body.ratioNote === 'string' ? body.ratioNote.trim().slice(0, 200) : ''
+        if (Math.abs(r - PRIME_INVOICE_RATIO) > 1e-9 && !patch.ratioNote) return NextResponse.json({ error: '85% 以外にするときは理由を書いてください' }, { status: 400 })
+      }
       if (body.invoiceDate !== undefined) {
         if (typeof body.invoiceDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.invoiceDate)) return NextResponse.json({ error: '請求年月日の形式が不正です' }, { status: 400 })
         patch.invoiceDate = body.invoiceDate
@@ -296,7 +303,7 @@ export async function POST(request: NextRequest) {
           }
           const wage = canPay ? e.sheet.wageDeductions : base.wageDeductions
           const changed = base.gcAmount !== e.sheet.gcAmount || JSON.stringify(base.borrowed) !== JSON.stringify(e.sheet.borrowed) || JSON.stringify(base.wageDeductions) !== JSON.stringify(wage)
-          next.push(recomputeSheet({ ...base, ...e.sheet, wageDeductions: wage, source: changed || base.source === 'manual' ? 'manual' : base.source }))
+          next.push(recomputeSheet({ ...base, ...e.sheet, wageDeductions: wage, source: changed || base.source === 'manual' ? 'manual' : base.source }, patch.ratio ?? cur.ratio ?? PRIME_INVOICE_RATIO))
         }
         patch.sheets = next
       }
@@ -315,7 +322,7 @@ export async function POST(request: NextRequest) {
       if (f.kind === 'memo' && !(await callerCan(request, 'pay.view'))) return NextResponse.json({ error: '控除計算書を外せるのは給与を見られる人だけです' }, { status: 403 })
       if (!getStaffDocsBucket()) return storageUnavailable()
       const rest = cur.files.filter(x => x.path !== path)
-      const parsed = rest.length > 0 ? await parseFiles(rest, { companyName: cur.companyName, siteName: cur.siteName }) : { sheets: [], files: [], warnings: [] }
+      const parsed = rest.length > 0 ? await parseFiles(rest, { companyName: cur.companyName, siteName: cur.siteName, ratio: cur.ratio ?? PRIME_INVOICE_RATIO }) : { sheets: [], files: [], warnings: [] }
       const r = await updatePrimeDraft({ id, actor, patch: { sheets: parsed.sheets, files: parsed.files, warnings: parsed.warnings } })
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
       await deleteFile(path).catch(e => console.error('[prime-invoice] file delete failed', path, e))

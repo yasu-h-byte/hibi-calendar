@@ -196,7 +196,10 @@ export interface PrimeInvoiceBundle {
   billingPeriod: { from: string; to: string }
   /** 請求年月日（控えの帳票年月日。無ければ翌月15日） */
   invoiceDate: string
+  /** 一次からの受取割合（既定 85%・PRIME_INVOICE_RATIO）。発行ごと（この請求書ごと）に下書きの間に変えられる（2026-10-20 代表: IHI は事情があって 90% の月がある） */
   ratio: number
+  /** 割合を既定から変えた理由（85% 以外のときに書く） */
+  ratioNote?: string
   taxRate: number
   sheets: PrimeSheet[]
   files: PrimeInvoiceFile[]
@@ -489,19 +492,24 @@ export function computeSheetAmounts(input: { gcAmount: number; borrowed: PrimeBo
   return { base, ratioAmount, amount, tax, total: amount + tax }
 }
 
-/** 控え1枚（＋あればメモ）から請求書1枚を作る */
-export function buildSheet(st: GcStatement, memo: MemoParsed | null, files: { statementFile: string | null; memoFile: string | null }): PrimeSheet {
+/** 控え1枚（＋あればメモ）から請求書1枚を作る。ratio は請求書ごとの割合（既定 85%） */
+export function buildSheet(st: GcStatement, memo: MemoParsed | null, files: { statementFile: string | null; memoFile: string | null }, ratio = PRIME_INVOICE_RATIO): PrimeSheet {
   const warnings: string[] = []
+  const isDefaultRatio = Math.abs(ratio - PRIME_INVOICE_RATIO) < 1e-9
   const borrowed: PrimeBorrowedLine[] = (memo?.borrowed || []).map(b => ({ name: b.name, companyName: b.companyName, amount: b.amount }))
   const wageDeductions: PrimeWageDeduction[] = memo?.hibi && memo.hibi.wage > 0 ? [{ name: memo.hibi.wageName || '出向者', amount: memo.hibi.wage }] : []
   if (memo && memo.gcTotal !== st.amount) warnings.push(`メモの「大林組への請求額 計」${memo.gcTotal.toLocaleString()}円が、控えの今回請求金額計 ${st.amount.toLocaleString()}円と違います`)
-  const amounts = computeSheetAmounts({ gcAmount: st.amount, borrowed, wageDeductions })
+  const amounts = computeSheetAmounts({ gcAmount: st.amount, borrowed, wageDeductions }, ratio)
   const memoPayable = memo?.hibi?.payable ?? null
-  if (memoPayable !== null && memoPayable !== amounts.amount) {
-    warnings.push(`メモの「日比建設支払額（税別）」${memoPayable.toLocaleString()}円と、計算した請求額 ${amounts.amount.toLocaleString()}円に ${(amounts.amount - memoPayable).toLocaleString()}円の差があります（山岡の端数の扱いの違いか、読み取りの誤り。メモを確認してください）`)
-  }
-  if (memo?.hibi && memo.hibi.ratioAmount !== amounts.ratioAmount) {
-    warnings.push(`メモの85%の額 ${memo.hibi.ratioAmount.toLocaleString()}円と計算 ${amounts.ratioAmount.toLocaleString()}円が違います`)
+  if (!isDefaultRatio && memo?.hibi) {
+    warnings.push(`割合が ${Math.round(ratio * 100)}% なので、メモの「日比建設支払額（税別）」（85% で計算）とは合いません。割合が正しいか確かめてください`)
+  } else {
+    if (memoPayable !== null && memoPayable !== amounts.amount) {
+      warnings.push(`メモの「日比建設支払額（税別）」${memoPayable.toLocaleString()}円と、計算した請求額 ${amounts.amount.toLocaleString()}円に ${(amounts.amount - memoPayable).toLocaleString()}円の差があります（山岡の端数の扱いの違いか、読み取りの誤り。メモを確認してください）`)
+    }
+    if (memo?.hibi && memo.hibi.ratioAmount !== amounts.ratioAmount) {
+      warnings.push(`メモの85%の額 ${memo.hibi.ratioAmount.toLocaleString()}円と計算 ${amounts.ratioAmount.toLocaleString()}円が違います`)
+    }
   }
   if (st.tax !== Math.floor(st.amount * PRIME_INVOICE_TAX_RATE)) warnings.push('控えの消費税額が税抜の10%になっていません')
   return {
@@ -512,12 +520,15 @@ export function buildSheet(st: GcStatement, memo: MemoParsed | null, files: { st
   }
 }
 
-/** 手で直した枚を計算し直す（数字の項目はサーバで必ずここを通す） */
-export function recomputeSheet(sheet: PrimeSheet): PrimeSheet {
-  const amounts = computeSheetAmounts({ gcAmount: sheet.gcAmount, borrowed: sheet.borrowed, wageDeductions: sheet.wageDeductions })
+/** 手で直した枚・割合を変えた枚を計算し直す（数字の項目はサーバで必ずここを通す）。ratio は請求書ごとの割合 */
+export function recomputeSheet(sheet: PrimeSheet, ratio = PRIME_INVOICE_RATIO): PrimeSheet {
+  const amounts = computeSheetAmounts({ gcAmount: sheet.gcAmount, borrowed: sheet.borrowed, wageDeductions: sheet.wageDeductions }, ratio)
   const gcTax = Math.floor(sheet.gcAmount * PRIME_INVOICE_TAX_RATE)
-  const warnings = sheet.warnings.filter(w => !w.startsWith('メモの「日比建設支払額'))
-  if (sheet.memoPayable !== null && sheet.memoPayable !== amounts.amount) {
+  const isDefaultRatio = Math.abs(ratio - PRIME_INVOICE_RATIO) < 1e-9
+  const warnings = sheet.warnings.filter(w => !w.startsWith('メモの「日比建設支払額') && !w.startsWith('メモの85%') && !w.startsWith('割合が '))
+  if (!isDefaultRatio && sheet.memoPayable !== null) {
+    warnings.push(`割合が ${Math.round(ratio * 100)}% なので、メモの「日比建設支払額（税別）」（85% で計算）とは合いません。割合が正しいか確かめてください`)
+  } else if (sheet.memoPayable !== null && sheet.memoPayable !== amounts.amount) {
     warnings.push(`メモの「日比建設支払額（税別）」${sheet.memoPayable.toLocaleString()}円と、計算した請求額 ${amounts.amount.toLocaleString()}円に ${(amounts.amount - sheet.memoPayable).toLocaleString()}円の差があります`)
   }
   return { ...sheet, gcTax, gcTotal: sheet.gcAmount + gcTax, ...amounts, warnings }
@@ -539,6 +550,7 @@ export function matchMemoToSheet(memo: MemoParsed, statements: GcStatement[]): n
 export function assembleSheets(
   statements: { st: GcStatement; file: string }[],
   memos: { memo: MemoParsed; file: string }[],
+  ratio = PRIME_INVOICE_RATIO,
 ): { sheets: PrimeSheet[]; warnings: string[] } {
   const warnings: string[] = []
   const sorted = [...statements].sort((a, b) => (a.st.docNo || '').localeCompare(b.st.docNo || '') || a.st.tradeName.localeCompare(b.st.tradeName, 'ja'))
@@ -549,7 +561,7 @@ export function assembleSheets(
     if (memoFor.has(idx)) { warnings.push(`「${sorted[idx].st.tradeName}」に控除計算書が2枚あります。あとの1枚は使いません`); continue }
     memoFor.set(idx, m)
   }
-  const sheets = sorted.map((s, i) => buildSheet(s.st, memoFor.get(i)?.memo || null, { statementFile: s.file, memoFile: memoFor.get(i)?.file || null }))
+  const sheets = sorted.map((s, i) => buildSheet(s.st, memoFor.get(i)?.memo || null, { statementFile: s.file, memoFile: memoFor.get(i)?.file || null }, ratio))
   // 同じ工種が2枚（同じ控えを2回入れた）
   const seen = new Set<string>()
   for (const sh of sheets) {
@@ -738,6 +750,13 @@ export function maskPrimeBundleForViewer<T extends Pick<PrimeInvoiceBundle, 'she
 // ─────────────────────────────────────────────
 // 入力の確認（手で直すとき）
 // ─────────────────────────────────────────────
+
+/** 割合の入力（% の数。1〜100・小数1桁まで）→ 0.85 のような割合。だめなら null */
+export function parseRatioPercent(v: unknown): number | null {
+  const n = parseMoneyToken(String(v ?? ''))
+  if (n === null || n <= 0 || n > 100) return null
+  return Math.round(n * 10) / 1000
+}
 
 export function sanitizeSheetEdit(input: unknown): { ok: true; sheet: Pick<PrimeSheet, 'tradeName' | 'tradeCode' | 'docNo' | 'billDate' | 'gcAmount' | 'borrowed' | 'wageDeductions'> } | { ok: false; error: string } {
   if (!input || typeof input !== 'object') return { ok: false, error: '枚の内容が不正です' }

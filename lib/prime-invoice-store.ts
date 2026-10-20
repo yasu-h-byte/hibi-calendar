@@ -151,18 +151,22 @@ export async function createPrimeDraft(args: {
 /** 下書きの内容を直す（枚の数字・請求年月日・ファイル）。draft のときだけ */
 export async function updatePrimeDraft(args: {
   id: string; actor: string
-  patch: { sheets?: PrimeSheet[]; files?: PrimeInvoiceFile[]; invoiceDate?: string; warnings?: string[] }
+  patch: { sheets?: PrimeSheet[]; files?: PrimeInvoiceFile[]; invoiceDate?: string; warnings?: string[]; ratio?: number; ratioNote?: string }
 }): Promise<PrimeResult | PrimeError> {
   const cur = await getPrimeBundle(args.id)
   if (!cur) return { ok: false, error: '請求書が見つかりません' }
   if (cur.status !== 'draft') return { ok: false, error: '下書きのときだけ直せます（申請中は取り下げ、発行済みは取り消してから）' }
-  const sheets = args.patch.sheets ? args.patch.sheets.map(recomputeSheet) : cur.sheets
+  const ratio = args.patch.ratio ?? cur.ratio ?? PRIME_INVOICE_RATIO
+  const ratioChanged = args.patch.ratio !== undefined && Math.abs(args.patch.ratio - (cur.ratio ?? PRIME_INVOICE_RATIO)) > 1e-9
+  // 割合を変えたら全部の枚を計算し直す
+  const sheets = (args.patch.sheets || (ratioChanged ? cur.sheets : null))?.map(s => recomputeSheet(s, ratio)) || cur.sheets
   const sums = sumSheets(sheets)
   const upd = compact({
-    sheets, files: args.patch.files, invoiceDate: args.patch.invoiceDate, warnings: args.patch.warnings, ...sums, updatedAt: new Date().toISOString(),
+    sheets, files: args.patch.files, invoiceDate: args.patch.invoiceDate, warnings: args.patch.warnings,
+    ratio: args.patch.ratio, ratioNote: args.patch.ratioNote, ...sums, updatedAt: new Date().toISOString(),
   })
   await updateDoc(doc(db, COLLECTION, args.id), upd)
-  await logActivity(args.actor, 'primeInvoice.update', `一次への請求書の下書きを修正：${labelOf(cur)}（税抜 ${sums.subtotal.toLocaleString()}円）`)
+  await logActivity(args.actor, 'primeInvoice.update', `一次への請求書の下書きを修正：${labelOf(cur)}（税抜 ${sums.subtotal.toLocaleString()}円${ratioChanged ? `・割合 ${Math.round((cur.ratio ?? PRIME_INVOICE_RATIO) * 100)}% → ${Math.round(ratio * 100)}%${args.patch.ratioNote ? `（${args.patch.ratioNote}）` : ''}` : ''}）`)
   return { ok: true, record: { ...cur, ...upd } as PrimeInvoiceBundle }
 }
 

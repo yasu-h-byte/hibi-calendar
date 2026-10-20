@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261020_prime_invoice_ratio',
+    title: '山岡への請求書: 割合（85%）を請求書ごとに変えられるようにしました',
+    content:
+      '事情があって 85% でない割合で請求する月（IHI の 90% など）は、下書きの「割合を変える」で % と理由を入れると、全部の枚を計算し直します。この請求書だけの設定で、ほかの月や現場には影響しません。85% 以外のときは一覧と詳細に黄色の印が出ます。',
+    category: 'new',
+    publishedAt: '2026-10-20T20:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261020_prime_invoice',
     title: '「山岡への請求書」ができました（大林組の控えを入れると自動で作ります）',
     content:

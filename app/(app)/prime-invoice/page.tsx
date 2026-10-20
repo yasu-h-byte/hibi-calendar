@@ -23,7 +23,7 @@ import InvoiceNav from '@/components/invoice/InvoiceNav'
 import PrimeInvoiceDocument from '@/components/invoice/PrimeInvoiceDocument'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import {
-  PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_REQUEST_BYTES, PRIME_INVOICE_MAX_FILES, parseMoneyToken,
+  PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_REQUEST_BYTES, PRIME_INVOICE_MAX_FILES, PRIME_INVOICE_RATIO, parseMoneyToken, parseRatioPercent,
   type PrimeInvoiceBundle, type PrimeSheet, type PrimeManDays, type PrimeCheckRow, type PrimeInvoiceStatus,
 } from '@/lib/prime-invoice'
 
@@ -47,7 +47,8 @@ const signedNum = (v: number, unit: string) => (v === 0 ? '±0' : (v > 0 ? '+' :
 const ymLabelOf = (ym: string) => `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月分`
 const jpDate = (iso: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[1]}/${parseInt(m[2])}/${parseInt(m[3])}` : '—' }
 const fmtSize = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`)
-const pct = (r: number) => `${Math.round(r * 100)}%`
+const pct = (r: number) => `${Math.round(r * 1000) / 10}%`
+const isDefaultRatio = (r: number) => Math.abs(r - PRIME_INVOICE_RATIO) < 1e-9
 
 const STATUS: Record<PrimeInvoiceStatus, { label: string; tone: ChipTone }> = {
   draft: { label: '下書き', tone: 'gray' },
@@ -83,7 +84,7 @@ export default function PrimeInvoicePage() {
   const [detail, setDetail] = useState<DetailData | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const [modal, setModal] = useState<null | { mode: 'new' } | { mode: 'addFiles'; rec: Bundle } | { mode: 'editSheet'; rec: Bundle; idx: number }>(null)
+  const [modal, setModal] = useState<null | { mode: 'new' } | { mode: 'addFiles'; rec: Bundle } | { mode: 'editSheet'; rec: Bundle; idx: number } | { mode: 'ratio'; rec: Bundle }>(null)
 
   const latest = useLatestRequest()
   const load = useCallback(async () => {
@@ -264,7 +265,7 @@ export default function PrimeInvoicePage() {
                       <td className="px-2 py-2.5"><Chip tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Chip></td>
                       <td className="px-2 py-2.5 text-right tabular-nums">{r.sheets.length}</td>
                       <td className="px-2 py-2.5 text-right tabular-nums">{yen(r.subtotal)}</td>
-                      <td className="px-2 py-2.5 text-right tabular-nums font-bold">{yen(r.total)}</td>
+                      <td className="px-2 py-2.5 text-right tabular-nums font-bold">{yen(r.total)}{!isDefaultRatio(r.ratio) && <Chip tone="amber" title={r.ratioNote || ''}>{pct(r.ratio)}</Chip>}</td>
                       <td className="px-2 py-2.5 text-xs">{r.no || '—'}</td>
                       <td className="px-2 py-2.5">{warn > 0 ? <Chip tone="amber">{warn}件</Chip> : <Chip tone="green">なし</Chip>}</td>
                     </tr>
@@ -281,7 +282,7 @@ export default function PrimeInvoicePage() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-bold">{rec.siteName}　{ymLabelOf(rec.ym)}　<Chip tone={STATUS[rec.status].tone}>{STATUS[rec.status].label}</Chip>{rec.no && <span className="ml-2 text-sm text-hibi-sub">{rec.no}</span>}</h2>
-              <span className="text-xs text-hibi-sub dark:text-gray-400">人工の期間 {jpDate(rec.period.from)}〜{jpDate(rec.period.to)}・請求年月日 {jpDate(rec.issueDate || rec.invoiceDate)}</span>
+              <span className="text-xs text-hibi-sub dark:text-gray-400">人工の期間 {jpDate(rec.period.from)}〜{jpDate(rec.period.to)}・請求年月日 {jpDate(rec.issueDate || rec.invoiceDate)}・割合 {isDefaultRatio(rec.ratio) ? pct(rec.ratio) : <Chip tone="amber" title={rec.ratioNote || ''}>{pct(rec.ratio)}（{rec.ratioNote || '理由なし'}）</Chip>}</span>
               <button onClick={() => setOpenId(null)} className="ml-auto text-xs text-hibi-sub hover:underline">閉じる</button>
             </div>
 
@@ -309,6 +310,7 @@ export default function PrimeInvoicePage() {
             <div className="flex items-center gap-2 flex-wrap">
               <button onClick={() => window.print()} className={BTN_GHOST}><Icon name="download" size={15} />印刷 / PDF保存（{rec.sheets.length}枚）</button>
               {rec.status === 'draft' && canRequest && <button onClick={() => setModal({ mode: 'addFiles', rec })} disabled={busy} className={BTN_GHOST}><Icon name="folder" size={15} />ファイルを足す</button>}
+              {rec.status === 'draft' && canRequest && <button onClick={() => setModal({ mode: 'ratio', rec })} disabled={busy} className={BTN_GHOST} title="この請求書だけの割合（既定 85%）"><Icon name="yen" size={15} />割合を変える（{pct(rec.ratio)}）</button>}
               {(rec.status === 'pending' || rec.status === 'checked' || rec.status === 'issued') && (
                 <span className="text-xs text-hibi-sub dark:text-gray-400">
                   申請 {rec.requestedByName || '—'}{rec.requestedAt ? `（${jpDate(rec.requestedAt)}）` : ''}
@@ -337,7 +339,7 @@ export default function PrimeInvoicePage() {
                     <th className="text-left px-3 py-2">工種（取引件名）</th>
                     <th className="text-right px-2 py-2">大林組への請求額<br /><span className="font-normal">今回請求金額計（税抜）</span></th>
                     <th className="text-right px-2 py-2">他社借受の切り出し</th>
-                    <th className="text-right px-2 py-2">×{pct(rec.ratio)}</th>
+                    <th className="text-right px-2 py-2">×{pct(rec.ratio)}{!isDefaultRatio(rec.ratio) && <><br /><Chip tone="amber">85%以外</Chip></>}</th>
                     <th className="text-right px-2 py-2">給与の控除<br /><span className="font-normal">山岡が直接払った分</span></th>
                     <th className="text-right px-2 py-2">請求額（税抜）</th>
                     <th className="text-right px-2 py-2">消費税</th>
@@ -448,6 +450,9 @@ export default function PrimeInvoicePage() {
       {modal?.mode === 'addFiles' && data && (
         <UploadModal companies={data.companies} sites={data.sites} ym={modal.rec.ym} fixed={{ companyId: modal.rec.companyId, siteId: modal.rec.siteId, docId: modal.rec.id, existing: modal.rec.files.length }} onClose={() => setModal(null)}
           onDone={async (id) => { setModal(null); await refreshAll(id) }} />
+      )}
+      {modal?.mode === 'ratio' && (
+        <RatioModal rec={modal.rec} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await refreshAll(modal.rec.id) }} />
       )}
       {modal?.mode === 'editSheet' && (
         <EditSheetModal rec={modal.rec} idx={modal.idx} onClose={() => setModal(null)}
@@ -576,6 +581,50 @@ function UploadModal({ companies, sites, ym, fixed, onClose, onDone }: {
             ))}
           </ul>
         )}
+        <FieldError>{fieldErr}</FieldError>
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────
+// 割合を変える（この請求書だけ・既定 85%。IHI の 90% の月など）
+// ─────────────────────────────────────────────
+
+function RatioModal({ rec, onClose, onSaved }: { rec: Bundle; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [pctText, setPctText] = useState(String(Math.round(rec.ratio * 1000) / 10))
+  const [note, setNote] = useState(rec.ratioNote || '')
+  const [fieldErr, setFieldErr] = useState('')
+  const [saving, setSaving] = useState(false)
+  const r = parseRatioPercent(pctText)
+  const preview = r === null ? null : rec.sheets.reduce((t, s) => t + (Math.floor((s.gcAmount - s.borrowed.reduce((a, b) => a + b.amount, 0)) * r + 1e-9) - s.wageDeductions.reduce((a, w) => a + w.amount, 0)), 0)
+  const save = async () => {
+    setFieldErr('')
+    if (r === null) { setFieldErr('割合は 1〜100 の % で入れてください（例: 85・90）'); return }
+    if (!isDefaultRatio(r) && !note.trim()) { setFieldErr('85% 以外にするときは理由を書いてください（確認する人が見ます）'); return }
+    setSaving(true)
+    try {
+      const res = await postJson('/api/prime-invoice', { action: 'update', id: rec.id, ratioPercent: pctText, ratioNote: note.trim() })
+      if (!res.ok) { notify.failed('保存', res.error); return }
+      notify.success(`割合を ${pct(r)} にして計算し直しました`)
+      await onSaved()
+    } finally { setSaving(false) }
+  }
+  return (
+    <Modal open onClose={onClose} title="この請求書の割合を変える" sub="ふだんは大林組への請求額の 85% です。事情があって違う割合で請求する月は、ここで変えると全部の枚を計算し直します（この請求書だけ。ほかの月・現場には影響しません）" size="md" dirty
+      footer={<><CancelButton onClick={onClose} disabled={saving} /><PrimaryButton onClick={save} disabled={saving}>{saving ? '保存しています…' : '計算し直す'}</PrimaryButton></>}>
+      <div className="space-y-3 text-sm">
+        <label className="block"><span className="text-xs font-bold text-hibi-sub">割合（%）</span>
+          <div className="flex items-center gap-2"><input value={pctText} onChange={e => setPctText(e.target.value)} inputMode="decimal" className={`${INPUT} w-28 text-right tabular-nums`} /><span>%</span>
+            {[85, 90, 100].map(p => <button key={p} type="button" onClick={() => setPctText(String(p))} className="text-xs px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-hibi-bg">{p}%</button>)}
+          </div>
+        </label>
+        <label className="block"><span className="text-xs font-bold text-hibi-sub">理由（85% 以外のとき必須）</span><input value={note} onChange={e => setNote(e.target.value)} placeholder="例: 2026年9月分は山岡と合意のうえ 90%" className={INPUT} /></label>
+        <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/40 px-4 py-3 text-sm tabular-nums">
+          <div className="text-2xs text-hibi-sub">この割合での請求額（税抜・{rec.sheets.length}枚の合計）</div>
+          <b>{preview === null ? '—' : yen(preview)}</b><span className="text-xs text-hibi-sub ml-2">（いまは {yen(rec.subtotal)}）</span>
+        </div>
+        {rec.sheets.some(s => s.memo) && <p className="text-xs text-amber-800 dark:text-amber-300">控除計算書は 85% で書かれているので、割合を変えると「メモの支払額と合わない」注意が出ます（想定どおり）。</p>}
         <FieldError>{fieldErr}</FieldError>
       </div>
     </Modal>
