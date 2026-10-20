@@ -18,6 +18,7 @@
 | `peerBilling[]` | 応援現場で同業者へ請求する**見込み**（同業者との請求・支払一覧と同じ計算。まだ請求書を発行していない金額も含む） |
 | `peerInvoices[]` | 実際に発行・取り消しした「応援の請求書」（`no`・`companyId`・`issueDate`・`dueDate`・`subtotal`（税抜）・`tax`・`total`（税込）・`status`（`issued`\|`void`）・`sites[]`（現場ごとの内訳））。発行済みがあればこちらを確定額として使う（docs/peer-invoice.md） |
 | `hfuInvoices[]` | HFU → 日比建設 の請求書（2026-09-26・グループ内。形は `peerInvoices[]` と同じ）。`peerInvoices[]` には含まれない。日比建設から見ると支払い、HFU から見ると入金（docs/peer-invoice.md「HFU → 日比建設 の請求書」） |
+| `primeInvoices[]` | 山岡（一次）への請求書（2026-10-20・docs/prime-invoice.md）。大林組の控えから作って発行したもの（`no`・`siteId`・`ratio`・`subtotal`（税抜）・`tax`・`total`（税込）・`issueDate`・`status`（`issued`\|`void`）・`sheets[]`（工種ごと: 大林組への額・控除の合計・請求額））。発行すると `sites[].billing` も同じ税抜に自動で書かれるので、入金予定はどちらを見ても同じ。給与の控除の内訳は渡さない |
 | `hfuWorkforce` | HFU 所属の作業員の人数と稼働（2026-09-27）: 在籍人数 `heads`・その月に人工がある人数 `workingHeads`・人工 `workDays`・残業 `otHours`・社内単価での額 `amount`（税抜）・単価 `tobiRate`/`dokoRate`・出面が入っている最後の日 `lastDate`。人件費 `laborCost`（給与計算の支給額・残業や手当を含む・会社負担の社会保険は含まない）とその人工 `laborManDays`、日額の平均 `dailyRateAvg`。人工の数え方は HFU → 日比建設 の請求書の下書きと同じ。締まっていない月は途中の数字。経営コックピットの HFU 黒字化シミュレーター（鳶の売上の見込み）で使う |
 | `closed` | 出面が締まった月か（前月より前）。締まっていない月は数字が動く |
 
@@ -26,6 +27,7 @@
 
 ### 受け取った外注の請求書（2026-10-05）
 `GET /api/integration/subcon-invoices?from=YYYYMM`（ヘッダ `x-integration-key`）。from の月以降の `subconInvoices`（外注の請求書・支払内訳書）と、`paperInvoices` のうち一次へ出した請求書（現場を選んだもの）を `kind`（received / remittance / issued）付きで返す（2026-10-05 入口の1本化）。
+DEDURA＋ で作って発行した山岡への請求書（`primeInvoices`）はファイルが無いのでここには出さず、月の窓口の `primeInvoices[]` で渡す（2026-10-20）。
 各件に1つ目のファイル（請求書の本体）を取り出す署名つきURL（15分）`file.url` を付ける。添付（2つ目以降）は数（`attachments`）だけ。
 金額は請求書に書いてあるとおり（`total` 税込・`subtotal` 税抜・任意）。経営コックピットは毎朝これを読み、まだ取り込んでいない件のファイルを
 自分の置き場（Supabase Storage）に写して AI で読む（経営コックピット docs/specs/27-dedura.md）。

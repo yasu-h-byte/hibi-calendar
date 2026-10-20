@@ -23,6 +23,7 @@ import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import { buildPeerStatements } from '@/lib/peer-statement'
 import { summarizePeerInvoiceSites } from '@/lib/peer-invoice'
 import { listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
+import { listPrimeBundlesForYm } from '@/lib/prime-invoice-store'
 import { reportSitesForPeriod } from '@/lib/report-sites'
 import { buildHfuInvoiceDraft } from '@/lib/hfu-invoice'
 import { isWorkerOfOrg } from '@/lib/orgs'
@@ -92,6 +93,30 @@ export interface IntegrationPeerInvoice {
   sites: { siteId: string; siteName: string; amount: number }[]
 }
 
+/**
+ * 山岡（一次）への請求書（lib/prime-invoice.ts・2026-10-20）。大林組の控えから作って発行したもの（issued）と取り消し（void）。
+ * sites[].billing はこの請求書の発行で同じ額に自動で書かれるので、確定額はどちらを見ても同じ。
+ * 給与の控除の内訳は渡さない（deductions は切り出し＋控除の合計）。
+ */
+export interface IntegrationPrimeInvoice {
+  no: string
+  companyId: string
+  companyName: string
+  siteId: string
+  siteName: string
+  ym: string
+  issueDate: string
+  /** 85% など（この請求書で使った割合） */
+  ratio: number
+  /** 税抜 */
+  subtotal: number
+  tax: number
+  /** 税込 */
+  total: number
+  status: 'issued' | 'void'
+  sheets: { tradeName: string; gcAmount: number; deductions: number; amount: number; tax: number; total: number }[]
+}
+
 export interface IntegrationMonth {
   ym: string
   generatedAt: string
@@ -106,6 +131,8 @@ export interface IntegrationMonth {
    * （日比建設が同業者から受け取る入金）とは分ける。日比建設から見ると支払い、HFU から見ると入金。
    */
   hfuInvoices: IntegrationPeerInvoice[]
+  /** 山岡（一次）への請求書（発行済み・取り消し済み）。2026-10-20 */
+  primeInvoices: IntegrationPrimeInvoice[]
   /**
    * HFU 所属の作業員の人数と稼働（2026-09-27・経営コックピットの HFU 黒字化シミュレーター用）。
    * 人工・残業・額は HFU → 日比建設 の請求書の下書き（buildHfuInvoiceDraft）と同じ数え方。締まっていない月は途中の数字
@@ -249,6 +276,18 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
   })
   const peerInvoices = peerInvoiceRecords.filter(inv => inv.kind !== 'hfu').map(toIntegration)
   const hfuInvoices = peerInvoiceRecords.filter(inv => inv.kind === 'hfu').map(toIntegration)
+  // 山岡（一次）への請求書（2026-10-20）。下書き・確認待ちはまだ請求書として出ていないので渡さない
+  const primeInvoices: IntegrationPrimeInvoice[] = (await listPrimeBundlesForYm(ym))
+    .filter((b): b is typeof b & { status: 'issued' | 'void' } => b.status === 'issued' || b.status === 'void')
+    .map(b => ({
+      no: b.no, companyId: b.companyId, companyName: b.companyName, siteId: b.siteId, siteName: b.siteName, ym: b.ym,
+      issueDate: b.issueDate, ratio: b.ratio, subtotal: b.subtotal, tax: b.tax, total: b.total, status: b.status,
+      sheets: b.sheets.map(s => ({
+        tradeName: s.tradeName, gcAmount: s.gcAmount,
+        deductions: s.borrowed.reduce((t, x) => t + x.amount, 0) + s.wageDeductions.reduce((t, x) => t + x.amount, 0),
+        amount: s.amount, tax: s.tax, total: s.total,
+      })),
+    }))
 
   return {
     ym,
@@ -259,6 +298,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     peerBilling,
     peerInvoices,
     hfuInvoices,
+    primeInvoices,
     hfuWorkforce: buildHfuWorkforce(main, att.d, ym, payroll.workersByYm[ym] || []),
     totals: {
       billing: sites.reduce((t, s) => t + s.billing, 0),

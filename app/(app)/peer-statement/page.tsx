@@ -53,6 +53,8 @@ export default function PeerStatementPage() {
   const [openId, setOpenId] = useState<string | null>(null)
   /** 紙（手作り）で出した請求書を入れた会社（app/api/paper-invoice・2026-10-02） */
   const [paperCos, setPaperCos] = useState<Map<string, string>>(new Map())  // companyId → 会社名
+  /** 山岡（一次）への請求書（自社現場・/prime-invoice・2026-10-20）。この一覧（同業者との貸し借り）とは別の請求 */
+  const [prime, setPrime] = useState<{ siteName: string; status: string; total: number; no: string }[] | null>(null)
 
   // 月を素早く切り替えたとき、前の月の応答をあとから画面に出さない（lib/hooks/useLatestRequest・2026-10-02）
   const latest = useLatestRequest()
@@ -60,12 +62,13 @@ export default function PeerStatementPage() {
     if (!ready) return
     setRows(null); setErr('')
     const req = latest.begin()
-    let stmtRes: Response, invRes: Response, paperRes: Response
+    let stmtRes: Response, invRes: Response, paperRes: Response, primeRes: Response
     try {
-      ;[stmtRes, invRes, paperRes] = await Promise.all([
+      ;[stmtRes, invRes, paperRes, primeRes] = await Promise.all([
         fetchWithAuth(`/api/peer-statement?ym=${ym}`, { signal: req.signal }),
         fetchWithAuth(`/api/peer-invoice?ym=${ym}`, { signal: req.signal }),
         fetchWithAuth(`/api/paper-invoice?ym=${ym}&lite=1`, { signal: req.signal }),
+        fetchWithAuth(`/api/prime-invoice?ym=${ym}`, { signal: req.signal }),
       ])
     } catch (e) {
       if (latest.isAbort(e) || !req.isCurrent()) return
@@ -86,6 +89,12 @@ export default function PeerStatementPage() {
       setPaperCos(new Map(((p.records || []) as { companyId: string; companyName: string }[]).map(r => [r.companyId, r.companyName])))
     } else {
       setPaperCos(new Map())
+    }
+    if (primeRes.ok) {
+      const p = await primeRes.json()
+      setPrime(((p.records || []) as { siteName: string; status: string; total: number; no: string }[]).map(r => ({ siteName: r.siteName, status: r.status, total: r.total, no: r.no })))
+    } else {
+      setPrime(null)
     }
   }, [ready, ym, latest])
   useEffect(() => { load() }, [load])
@@ -190,7 +199,7 @@ export default function PeerStatementPage() {
           </section>
 
           {/* ② 合計 */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <Stat label={`請求する（${billingCos.length}社）`} value={yen(billingSum)} sub="応援に出した人工 × 単価（税抜）" />
             <Stat label={`支払う（${list.filter(r => r.paymentTotal > 0).length}社）`} value={yen(paymentSum)} sub="来てもらった人工 × 単価（税抜）" />
             <a href={hrefOf(HFU_INVOICE_COMPANY_ID)} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1 hover:border-hibi-navy dark:hover:border-blue-400 transition">
@@ -199,6 +208,21 @@ export default function PeerStatementPage() {
               <span className="flex items-center gap-2 text-xs text-hibi-sub dark:text-gray-400">
                 <Chip tone={STATE[hfu.state].tone}>{STATE[hfu.state].label}{hfu.issued ? ` ${hfu.issued.no}` : ''}</Chip>
                 グループ内の請求。上の合計には入れない
+              </span>
+            </a>
+            {/* 山岡（一次）への請求書（自社現場）。同業者との貸し借りとは別の請求なので上の合計には入れない（2026-10-20） */}
+            <a href={`/prime-invoice?ym=${ym}`} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1 hover:border-hibi-navy dark:hover:border-blue-400 transition">
+              <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">山岡への請求書（自社現場）</span>
+              <span className="text-[1.625rem] font-bold tabular-nums text-gray-900 dark:text-white">{prime && prime.some(p => p.status === 'issued') ? yen(prime.filter(p => p.status === 'issued').reduce((t, p) => t + p.total, 0)) : '—'}</span>
+              <span className="flex items-center gap-2 flex-wrap text-xs text-hibi-sub dark:text-gray-400">
+                {prime === null ? <Chip tone="gray">読み込めません</Chip>
+                  : prime.length === 0 ? <Chip tone="amber">まだ作っていない</Chip>
+                  : prime.filter(p => p.status !== 'void').map(p => (
+                    <Chip key={p.siteName + p.no} tone={p.status === 'issued' ? 'green' : p.status === 'pending' || p.status === 'checked' ? 'blue' : 'gray'}>
+                      {p.siteName.slice(0, 6)} {p.status === 'issued' ? `発行済み ${p.no}` : p.status === 'pending' ? '確認1待ち' : p.status === 'checked' ? '確認2待ち' : '下書き'}
+                    </Chip>
+                  ))}
+                大林組の控えから作る（税込）
               </span>
             </a>
           </section>

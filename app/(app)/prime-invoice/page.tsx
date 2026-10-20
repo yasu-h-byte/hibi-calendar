@@ -24,7 +24,7 @@ import PrimeInvoiceDocument from '@/components/invoice/PrimeInvoiceDocument'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import {
   PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_REQUEST_BYTES, PRIME_INVOICE_MAX_FILES, PRIME_INVOICE_RATIO, parseMoneyToken, parseRatioPercent,
-  type PrimeInvoiceBundle, type PrimeSheet, type PrimeManDays, type PrimeCheckRow, type PrimeInvoiceStatus,
+  type PrimeInvoiceBundle, type PrimeSheet, type PrimeManDays, type PrimeCheckRow, type PrimeInvoiceStatus, type PrimeRemittanceComparison,
 } from '@/lib/prime-invoice'
 
 type Bundle = PrimeInvoiceBundle & { wageMasked?: boolean }
@@ -34,6 +34,8 @@ interface MonthData {
   companies: { id: string; name: string }[]
   sites: Record<string, { id: string; name: string }[]>
   months: Record<string, number>
+  /** 支払内訳書との突き合わせ（会社ごと・2026-10-20） */
+  remittances?: Record<string, { comparison: PrimeRemittanceComparison; records: { id: string; no: string | null; total: number; uploadedByName: string; files: number }[] }>
   storageReady: boolean
 }
 interface DetailData {
@@ -240,6 +242,34 @@ export default function PrimeInvoicePage() {
           <TodoCard icon="check" tone="ok" title="発行済み" big={`${nIssued}件`} sub="番号が付いた請求書。印刷して送る" />
           <TodoCard icon="yen" tone="info" title="この月の請求額（税込）" big={yen(records.filter(r => r.status === 'issued' || r.status === 'pending' || r.status === 'draft').reduce((s, r) => s + r.total, 0))} sub="下書き・承認待ちも含む見込み" />
         </div>
+
+        {/* 支払内訳書との突き合わせ（入金のチェック） */}
+        {data && data.remittances && Object.keys(data.remittances).length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-hibi-line dark:border-gray-700 p-4 space-y-2">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h3 className="font-bold text-sm">支払内訳書との突き合わせ（{ymLabelOf(ym)}）</h3>
+              <span className="text-xs text-hibi-sub dark:text-gray-400">発行済みの請求書の税込合計と、「受け取った請求書」に入れた支払内訳書の振込額を会社ごとに比べます。</span>
+              <a href={`/subcon-invoice?ym=${ym}`} className="ml-auto text-xs text-hibi-navy dark:text-blue-300 hover:underline">受け取った請求書を開く</a>
+            </div>
+            {Object.entries(data.remittances).map(([cid, r]) => {
+              const c = r.comparison
+              const name = data.companies.find(x => x.id === cid)?.name || cid
+              const chip = c.result === 'noInvoice' ? <Chip tone="gray">発行済みの請求書なし</Chip>
+                : c.result === 'noRemittance' ? <Chip tone="amber">{c.remittanceCount > 0 ? '支払内訳書はあるが振込額が未入力' : '支払内訳書がまだ届いていない'}</Chip>
+                : c.result === 'match' ? <Chip tone="green">振込額と一致</Chip>
+                : c.result === 'close' ? <Chip tone="green">ほぼ一致 {signedNum(c.diff, '円')}</Chip>
+                : <Chip tone="red">差 {signedNum(c.diff, '円')}（振込額 − 請求書）</Chip>
+              return (
+                <div key={cid} className="flex items-center gap-3 flex-wrap text-sm">
+                  <span className="font-bold">{name}</span>
+                  <span className="tabular-nums">請求書（税込・{c.invoiceCount}件） {yen(c.invoiceTotal)}</span>
+                  <span className="tabular-nums">支払内訳書（{c.remittanceCount}件） {c.remittanceTotal > 0 ? yen(c.remittanceTotal) : '—'}</span>
+                  {chip}
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {err && <p className="text-sm text-red-600">{err}</p>}
         {data && !data.storageReady && <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">ファイルの置き場に接続できないため、いまは控えを入れられません（サーバー設定）。</p>}
