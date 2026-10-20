@@ -128,7 +128,7 @@ export function PrimeInvoiceSheetPage({ b, s, pageNo, pages }: { b: PrimeInvoice
           <table className="prime-table prime-order">
             <tbody>
               {['注文番号', '契約金額', '増減額', '前回迄の請求額'].map(k => <tr key={k}><th>{k}</th><td></td></tr>)}
-              <tr><th>今回請求額　第　　回</th><td></td></tr>
+              <tr><th className="prime-order-th2">今回請求額 第　回</th><td></td></tr>
               <tr><th>差引残額</th><td></td></tr>
             </tbody>
           </table>
@@ -217,15 +217,15 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         .prime-table th, .prime-table td { border: 1px solid #333; padding: 2px 6px; font-size: .82rem; vertical-align: middle; overflow: hidden; }
         .prime-table th { font-weight: 600; background: #fff; text-align: center; white-space: nowrap; }
         .prime-site { margin-top: 20px; }
-        .prime-site th { width: 50px; font-size: .8rem; }
+        .prime-site th { width: 70px; font-size: .8rem; padding: 2px 4px; }
         .prime-site td { height: 41px; }
         .prime-site-name { font-size: .92rem; }
         .prime-site-trade { font-size: .84rem; width: 145px; }
-        .prime-site th + td + th { width: 65px; }
+        .prime-site th + td + th { width: 70px; }
         .prime-lines th { height: 16px; }
         .prime-lines td { height: 18px; }
         .prime-c-m { width: 22px; } .prime-c-d { width: 25px; }
-        .prime-c-qty { width: 80px; } .prime-c-unit { width: 40px; } .prime-c-rate { width: 90px; } .prime-c-amt { width: 110px; }
+        .prime-c-qty { width: 80px; } .prime-c-unit { width: 44px; } .prime-c-rate { width: 90px; } .prime-c-amt { width: 110px; }
         .prime-desc { text-align: center; }
         .prime-num { text-align: right; font-variant-numeric: tabular-nums; }
         .prime-ctr { text-align: center; }
@@ -241,12 +241,13 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         .prime-right-col { padding-top: 0; }
         .prime-paykind { margin-top: 0; }
         .prime-paykind td { font-size: .7rem; height: 18px; }
-        .prime-paykind-h { width: 40px; }
+        .prime-paykind-h { width: 44px; }
         .prime-order { margin-top: 20px; }
-        .prime-order th { width: 85px; font-size: .76rem; text-align: center; }
+        .prime-order th { width: 108px; font-size: .76rem; text-align: center; padding: 2px 4px; }
+        .prime-order-th2 { font-size: .7rem !important; letter-spacing: -.02em; }
         .prime-order td { height: 17px; }
         .prime-bank { margin-top: 10px; }
-        .prime-bank th { width: 85px; font-size: .78rem; }
+        .prime-bank th { width: 108px; font-size: .78rem; }
         .prime-bank td { height: 16px; text-align: center; }
         .prime-branch { display: inline-block; min-width: 60%; }
         .prime-branch-suffix { float: right; font-size: .74rem; }
@@ -255,7 +256,7 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         .prime-circled { display: inline-block; border: 1.5px solid #333; border-radius: 50%; padding: 0 3px; font-weight: 700; }
         .prime-other { display: inline-block; min-width: 28px; }
         .prime-codes { margin-top: 10px; }
-        .prime-codes th { width: 85px; font-size: .76rem; }
+        .prime-codes th { width: 108px; font-size: .76rem; }
         .prime-codes td { height: 18px; }
         .prime-code-cells { display: flex; gap: 2px; align-items: center; }
         .prime-code-cells span { display: inline-block; width: 15px; height: 17px; border: 1px solid #555; }
