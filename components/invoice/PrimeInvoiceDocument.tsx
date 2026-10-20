@@ -187,6 +187,11 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
           .prime-page:last-child { page-break-after: auto; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           main, .prime-root { padding: 0 !important; margin: 0 !important; max-width: 100% !important; background: white !important; }
+          /* 印刷面を紙の左上に貼り付ける。画面の入れ物（space-y-5 の 20px など）の余白が 1枚目を押し下げ、A4 からあふれた分が「2枚目の白紙」になっていた（2026-10-20 代表指摘）。
+             祖先の余白を1つずつ消す方式だと足し忘れるので、位置そのものを紙の原点に固定する（手元の Chrome で 2枚 → 3ページが 2ページになるのを確認） */
+          html, body { margin: 0 !important; padding: 0 !important; }
+          .prime-root { position: absolute; top: 0; left: 0; width: 100%; }
+          main .animate-fadeIn { animation: none !important; opacity: 1 !important; }
         }
         /* 元の請求書（山岡 2023.09版・A4横）を 96dpi で測った寸法に合わせる（2026-10-20 代表「余白や文字・枠の大きさも元に寄せる」）。
            左右の列: 左 169mm・間 9mm・右 98mm。上の余白 23mm・左 12.5mm・右 7mm。各枠の高さは px（印刷も 96dpi の px で同じ）。
