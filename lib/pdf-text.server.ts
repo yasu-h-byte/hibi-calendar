@@ -12,7 +12,11 @@
  */
 import 'server-only'
 import { createRequire } from 'module'
+import { existsSync } from 'fs'
 import path from 'path'
+
+/** webpack に束ねられた中から本物の Node の require を使う（Vercel の関数）。無ければ undefined */
+declare const __non_webpack_require__: NodeRequire | undefined
 
 type TextItem = { str: string; transform: number[] }
 
@@ -25,19 +29,32 @@ function loadPdfjs() {
 
 /**
  * pdfjs-dist の置き場（cmaps/・standard_fonts/・pdf.worker.mjs を引くため）。
- * Vercel の関数の中では webpack が __filename を本物のパスにしないので、作業ディレクトリ（/var/task）から引く。
- * 手元（next dev・vitest）も作業ディレクトリ＝リポジトリの根なので同じ式でよい。
+ * Vercel の関数の中では webpack が `createRequire` を潰す（2026-10-20 Preview: 「Cannot read properties of undefined (reading 'resolve')」）ので、
+ * まず作業ディレクトリ（Vercel は /var/task・手元はリポジトリの根）の node_modules を直接見る。
+ * 見つからなければ本物の require（__non_webpack_require__）→ createRequire の順に試す。
  */
 function pdfjsRoot(): string {
-  const candidates = [path.join(process.cwd(), 'package.json'), __filename]
-  let lastErr: unknown = null
-  for (const from of candidates) {
-    try {
-      const req = createRequire(from)
-      return req.resolve('pdfjs-dist/package.json').replace(/package\.json$/, '')
-    } catch (e) { lastErr = e }
+  const tried: string[] = []
+  // 1. 作業ディレクトリから上へ（node_modules/pdfjs-dist/package.json があるところ）
+  let dir = process.cwd()
+  for (let i = 0; i < 5; i++) {
+    const cand = path.join(dir, 'node_modules', 'pdfjs-dist')
+    tried.push(cand)
+    if (existsSync(path.join(cand, 'package.json'))) return `${cand}${path.sep}`
+    const up = path.dirname(dir)
+    if (up === dir) break
+    dir = up
   }
-  throw new Error(`pdfjs-dist が見つかりません: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`)
+  // 2. 本物の require / createRequire
+  const resolvers: (() => string)[] = [
+    () => (typeof __non_webpack_require__ === 'function' ? __non_webpack_require__.resolve('pdfjs-dist/package.json') : ''),
+    () => (typeof createRequire === 'function' ? createRequire(path.join(process.cwd(), 'package.json')).resolve('pdfjs-dist/package.json') : ''),
+  ]
+  let lastErr = ''
+  for (const r of resolvers) {
+    try { const p = r(); if (p) return p.replace(/package\.json$/, '') } catch (e) { lastErr = e instanceof Error ? e.message : String(e) }
+  }
+  throw new Error(`pdfjs-dist が見つかりません（cwd=${process.cwd()}・探した: ${tried.join(', ')}${lastErr ? `・${lastErr}` : ''}）`)
 }
 
 /**
