@@ -16,6 +16,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | **[docs/payroll-manual.md](docs/payroll-manual.md)** | **給与計算 実務マニュアル（運用者向け・最重要）** |
 | **[docs/manual-morita.md](docs/manual-morita.md)** | **事務業務マニュアル（森田さん向け・網羅版。奥寺さん・佐藤さんから引き継ぐ給与締め・有給・道具代・請求を1冊に。個人パスワード発行は付録）** |
 | [docs/payroll-manual-okutera.md](docs/payroll-manual-okutera.md) | 給与計算マニュアル（奥寺さん用・アーカイブ。計算ロジックの記録として保存） |
+| [docs/manual-prime-invoice.md](docs/manual-prime-invoice.md) | 山岡への請求書マニュアル（森田さん・政仁さん・代表向け・スクショつき）。公開版 `public/manual-prime-invoice.html`・画像 `public/manual-img/prime-invoice/`。仕様は docs/prime-invoice.md |
 | [docs/manual-syaroshi.md](docs/manual-syaroshi.md) | 社労士提出用資料マニュアル（HFU分・キャシュモ向け） |
 | [docs/salary-calculation.md](docs/salary-calculation.md) | 給与計算の技術仕様（開発者向け） |
 | [docs/calc-examples.md](docs/calc-examples.md) | 給与計算例集（社労士確認用・8パターン） |

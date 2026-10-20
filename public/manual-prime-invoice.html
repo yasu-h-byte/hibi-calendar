@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>山岡への請求書マニュアル - DEDURA＋</title>
+<style>
+  :root { --charcoal: #20262F; --amber: #F5A623; --green: #1E9E52; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.7; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--charcoal); color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  pre.flow { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 12px 16px; font-size: 13px; overflow-x: auto; line-height: 1.5; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin: 4px 0; }
+  img { max-width: 100%; border: 1px solid #d5dbe2; border-radius: 8px; margin: 8px 0 16px; display: block; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } img { box-shadow: none; } }
+  @media (max-width: 600px) { body { padding: 12px; font-size: 14px; } table { font-size: 13px; } th, td { padding: 6px 8px; } .step-text { font-size: 14px; } }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>DEDURA＋<br>山岡への請求書マニュアル（大林組の控えから自動で作る）</h1>
+<p><strong>目的</strong>: 山岡建設工業への毎月の請求書（笹塚・IHI などの自社現場）を、大林組の請求書（控え）の PDF から自動で作り、手で数字を写さないで発行する<br>
+<strong>対象読者</strong>: 森田さん（格納・申請）、政仁さん（確認1）、代表（確認2・発行）<br>
+<strong>画面</strong>: メニュー「請求・支払」→ 上のタブ「山岡への請求書」（<code>/prime-invoice</code>）<br>
+<strong>作成日</strong>: 2026年10月20日<br>
+<strong>最終更新</strong>: 2026年10月20日<br>
+<strong>公開版</strong>: <code>/manual-prime-invoice.html</code>（資料一覧から開けます）</p>
+<div class="toc"><strong>目次</strong><ul><li><a href="#sec1">0. この仕組みでできること</a></li><li><a href="#sec2">1. 用意するもの（届いたら）</a></li><li><a href="#sec3">2. 森田さんの手順（格納 → 申請）</a></li><li><a href="#sec4">3. 政仁さんの手順（確認1）</a></li><li><a href="#sec5">4. 代表の手順（確認2・発行）</a></li><li><a href="#sec6">5. 印刷して山岡へ送る</a></li><li><a href="#sec7">6. 直したいとき</a></li><li><a href="#sec8">7. 困ったとき</a></li><li><a href="#sec9">8. 決まり（参考）</a></li><li><a href="#history">改訂履歴</a></li></ul></div>
+<hr>
+<h2 id="sec1">0. この仕組みでできること</h2>
+<p>毎月、山岡から「山岡 → 大林組 の請求書（控え）」が工種ごとに5枚前後届きます。日比建設はその <strong>「今回請求金額計」の 85%</strong> を山岡に請求します。<br>
+借受職人の調整があるときは、山岡の「所属元の異なる借受職人給与の控除」のメモ（控除計算書）も付きます。</p>
+<p>これまでは森田さんが数字を手で写して山岡の書式に書いていました（2026年9月分で、85% を掛け忘れて 100% のまま出した件がきっかけです）。<br>
+この仕組みでは、<strong>PDF を入れるだけ</strong>で次が自動になります。</p>
+<table><thead><tr><th>自動でやること</th><th>内容</th></tr></thead><tbody><tr><td>読み取り</td><td>控えから 工種・今回請求金額計・消費税・帳票年月日 を読む。控除計算書から 他社借受の切り出し・給与の控除・支払額 を読む</td></tr><tr><td>計算</td><td>工種ごとに「（今回請求金額計 − 他社借受）× 85% − 給与の控除」。消費税と税込も</td></tr><tr><td>検算</td><td>山岡が大林組へ出した人工（控除計算書の内訳）と、DEDURA＋ の出面（前月21日〜当月20日）を並べる</td></tr><tr><td>承認</td><td>森田さんが申請 → 政仁さんが確認1 → 代表が確認2して発行（番号が付く）</td></tr><tr><td>印刷</td><td>山岡の請求書の書式（A4 横・工種ごとに1枚）で印刷・PDF 保存</td></tr></tbody></table>
+<h3>流れ</h3>
+<pre class="flow">森田さん                 政仁さん             代表
+控えを入れて作る ──→ 発行を申請 ──→ 確認1 ──→ 確認2して発行 ──→ 印刷して山岡へ
+（下書き）              （確認1待ち）      （確認2待ち）    （発行済み・番号）</pre>
+<ul><li>代表は「代表が1回で発行」で確認1・確認2をまとめて発行することもできます（急ぐとき）</li><li>差し戻されたら下書きに戻ります。直して、もう一度申請します</li></ul>
+<hr>
+<h2 id="sec2">1. 用意するもの（届いたら）</h2>
+<table><thead><tr><th>書類</th><th>形</th><th>必須</th></tr></thead><tbody><tr><td>大林組の請求書（控え）</td><td>工種ごとに1枚ずつの PDF（5枚前後）。山岡から届いたファイルそのまま</td><td>必須</td></tr><tr><td>山岡の控除計算書（借受職人給与の控除）</td><td>1枚の PDF。借受職人の調整がある月だけ</td><td>あれば</td></tr></tbody></table>
+<div class="box box-warn">
+<strong>文字入りの PDF が必要です。</strong> 山岡の基幹システムや Excel から出した PDF は文字が入っているので読めます。
+紙をスキャンした PDF（画像だけ）は読めません。その枚は「直す」で数字を手で入れるか、山岡に元の PDF をもらってください。
+</div>
+<hr>
+<h2 id="sec3">2. 森田さんの手順（格納 → 申請）</h2>
+<h3>2-1. 画面を開く</h3>
+<p>メニュー「請求・支払」→ 上のタブ「<strong>山岡への請求書</strong>」。月は既定で前月です（控えは翌月の中旬に届くため）。「‹ ›」で月を変えられます。</p>
+<p><img src="/manual-img/prime-invoice/01-page.jpg" alt="山岡への請求書の画面"></p>
+<h3>2-2. 控えを入れて作る</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">右上の「<strong>控えを入れて作る</strong>」を押す</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">請求先（山岡建設工業）と現場（笹塚 / IHI …）を選ぶ</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">控えの PDF（5枚前後）と、あれば控除計算書の PDF を<strong>まとめて</strong>点線の枠にドロップ（または「ファイルを選ぶ」）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">「<strong>読み取って下書きを作る</strong>」を押す。数秒で読み取りが終わり、一覧に下書きの行ができる</div></div>
+<p><img src="/manual-img/prime-invoice/02-upload.jpg" alt="控えを入れる窓"></p>
+<ul><li>どれが控えでどれが控除計算書かは、中身を見て自動で判別します（入れる順番は関係ありません）</li><li>同じ現場・同じ月の下書きがすでにあるときは、新しく作らずその行を開いて「ファイルを足す」を使います</li></ul>
+<h3>2-3. 読み取った内容を確かめる</h3>
+<p>一覧の行を押すと、下に詳細が開きます。まず<strong>枚の表</strong>を見ます。</p>
+<p><img src="/manual-img/prime-invoice/03-sheets.png" alt="枚の表"></p>
+<table><thead><tr><th>列</th><th>意味</th><th>確かめること</th></tr></thead><tbody><tr><td>工種（取引件名）</td><td>控えの「取引件名」。帳票No も出る</td><td>枚数が控えの枚数と合っているか。「PDFから読んだ」の印があるか</td></tr><tr><td>大林組への請求額</td><td>控えの「今回請求金額計」（税抜）</td><td>控えの数字と同じか</td></tr><tr><td>他社借受の切り出し</td><td>控除計算書の「○○分出面」の人工 × 常用単価（85% を掛ける<strong>前</strong>に引く）</td><td>名前と金額が控除計算書と同じか</td></tr><tr><td>×85%</td><td>切り出し後の額 × 85%（端数は切り捨て）</td><td>—</td></tr><tr><td>給与の控除</td><td>山岡が直接払った給与（出向者の分。85% を掛けた<strong>後</strong>に引く）</td><td>名前と金額が控除計算書と同じか。給与を見られる人だけに出ます（下の画像では金額を伏せています）</td></tr><tr><td>請求額（税抜）・消費税・税込</td><td>山岡への請求額</td><td>合計が控除計算書の「日比建設支払額（税別）」と同じか</td></tr></tbody></table>
+<p><strong>黄色の「読み取りの注意」が出たとき</strong> は、内容を読んで対処します。</p>
+<table><thead><tr><th>注意の文</th><th>意味</th><th>対処</th></tr></thead><tbody><tr><td>控除計算書が…どの工種の控えに当たるか分かりません</td><td>メモの「計」の金額と同じ控えが無い</td><td>控えが1枚足りないか、別の月のメモ。ファイルを確かめる</td></tr><tr><td>メモの「日比建設支払額」…円の差があります</td><td>計算と山岡の支払額が合わない</td><td>1〜数円なら山岡の端数処理の違い。大きければメモか控えの読み取りを確かめる</td></tr><tr><td>控えの受注者「…」が請求先の会社と違います</td><td>山岡以外の控えを入れた</td><td>ファイルを外す</td></tr><tr><td>「…」の控えが2枚あります</td><td>同じ控えを2回入れた</td><td>片方を外す</td></tr><tr><td>PDF を読めませんでした（…）</td><td>スキャン画像・壊れたファイル</td><td>元の PDF をもらうか、「直す」で手入力</td></tr></tbody></table>
+<h3>2-4. 出面との検算を見る</h3>
+<p>枚の表の下に「<strong>出面との検算</strong>」が出ます。山岡が大林組へ出した人工（控除計算書の内訳）と、DEDURA＋ の出面（前月21日〜当月20日）を並べたものです。</p>
+<p><img src="/manual-img/prime-invoice/04-check.png" alt="出面との検算"></p>
+<ul><li>差が小さければ緑、大きければ赤。赤が出たら、出面の入力漏れや、山岡の人工の数え方の違いを疑います</li><li><strong>笹塚のように出来高払いの工種（足場・コンクリートなど）が同じ現場にある場合、出面にはその仕事をした人も含まれる</strong>ので、出面の方が手間（メモ）より大きくなります。現場に工種ごとの出面（工種サイト）が無い間は、この検算は参考として見てください</li><li>他社から借りた人（志賀さんなど）は出面にいないので、その分だけメモの方が多くなるのは正常です</li><li>出向者（山岡が給与を払う人）は人工に含めています。「人ごとの内訳」で出向の印が付きます</li><li>控除計算書が無い月は、出面の値だけが出ます（比べる相手がありません）</li></ul>
+<h3>2-5. 発行を申請する</h3>
+<p>内容が合っていれば「<strong>発行を申請（確認1へ回す）</strong>」を押します。申請した時点で内容が凍結され、政仁さんの通知ベルに出ます。</p>
+<p><img src="/manual-img/prime-invoice/05-buttons.png" alt="ボタン列"></p>
+<div class="box box-warn">
+<strong>押せないとき（鍵の印）</strong>: 人工の期間（前月21日〜当月20日）の中に、職長承認・最終承認が済んでいない日があります。赤い枠にどの日かが出るので、出面の画面で承認を済ませてから申請してください。
+</div>
+<p>申請のあとに直したいときは「申請を取り下げ」で下書きに戻せます（確認1が済んだあとは、政仁さんか代表に差し戻しを頼みます）。</p>
+<hr>
+<h2 id="sec4">3. 政仁さんの手順（確認1）</h2>
+<div class="step"><div class="step-num">1</div><div class="step-text">通知ベルの「山岡への請求書の確認1待ち」を押す（または 請求・支払 → 山岡への請求書 で「確認1待ち」の行を開く）</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">枚の表（控えの金額・切り出し・控除・請求額）と、出面との検算を見る</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">問題なければ「<strong>確認1を済ませる</strong>」。直してほしいところがあれば「差し戻し」（理由を書く）</div></div>
+<p>確認1だけでは発行されません。代表の確認2で番号が付きます。</p>
+<hr>
+<h2 id="sec5">4. 代表の手順（確認2・発行）</h2>
+<div class="step"><div class="step-num">1</div><div class="step-text">通知ベルの「山岡への請求書の確認2待ち」を押す</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">内容を見て「<strong>確認2して発行</strong>」。番号（HCP-202609-01 のような形）が付き、内容は変えられなくなる</div></div>
+<ul><li>急ぐときは、下書き・確認1待ちの状態から「<strong>代表が1回で発行</strong>」で確認1・確認2をまとめて発行できます（記録に「代表（1回で発行）」と残ります）</li><li>確認1をした人と同じ人は確認2をできません（別の人が確かめる決まり）</li></ul>
+<hr>
+<h2 id="sec6">5. 印刷して山岡へ送る</h2>
+<p>発行済みの行を開き、「<strong>印刷 / PDF保存</strong>」を押します。山岡の請求書の書式（A4 横）で、工種ごとに1枚ずつ印刷されます。印刷の設定で「横向き」になっていることを確かめてください。社印は印刷したものに押します。</p>
+<p><img src="/manual-img/prime-invoice/06-print.png" alt="印刷面"></p>
+<p>下書き・確認待ちの状態でも印刷はできますが、「下書き」「確認1待ち」の透かしが入ります。山岡に送るのは発行済みのものです。</p>
+<hr>
+<h2 id="sec7">6. 直したいとき</h2>
+<table><thead><tr><th>したいこと</th><th>やり方</th><th>できる人</th></tr></thead><tbody><tr><td>読めなかった枚の数字を入れる・直す</td><td>枚の表の「直す」→ 工種・大林組への請求額・切り出し・控除を入力 → 保存。計算（85%・消費税）は自動</td><td>森田さん・政仁さん・代表（給与の控除は給与を見られる人だけ）</td></tr><tr><td>控えや控除計算書を足す</td><td>「ファイルを足す」→ PDF を入れる。全部のファイルで読み直す</td><td>同上</td></tr><tr><td>間違ったファイルを外す</td><td>「入れたファイル」の「外す」。残りで読み直す（手で直した数字は元に戻る）</td><td>同上</td></tr><tr><td><strong>割合を 85% から変える</strong>（IHI の 90% など）</td><td>「割合を変える」→ % と理由を入れる → 計算し直す。この請求書だけに効く。85% 以外は黄色の印が出る</td><td>森田さん・政仁さん・代表</td></tr><tr><td>申請を戻す</td><td>確認1待ちの間: 森田さんが「申請を取り下げ」。確認1のあと: 政仁さん・代表が「差し戻し」</td><td>—</td></tr><tr><td>発行済みを作り直す</td><td>「取り消し」（番号は欠番のまま残る）→ 控えをもう一度入れて新しく作る</td><td>政仁さん・代表</td></tr><tr><td>下書きを消す</td><td>「下書きを削除」（ファイルも消える）</td><td>森田さん・政仁さん・代表</td></tr></tbody></table>
+<p><img src="/manual-img/prime-invoice/07-ratio.jpg" alt="割合を変える窓"></p>
+<div class="box box-warn">
+割合を変えた月は、控除計算書（85% で書かれている）とは合わないので「メモの支払額と合わない」注意が出ます。これは想定どおりです。割合が正しいかだけ確かめてください。
+</div>
+<hr>
+<h2 id="sec8">7. 困ったとき</h2>
+<table><thead><tr><th>症状</th><th>原因と対処</th></tr></thead><tbody><tr><td>「PDF を読めませんでした」</td><td>紙をスキャンした PDF は文字が無いので読めません。山岡に元の PDF をもらうか、「直す」で数字を手入力</td></tr><tr><td>枚が1枚も読めない</td><td>控えの形が違う（大林組以外の元請の書式など）。「直す」で手入力。代表に知らせてください</td></tr><tr><td>「紙の請求書の控え」があるため発行できない</td><td>同じ現場・同じ月の一次への請求書を「紙の請求書の控え」に入れてあると、二重請求になるので止めています。紙の方を消すか、こちらを下書きのままにします</td></tr><tr><td>「この会社・この現場・この月は…請求書があります」</td><td>同じ現場・月に下書き・確認待ち・発行済みがあります。その行を開いて直す・足す・取り消しをします</td></tr><tr><td>「給与の控除」が「伏せ」と出る</td><td>給与を見られる人（森田さん・政仁さん・代表）以外には控除の額を出しません。請求額そのものは見えます</td></tr><tr><td>承認がそろっていなくて申請できない</td><td>赤い枠の日の職長承認・最終承認を出面の画面で済ませる。前月分の日が含まれることがあります</td></tr><tr><td>出面との検算で大きな差</td><td>出面の入力漏れ（さかのぼり入力は代表・政仁さん）、または山岡の人工の数え方の違い。差の内容を代表に知らせてください</td></tr></tbody></table>
+<hr>
+<h2 id="sec9">8. 決まり（参考）</h2>
+<ul><li>計算: <code>floor((今回請求金額計 − 他社借受の人工分) × 割合) − 山岡が払った給与</code>。割合は既定 85%。消費税は 10%（切り捨て）</li><li>人工の期間: 前月21日〜当月20日（山岡の出来高調査日は当月末、帳票は翌月15日）</li><li>請求年月日: 控えの帳票年月日（翌月15日）。請求書の摘要の期間は対象月の1日〜末日</li><li>番号: <code>HCP-YYYYMM-NN</code>（応援の請求書 HC-… とは別の連番。取り消した番号は欠番）</li><li>同じ現場・同じ月に生きている請求書は1つ</li><li>詳しい仕様: <code>docs/prime-invoice.md</code>（開発者向け）</li></ul>
+<hr>
+<h2 id="history">改訂履歴</h2>
+<table><thead><tr><th>日付</th><th>内容</th></tr></thead><tbody><tr><td>2026-10-20</td><td>初版（機能のリリースと同時。承認ルート 格納→確認1→確認2、代表の1回で発行、割合の変更を含む）</td></tr></tbody></table>
+
+
+<p style="text-align:center; color:#999; font-size:12px;">DEDURA＋ / 山岡への請求書マニュアル / 最終更新: 2026-10-20</p>
+</body>
+</html>

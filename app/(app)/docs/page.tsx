@@ -31,7 +31,8 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', badge: '日次参照', updated: '2026-10-03' },
 
   // ── 事務（森田さん・2026-10からキャシュモ委託体制） ──
-  { category: 'manual', roles: ['jimu'], title: '事務業務マニュアル（森田さん向け）', desc: '奥寺さん・佐藤さんの業務を統合した引き継ぎ版。出面補助・申請承認・道具代・月次締め・キャシュモへの資料提出まで（給与計算・振込はキャシュモ委託）', url: '/manual-morita.html', badge: 'NEW', updated: '2026-10-18' },
+  { category: 'manual', roles: ['jimu'], title: '事務業務マニュアル（森田さん向け）', desc: '奥寺さん・佐藤さんの業務を統合した引き継ぎ版。出面補助・申請承認・道具代・月次締め・キャシュモへの資料提出まで（給与計算・振込はキャシュモ委託）', url: '/manual-morita.html', badge: 'NEW', updated: '2026-10-20' },
+  { category: 'manual', roles: ['jimu', 'approver', 'admin'], title: '山岡への請求書マニュアル', desc: '大林組の請求書（控え）のPDFと山岡の控除計算書を入れると、85%・他社借受の切り出し・給与の控除を計算して山岡の書式で印刷。格納（森田さん）→ 確認1（政仁さん）→ 確認2（代表）の手順、読み取りの注意の見方、出面との検算、割合（IHI の90%など）の変え方。画面のスクショつき', url: '/manual-prime-invoice.html', badge: 'NEW', updated: '2026-10-20' },
   { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: 'キャシュモに毎月渡す2資料（月次集計Excel・計算根拠PDF）と根拠書類3点（勤務予定シフト・実労働時間明細・出面一覧）の説明。変形労働時間制・3段階残業判定・有給日給・日本人の計算方法・端数処理', url: '/manual-syaroshi.html', updated: '2026-10-02' },
 
   // ── お知らせ（計算ルールの変更） ──
