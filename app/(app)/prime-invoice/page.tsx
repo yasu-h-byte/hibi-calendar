@@ -282,7 +282,15 @@ export default function PrimeInvoicePage() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-bold">{rec.siteName}　{ymLabelOf(rec.ym)}　<Chip tone={STATUS[rec.status].tone}>{STATUS[rec.status].label}</Chip>{rec.no && <span className="ml-2 text-sm text-hibi-sub">{rec.no}</span>}</h2>
-              <span className="text-xs text-hibi-sub dark:text-gray-400">人工の期間 {jpDate(rec.period.from)}〜{jpDate(rec.period.to)}・請求年月日 {jpDate(rec.issueDate || rec.invoiceDate)}・割合 {isDefaultRatio(rec.ratio) ? pct(rec.ratio) : <Chip tone="amber" title={rec.ratioNote || ''}>{pct(rec.ratio)}（{rec.ratioNote || '理由なし'}）</Chip>}</span>
+              <span className="text-xs text-hibi-sub dark:text-gray-400">
+                人工の期間 {jpDate(rec.period.from)}〜{jpDate(rec.period.to)}・請求年月日{' '}
+                {rec.status === 'draft' && canRequest
+                  ? <input type="date" value={rec.invoiceDate || ''} disabled={busy} title="請求書に印字する日付（控えの帳票年月日。既定は翌月15日）"
+                      onChange={e => { const v = e.target.value; if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v !== rec.invoiceDate) act({ action: 'update', id: rec.id, invoiceDate: v }, '請求年月日の変更', `請求年月日を ${jpDate(v)} にしました`) }}
+                      className="h-7 px-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs" />
+                  : jpDate(rec.issueDate || rec.invoiceDate)}
+                ・割合 {isDefaultRatio(rec.ratio) ? pct(rec.ratio) : <Chip tone="amber" title={rec.ratioNote || ''}>{pct(rec.ratio)}（{rec.ratioNote || '理由なし'}）</Chip>}
+              </span>
               <button onClick={() => setOpenId(null)} className="ml-auto text-xs text-hibi-sub hover:underline">閉じる</button>
             </div>
 
@@ -311,6 +319,7 @@ export default function PrimeInvoicePage() {
               <button onClick={() => window.print()} className={BTN_GHOST}><Icon name="download" size={15} />印刷 / PDF保存（{rec.sheets.length}枚）</button>
               {rec.status === 'draft' && canRequest && <button onClick={() => setModal({ mode: 'addFiles', rec })} disabled={busy} className={BTN_GHOST}><Icon name="folder" size={15} />ファイルを足す</button>}
               {rec.status === 'draft' && canRequest && <button onClick={() => setModal({ mode: 'ratio', rec })} disabled={busy} className={BTN_GHOST} title="この請求書だけの割合（既定 85%）"><Icon name="yen" size={15} />割合を変える（{pct(rec.ratio)}）</button>}
+              {rec.status === 'draft' && canRequest && <button onClick={() => setModal({ mode: 'editSheet', rec, idx: rec.sheets.length })} disabled={busy} className={BTN_GHOST} title="スキャン画像など、読み取れなかった控えの数字を手で入れる"><Icon name="pen" size={15} />枚を手で足す</button>}
               {(rec.status === 'pending' || rec.status === 'checked' || rec.status === 'issued') && (
                 <span className="text-xs text-hibi-sub dark:text-gray-400">
                   申請 {rec.requestedByName || '—'}{rec.requestedAt ? `（${jpDate(rec.requestedAt)}）` : ''}
@@ -368,7 +377,7 @@ export default function PrimeInvoicePage() {
                       {rec.status === 'draft' && canRequest && <td className="px-2 py-2"><RowButton onClick={() => setModal({ mode: 'editSheet', rec, idx: i })}>直す</RowButton></td>}
                     </tr>
                   ))}
-                  {rec.sheets.length === 0 && <tr><td colSpan={9} className="px-3 py-3 text-sm text-gray-400">控えから枚を読み取れていません。ファイルを確かめるか、「ファイルを足す」で入れ直してください。</td></tr>}
+                  {rec.sheets.length === 0 && <tr><td colSpan={9} className="px-3 py-3 text-sm text-gray-400">控えから枚を読み取れていません。文字入りの PDF なら「ファイルを足す」で入れ直し、スキャン画像なら「枚を手で足す」で控えの数字を入れてください。</td></tr>}
                 </tbody>
                 <tfoot className="bg-hibi-bg dark:bg-gray-700/50 font-bold">
                   <tr><td className="px-3 py-2">合計（{rec.sheets.length}枚）</td><td className="px-2 py-2 text-right tabular-nums">{yen(rec.sheets.reduce((t, s) => t + s.gcAmount, 0))}</td><td></td><td></td><td></td><td className="px-2 py-2 text-right tabular-nums">{yen(rec.subtotal)}</td><td className="px-2 py-2 text-right tabular-nums">{yen(rec.tax)}</td><td className="px-2 py-2 text-right tabular-nums">{yen(rec.total)}</td>{rec.status === 'draft' && canRequest && <td></td>}</tr>
@@ -635,10 +644,17 @@ function RatioModal({ rec, onClose, onSaved }: { rec: Bundle; onClose: () => voi
 // 枚を手で直す（読み取れなかったとき・メモが無いとき）
 // ─────────────────────────────────────────────
 
+const BLANK_SHEET: PrimeSheet = {
+  tradeCode: '', tradeName: '', docNo: '', billDate: '', surveyDate: '', projectName: '', gcAmount: 0, gcTax: 0, gcTotal: 0,
+  borrowed: [], wageDeductions: [], base: 0, ratioAmount: 0, amount: 0, tax: 0, total: 0, memoPayable: null, memo: null,
+  source: 'manual', warnings: [], statementFile: null, memoFile: null,
+}
+
 function EditSheetModal({ rec, idx, onClose, onSaved }: { rec: Bundle; idx: number; onClose: () => void; onSaved: () => Promise<void> }) {
-  const s = rec.sheets[idx]
+  const isNew = idx >= rec.sheets.length
+  const s = rec.sheets[idx] || BLANK_SHEET
   const [tradeName, setTradeName] = useState(s.tradeName)
-  const [gcAmount, setGcAmount] = useState(String(s.gcAmount))
+  const [gcAmount, setGcAmount] = useState(s.gcAmount > 0 ? String(s.gcAmount) : '')
   const [borrowed, setBorrowed] = useState(s.borrowed.map(b => ({ name: b.name, companyName: b.companyName, amount: String(b.amount) })))
   const [wages, setWages] = useState(s.wageDeductions.map(w => ({ name: w.name, amount: String(w.amount) })))
   const [fieldErr, setFieldErr] = useState('')
@@ -662,21 +678,22 @@ function EditSheetModal({ rec, idx, onClose, onSaved }: { rec: Bundle; idx: numb
     if ((parseMoneyToken(gcAmount) ?? 0) <= 0) { setFieldErr('大林組への今回請求金額計を入れてください'); return }
     setSaving(true)
     try {
-      const sheets = rec.sheets.map((x, i) => i !== idx ? x : {
+      const edited = (x: PrimeSheet) => ({
         ...x, tradeName: tradeName.trim(), gcAmount: parseMoneyToken(gcAmount),
         borrowed: borrowed.filter(b => b.name.trim() || b.amount.trim()).map(b => ({ name: b.name.trim(), companyName: b.companyName.trim(), amount: parseMoneyToken(b.amount) ?? 0 })),
         wageDeductions: masked ? x.wageDeductions : wages.filter(w => w.name.trim() || w.amount.trim()).map(w => ({ name: w.name.trim(), amount: parseMoneyToken(w.amount) ?? 0 })),
       })
+      const sheets = isNew ? [...rec.sheets, edited(BLANK_SHEET)] : rec.sheets.map((x, i) => (i !== idx ? x : edited(x)))
       const r = await postJson('/api/prime-invoice', { action: 'update', id: rec.id, sheets })
       if (!r.ok) { notify.failed('保存', r.error); return }
-      notify.success('枚を直しました')
+      notify.success(isNew ? '枚を足しました' : '枚を直しました')
       await onSaved()
     } finally { setSaving(false) }
   }
 
   const rowCls = 'grid grid-cols-[1fr_1fr_8rem_auto] gap-2 items-center'
   return (
-    <Modal open onClose={onClose} title={`${s.tradeName || '枚'} を直す`} sub="PDF から読めなかった数字や、控除計算書が無いときの切り出し・控除をここで入れます。計算（85%・消費税）はサーバーが行います" size="lg" dirty
+    <Modal open onClose={onClose} title={isNew ? '枚を手で足す' : `${s.tradeName || '枚'} を直す`} sub={isNew ? 'スキャン画像など読み取れなかった控えの数字（工種・今回請求金額計）を、控えを見ながら入れます。計算（割合・消費税）はサーバーが行います' : 'PDF から読めなかった数字や、控除計算書が無いときの切り出し・控除をここで入れます。計算（割合・消費税）はサーバーが行います'} size="lg" dirty
       footer={<><CancelButton onClick={onClose} disabled={saving} /><PrimaryButton onClick={save} disabled={saving}>{saving ? '保存しています…' : '保存する'}</PrimaryButton></>}>
       <div className="space-y-4 text-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
