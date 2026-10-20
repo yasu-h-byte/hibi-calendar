@@ -32,7 +32,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/roles-auth.md](docs/roles-auth.md) | 役割・認証・権限（**権限の唯一の決まりは lib/permissions.ts**。職長の通行証） |
 | [docs/staff-docs.md](docs/staff-docs.md) | 書類庫（在留カード・雇用契約書の保管。Firebase Storage・署名つきURL・見られるのは代表/事業責任者/事務） |
 | `feedback`（Firestore）| **困ったこと・要望（2026-10-09・試験運用は森田さん・政仁さん・代表だけ）**。森田さんたちの書き込み。セッションの最初に未対応（status が open/doing・unreadForOwner）を Firebase MCP で確かめ、代表に伝える。返信の書き方は [docs/firestore.md](docs/firestore.md)「困ったこと・要望」 |
-| [docs/prime-invoice.md](docs/prime-invoice.md) | 一次（山岡建設工業）への請求書（2026-10-20）。大林組の控え PDF と山岡の控除計算書 PDF を入れると、85%・他社借受の切り出し・給与控除を計算して山岡フォーマットで印刷。/prime-invoice。承認ルートは 格納（森田）→ 確認1（政仁）→ 確認2（代表・invoice.issuePrime）。出面との検算は前月21日〜当月20日。控除の給与額は pay.view の人だけ |
+| [docs/prime-invoice.md](docs/prime-invoice.md) | 一次（山岡建設工業）への請求書（2026-10-20）。大林組の控え PDF と山岡の控除計算書 PDF を入れると、85%・他社借受の切り出し・給与控除を計算して山岡フォーマットで印刷。/prime-invoice。承認ルートは 格納（森田）→ 確認1（政仁）→ 確認2（代表・invoice.issuePrime）。代表だけ「1回で発行」も可。出面との検算は前月21日〜当月20日。控除の給与額は pay.view の人だけ |
 | [docs/peer-invoice.md](docs/peer-invoice.md) | 応援の請求書（同業者へ送る請求書 + 出面明細を印刷。/peer-invoice。発行で凍結・取り消しは欠番）＋ HFU → 日比建設 の請求書（HFU所属の人工 × 社内単価）＋ 受け取った外注の請求書（/subcon-invoice・経営コックピットが毎朝読む） |
 
 ## 開発の基本ルール

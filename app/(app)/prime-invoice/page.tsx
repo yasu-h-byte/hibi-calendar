@@ -160,6 +160,11 @@ export default function PrimeInvoicePage() {
     const ok = await confirmDialog({ title: '確認2: この内容で発行しますか？', description: `税込 ${yen(rec.total)}（${rec.sheets.length}枚）。発行すると番号が付き、内容は変えられなくなります（作り直すときは取り消し）。`, confirmLabel: '確認2して発行する' })
     if (ok) await act({ action: 'issue', id: rec.id }, '発行', '請求書を発行しました')
   }
+  const handleIssueDirect = async () => {
+    if (!rec) return
+    const ok = await confirmDialog({ title: '代表が1回で発行しますか？（確認1・確認2をまとめて）', description: `税込 ${yen(rec.total)}（${rec.sheets.length}枚）。政仁さんの確認1を待たずに、いま番号を付けて発行します。記録には「代表（1回で発行）」と残ります。`, confirmLabel: '1回で発行する' })
+    if (ok) await act({ action: 'issueDirect', id: rec.id }, '発行', '請求書を発行しました（1回で発行）')
+  }
   const handleReject = async () => {
     if (!rec) return
     const reason = await confirmWithReason({ title: 'この申請を差し戻しますか？', description: '下書きに戻ります（確認1も取り消されます）。申請した人が直して、もう一度申請できます。', confirmLabel: '差し戻す', reason: { label: '差し戻しの理由', placeholder: '例: 控除計算書が先月のものです', required: true } })
@@ -314,6 +319,7 @@ export default function PrimeInvoicePage() {
               {rec.status === 'draft' && canRequest && <button onClick={handleRequest} disabled={busy || approvalBlocked} className={BTN_MAIN}>{approvalBlocked && <Icon name="lock" size={14} />}発行を申請（確認1へ回す）</button>}
               {rec.status === 'pending' && canApprove && <button onClick={handleCheck} disabled={busy || approvalBlocked} className={BTN_OK}>{approvalBlocked && <Icon name="lock" size={14} />}確認1を済ませる</button>}
               {rec.status === 'checked' && canIssue && <button onClick={handleIssue} disabled={busy || approvalBlocked} className={BTN_OK}>{approvalBlocked && <Icon name="lock" size={14} />}確認2して発行</button>}
+              {(rec.status === 'draft' || rec.status === 'pending') && canIssue && <button onClick={handleIssueDirect} disabled={busy || approvalBlocked} className={BTN_GHOST} title="政仁さんの確認1を待たずに、代表がまとめて発行する">{approvalBlocked && <Icon name="lock" size={14} />}代表が1回で発行</button>}
               {(rec.status === 'pending' || rec.status === 'checked') && canApprove && <button onClick={handleReject} disabled={busy} className={BTN_DANGER}>差し戻し</button>}
               {rec.status === 'pending' && canRequest && <button onClick={handleWithdraw} disabled={busy} className={BTN_GHOST}>申請を取り下げ</button>}
               {rec.status === 'issued' && canApprove && <button onClick={handleVoid} disabled={busy} className={BTN_DANGER}>取り消し</button>}

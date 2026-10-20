@@ -12,6 +12,7 @@
  * POST { action:'request' | 'withdraw' | 'delete', id }            → 申請（確認1待ちへ）・取り下げ・下書きの削除（invoice.request）
  * POST { action:'check' | 'reject' | 'void', id, reason? }          → 確認1・差し戻し・取り消し（invoice.approve・事業責任者/代表）
  * POST { action:'issue', id }                                        → 確認2して発行（invoice.issuePrime・代表だけ。確認1と同じ人は不可）
+ * POST { action:'issueDirect', id }                                  → 代表が確認1・確認2をまとめて1回で発行（下書き・確認1待ち・確認2待ちのどれからでも）
  * 承認ルート（2026-10-20 代表決定）: 格納（森田さん）→ 確認1（政仁さん）→ 確認2（代表）→ 発行
  *
  * 給与の鍵: 控除の給与額（個人の給与）は pay.view の無い人には伏せて返す（maskPrimeBundleForViewer）。
@@ -176,7 +177,7 @@ export async function GET(request: NextRequest) {
 
 const REQUEST_ACTIONS = new Set(['upload', 'update', 'removeFile', 'request', 'withdraw', 'delete'])
 const APPROVE_ACTIONS = new Set(['check', 'reject', 'void'])
-const ISSUE_ACTIONS = new Set(['issue'])
+const ISSUE_ACTIONS = new Set(['issue', 'issueDirect'])
 
 /** multipart（upload）か JSON か */
 async function readBody(request: NextRequest): Promise<{ body: Record<string, unknown>; files: File[] } | null> {
@@ -321,7 +322,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, record: await maybeMask(request, r.record) })
     }
 
-    if (action === 'request' || action === 'check' || action === 'issue') {
+    if (action === 'request' || action === 'check' || action === 'issue' || action === 'issueDirect') {
       const cur = await getPrimeBundle(id)
       if (!cur) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
       const check = await buildCheck(main, cur)
@@ -330,7 +331,7 @@ export async function POST(request: NextRequest) {
         ? await requestPrimeInvoice({ main, id, actor, approvalMessage })
         : action === 'check'
           ? await checkPrimeInvoice({ main, id, actor, approvalMessage })
-          : await issuePrimeInvoice({ main, id, actor, approvalMessage })
+          : await issuePrimeInvoice({ main, id, actor, approvalMessage, direct: action === 'issueDirect' })
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
       return NextResponse.json({ ok: true, record: await maybeMask(request, r.record) })
     }

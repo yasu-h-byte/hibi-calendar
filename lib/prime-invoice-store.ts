@@ -219,12 +219,20 @@ export async function checkPrimeInvoice(args: { main: MainData; id: string; acto
  * 確認2して発行（checked → issued・代表だけ・lib/permissions.ts invoice.issuePrime）。確認1をした人とは別の人。
  * 番号はここで付く。採番と「同じ会社・現場・月に発行済みが無いか」は同じ月の処理を直列にした中で読み直す。
  */
-export async function issuePrimeInvoice(args: { main: MainData; id: string; actor: string; approvalMessage: string | null }): Promise<PrimeResult | PrimeError> {
-  const { main, id, actor } = args
+export async function issuePrimeInvoice(args: {
+  main: MainData; id: string; actor: string; approvalMessage: string | null
+  /** 代表が確認1・確認2をまとめて1回で発行する（下書き・確認1待ち・確認2待ちのどれからでも。2026-10-20 代表） */
+  direct?: boolean
+}): Promise<PrimeResult | PrimeError> {
+  const { main, id, actor, direct } = args
   const cur = await getPrimeBundle(id)
   if (!cur) return { ok: false, error: '請求書が見つかりません' }
-  if (cur.status !== 'checked') return { ok: false, error: cur.status === 'pending' ? '確認1（事業責任者）がまだです。確認1のあとに確認2で発行します' : '発行できる状態ではありません（下書き・発行済み・取り消し済み）' }
-  if (cur.checkedBy && cur.checkedBy === actor) return { ok: false, error: '確認1をした人は確認2をできません（別の人が確かめます）' }
+  if (direct) {
+    if (cur.status !== 'draft' && cur.status !== 'pending' && cur.status !== 'checked') return { ok: false, error: '発行できる状態ではありません（発行済み・取り消し済み）' }
+  } else {
+    if (cur.status !== 'checked') return { ok: false, error: cur.status === 'pending' ? '確認1（事業責任者）がまだです。確認1のあとに確認2で発行します（代表は「1回で発行」もできます）' : '発行できる状態ではありません（下書き・発行済み・取り消し済み）' }
+    if (cur.checkedBy && cur.checkedBy === actor) return { ok: false, error: '確認1をした人は確認2をできません（別の人が確かめるか、代表の「1回で発行」を使います）' }
+  }
   const err = await readinessError(main, cur, args.approvalMessage)
   if (err) return { ok: false, error: err }
   const issuer = cur.issuer || (main.companyProfile as CompanyProfile)
@@ -233,19 +241,24 @@ export async function issuePrimeInvoice(args: { main: MainData; id: string; acto
   const done = await withInvoiceMonthLock(cur.ym, async (tx) => {
     const fresh = await tx.get(ref)
     const st = fresh.exists() ? (fresh.data() as { status?: string }).status : undefined
-    if (st !== 'checked') return { ok: false as const, error: '発行できる状態ではありません（すでに処理済みです）' }
+    if (direct ? (st !== 'draft' && st !== 'pending' && st !== 'checked') : st !== 'checked') return { ok: false as const, error: '発行できる状態ではありません（すでに処理済みです）' }
     const all = await listPrimeBundlesForYm(cur.ym)
     if (all.some(b => b.id !== id && b.companyId === cur.companyId && b.siteId === cur.siteId && b.status === 'issued')) {
       return { ok: false as const, error: 'この会社・この現場・この月はすでに発行済みです。先に取り消してください' }
     }
     const now = new Date().toISOString()
-    const update = { no: nextInvoiceNoFrom(all, cur.ym, prefix), status: 'issued' as const, issuer, issueDate: cur.invoiceDate || todayJstIso(), issuedAt: now, issuedBy: actor, updatedAt: now }
+    const update = {
+      no: nextInvoiceNoFrom(all, cur.ym, prefix), status: 'issued' as const, issuer, issueDate: cur.invoiceDate || todayJstIso(), issuedAt: now, issuedBy: actor, updatedAt: now,
+      // 1回で発行: 確認1の記録も代表（まとめて）として残す（誰がどの段を飛ばしたかが分かるように）
+      ...(direct && !cur.checkedAt ? { checkedAt: now, checkedBy: actor, checkedByName: '代表（1回で発行）' } : {}),
+      ...(direct && cur.status === 'draft' ? { requestedAt: now, requestedBy: actor, requestedByName: '代表（1回で発行）' } : {}),
+    }
     tx.update(ref, update)
     return { ok: true as const, update }
   })
   if (!done.ok) return done
-  await logActivity(actor, 'primeInvoice.issue',
-    `${labelOf(cur)} 一次への請求書 ${done.update.no}（${cur.sheets.length}枚・税込 ¥${cur.total.toLocaleString()}）を確認2して発行（申請: ${cur.requestedByName || cur.requestedBy || '—'}・確認1: ${cur.checkedByName || cur.checkedBy || '—'}）`)
+  await logActivity(actor, direct ? 'primeInvoice.issueDirect' : 'primeInvoice.issue',
+    `${labelOf(cur)} 一次への請求書 ${done.update.no}（${cur.sheets.length}枚・税込 ¥${cur.total.toLocaleString()}）を${direct ? `代表が1回で発行（確認1・確認2をまとめて。元の状態: ${cur.status}）` : `確認2して発行（申請: ${cur.requestedByName || cur.requestedBy || '—'}・確認1: ${cur.checkedByName || cur.checkedBy || '—'}）`}`)
   return { ok: true, record: { ...cur, ...done.update } }
 }
 
