@@ -12,6 +12,7 @@
  */
 import 'server-only'
 import { createRequire } from 'module'
+import path from 'path'
 
 type TextItem = { str: string; transform: number[] }
 
@@ -22,11 +23,21 @@ function loadPdfjs() {
   return pdfjsPromise
 }
 
-/** pdfjs-dist の置き場（cmaps/・standard_fonts/ を引くため） */
+/**
+ * pdfjs-dist の置き場（cmaps/・standard_fonts/・pdf.worker.mjs を引くため）。
+ * Vercel の関数の中では webpack が __filename を本物のパスにしないので、作業ディレクトリ（/var/task）から引く。
+ * 手元（next dev・vitest）も作業ディレクトリ＝リポジトリの根なので同じ式でよい。
+ */
 function pdfjsRoot(): string {
-  const req = createRequire(__filename)
-  const pkg = req.resolve('pdfjs-dist/package.json')
-  return pkg.replace(/package\.json$/, '')
+  const candidates = [path.join(process.cwd(), 'package.json'), __filename]
+  let lastErr: unknown = null
+  for (const from of candidates) {
+    try {
+      const req = createRequire(from)
+      return req.resolve('pdfjs-dist/package.json').replace(/package\.json$/, '')
+    } catch (e) { lastErr = e }
+  }
+  throw new Error(`pdfjs-dist が見つかりません: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`)
 }
 
 /**
@@ -36,6 +47,9 @@ function pdfjsRoot(): string {
 export async function extractPdfLines(data: Uint8Array | Buffer, opts?: { maxPages?: number }): Promise<string[][]> {
   const pdfjs = await loadPdfjs()
   const root = pdfjsRoot()
+  // Node では「偽のワーカー」として pdf.worker.mjs を読み込む。相対の探し方に頼らず絶対パスで指す
+  //（Vercel の関数には next.config.js の outputFileTracingIncludes で同梱する）
+  if (!pdfjs.GlobalWorkerOptions.workerSrc) pdfjs.GlobalWorkerOptions.workerSrc = `${root}legacy/build/pdf.worker.mjs`
   const doc = await pdfjs.getDocument({
     // Buffer は Uint8Array の派生だが pdfjs は受け付けないので、素の Uint8Array に写す
     data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),

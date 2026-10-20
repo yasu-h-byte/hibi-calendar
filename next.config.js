@@ -41,7 +41,8 @@ const nextConfig = {
     serverComponentsExternalPackages: ['firebase-admin', 'pdfjs-dist'],
     // pdfjs が実行時にファイルとして読む CMap（日本語フォント）と標準フォントを、API の関数に同梱する
     outputFileTracingIncludes: {
-      '/api/prime-invoice': ['./node_modules/pdfjs-dist/cmaps/**', './node_modules/pdfjs-dist/standard_fonts/**', './node_modules/pdfjs-dist/legacy/build/pdf.mjs'],
+      // 2026-10-20 Preview で全部の PDF が読めなかった: 同梱一覧に pdf.worker.mjs（偽のワーカー）と package.json が無かった。build/ ごと入れる
+      '/api/prime-invoice': ['./node_modules/pdfjs-dist/package.json', './node_modules/pdfjs-dist/cmaps/**', './node_modules/pdfjs-dist/standard_fonts/**', './node_modules/pdfjs-dist/legacy/build/**'],
     },
   },
   webpack: (config, { isServer }) => {

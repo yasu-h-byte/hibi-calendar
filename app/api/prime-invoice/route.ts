@@ -91,7 +91,9 @@ async function parseFiles(files: PrimeInvoiceFile[], ctx: { companyName: string;
       lines = await extractPdfLines(await downloadFile(f.path))
     } catch (e) {
       console.error('[prime-invoice] pdf read failed', f.path, e)
-      out.push({ ...f, kind: 'other', parseError: 'PDF を読めませんでした（壊れているか、画像だけのスキャンです）' })
+      // 理由を画面にも出す（環境の問題＝ライブラリが見つからない等と、ファイルの問題を見分けるため）
+      const why = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, ' ').slice(0, 160)
+      out.push({ ...f, kind: 'other', parseError: `PDF を読めませんでした（${why || '壊れているか、画像だけのスキャンです'}）` })
       continue
     }
     if (lines.length === 0) { out.push({ ...f, kind: 'other', parseError: '文字が入っていない PDF です（スキャン画像）。数字は手で入れてください' }); continue }
