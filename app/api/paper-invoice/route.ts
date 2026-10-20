@@ -30,11 +30,13 @@ import { safeFileName, isValidIsoDate } from '@/lib/staff-docs'
 import { hasRole, resolveSiteParties, type CompanyLike } from '@/lib/companies'
 import { isWorkTypeSite, parentAndWorkTypeSiteIds } from '@/lib/site-hierarchy'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
-import { resolveInvoiceDraft, listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
+import { resolveInvoiceDraft, listPeerInvoicesForYm, listPaperInvoicesForYm } from '@/lib/peer-invoice-store'
+import { writeSiteBilling } from '@/lib/site-billing-sync'
+import { buildPeerStatements } from '@/lib/peer-statement'
 import {
   PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES, PAPER_INVOICE_DOC_ID_RE,
   sanitizePaperLines, comparePaperWithSystem, parsePaperNumber, isBlankNumberInput,
-  paperTotalsError, systemDoubleBillingError, mergePaperInvoices, comparePrimeSheets,
+  paperTotalsError, systemDoubleBillingError, mergePaperInvoices, comparePrimeSheets, allocatePaperToSites, paperExTaxTotal,
   type PrimeSiteComparison, type PaperInvoice, type PaperInvoiceFile, type SystemInvoiceFigures, type PaperComparison,
 } from '@/lib/paper-invoice'
 import { signedUploadUrl, signedReadUrl, fileMeta, deleteFile, deleteFilesWithPrefix, getStaffDocsBucket } from '@/lib/storage-admin'
@@ -171,6 +173,28 @@ async function preSaveError(next: Pick<PaperInvoice, 'companyId' | 'ym' | 'total
   const t = paperTotalsError(next)
   if (t) return t
   return systemDoubleBillingError(await listPeerInvoicesForYm(next.ym), next.ym, next.companyId)
+}
+
+/**
+ * 応援の紙の控えを登録・修正・削除したら、その会社の応援現場の「現場の請求額」を紙の税抜で書き直す（2026-10-20 代表: 川崎を入れても原価・収益が見込みのままだった）。
+ * 会社 × 月の紙の控えの税抜の合計を、出面からの見込み（工種サイトごとの行）の比で現場に割り振る。見込みが無い（人工が無い）会社は割り振れないので何もしない。
+ * HFU → 日比建設 と一次（山岡）は対象外。
+ */
+async function syncPeerBillingFromPaper(main: MainData, ym: string, companyId: string, actor: string): Promise<void> {
+  if (companyId === HFU_INVOICE_COMPANY_ID || isPrimeCompany(main, companyId)) return
+  const papers = (await listPaperInvoicesForYm(ym)).filter(p => p.companyId === companyId)
+  const exTax = paperExTaxTotal(papers)
+  const att = await getMultiMonthAttData([ym])
+  const y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(4, 6), 10)
+  const c = compute(main, att.d, att.sd, [{ y, m }])
+  const stmt = buildPeerStatements(main, c, att.d, att.sd, ym).find(s => s.companyId === companyId)
+  const lines = (stmt?.billing || []).map(b => ({ siteId: b.siteId, siteName: b.siteName, amount: b.amount }))
+  const alloc = allocatePaperToSites(exTax, lines)
+  const coName = (main.subcons || []).find(x => x.id === companyId)?.name || companyId
+  for (const l of lines) {
+    const a = alloc.find(x => x.siteId === l.siteId)
+    await writeSiteBilling({ siteId: l.siteId, siteName: l.siteName, ym, amounts: a ? [a.amount] : [], actor, why: `${coName}への紙の請求書 ${papers.length}枚（税抜 ${exTax.toLocaleString()}円）から自動` })
+  }
 }
 
 /** その月の会社ごとのシステムの数字（発行済み・承認待ちは凍結内容、なければ下書き） */
@@ -354,6 +378,7 @@ export async function POST(request: NextRequest) {
     const record = compact({ ...parsed.fields, files, uploadedAt: now, uploadedBy: by, uploadedByName: byName(by, main) || undefined }) as Omit<PaperInvoice, 'id'>
     await setDoc(ref, record)
     await logActivity(by, 'paperInvoice.add', `紙の請求書を登録：${label(record)}（税込 ${record.total.toLocaleString()}円・${files.length}ファイル）`)
+    await syncPeerBillingFromPaper(main, record.ym, record.companyId, by).catch(e => console.error('[paper-invoice] billing sync failed', docId, e))
     return NextResponse.json({ ok: true, record: { ...record, id: docId } })
   }
 
@@ -385,6 +410,12 @@ export async function POST(request: NextRequest) {
     }
     await updateDoc(ref, patch)
     await logActivity(by, 'paperInvoice.update', `紙の請求書を修正：${label({ ...cur, ...parsed.fields })}`)
+    {
+      // 会社・月を付け替えたときは、元の会社・月の分も書き直す
+      const next = { ...cur, ...patch } as PaperInvoice
+      await syncPeerBillingFromPaper(main, next.ym, next.companyId, by).catch(e => console.error('[paper-invoice] billing sync failed', docId, e))
+      if (next.companyId !== cur.companyId || next.ym !== cur.ym) await syncPeerBillingFromPaper(main, cur.ym, cur.companyId, by).catch(e => console.error('[paper-invoice] billing sync failed', docId, e))
+    }
     return NextResponse.json({ ok: true })
   }
 
@@ -397,6 +428,7 @@ export async function POST(request: NextRequest) {
       try { await deleteFile(f.path) } catch (e) { failed.push(f.path); console.error('[paper-invoice] file delete failed', f.path, e) }
     }
     await logActivity(by, 'paperInvoice.delete', `紙の請求書を削除：${label(cur)}${failed.length ? `（ファイル${failed.length}個は消せず残っています）` : ''}`)
+    await syncPeerBillingFromPaper(main, cur.ym, cur.companyId, by).catch(e => console.error('[paper-invoice] billing sync failed', docId, e))
     return NextResponse.json({ ok: true })
   }
 

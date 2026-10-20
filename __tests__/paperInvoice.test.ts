@@ -2,6 +2,7 @@
  * 紙（手作り）で出した請求書とシステムの見比べ（lib/paper-invoice.ts・2026-10-02）
  */
 import { describe, test, expect } from 'vitest'
+import { allocatePaperToSites, paperExTaxTotal } from '@/lib/paper-invoice'
 import {
   comparePaperWithSystem, sanitizePaperLines, parsePaperNumber, isBlankNumberInput,
   paperDoubleBillingError, paperSummaryFor, PAPER_INVOICE_DOC_ID_RE, type SystemInvoiceFigures,
@@ -150,5 +151,24 @@ describe('comparePrimeSheets（一次への請求書・現場ごとの合計 202
     expect(comparePrimeSheets([{ subtotal: 1_000_800, total: 1 }], 1_000_000, site).result).toBe('close')
     expect(comparePrimeSheets([{ subtotal: 900_000, total: 1 }], 1_000_000, site).result).toBe('diff')
     expect(comparePrimeSheets([{ subtotal: 900_000, total: 1 }], 0, site).result).toBe('noBilling')
+  })
+})
+
+
+describe('紙の控えの税抜を応援現場へ割り振る（原価・収益の請求額に自動で入れる・2026-10-20）', () => {
+  test('見込みの比で割り、端数は見込みが大きい現場に寄せる', () => {
+    expect(allocatePaperToSites(1000, [{ siteId: 'a', amount: 300 }, { siteId: 'b', amount: 700 }])).toEqual([{ siteId: 'a', amount: 300 }, { siteId: 'b', amount: 700 }])
+    const b = allocatePaperToSites(1000, [{ siteId: 'a', amount: 1 }, { siteId: 'b', amount: 1 }, { siteId: 'c', amount: 1 }])
+    expect(b.reduce((t, l) => t + l.amount, 0)).toBe(1000)
+    expect(b.find(l => l.siteId === 'a')?.amount).toBe(334)
+  })
+  test('見込みが無い・税抜が 0 なら割り振らない', () => {
+    expect(allocatePaperToSites(1000, [])).toEqual([])
+    expect(allocatePaperToSites(1000, [{ siteId: 'a', amount: 0 }])).toEqual([])
+    expect(allocatePaperToSites(0, [{ siteId: 'a', amount: 10 }])).toEqual([])
+  })
+  test('税抜小計が無い枚は税込 ÷ 1.1', () => {
+    expect(paperExTaxTotal([{ subtotal: 269874, total: 296862 }, { subtotal: null, total: 110000 }])).toBe(269874 + 100000)
+    expect(paperExTaxTotal([{ total: 296862 }])).toBe(269875)
   })
 })
