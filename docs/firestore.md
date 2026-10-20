@@ -272,7 +272,8 @@ workSchedule?: {
 | `period` | `{from,to}` | 人工の期間（前月21日〜当月20日・出面との検算に使う） |
 | `billingPeriod` | `{from,to}` | 請求書に印字する期間（対象月の1日〜末日） |
 | `invoiceDate` / `issueDate` | string | 請求年月日（控えの帳票年月日・翌月15日）／発行時に確定した日付 |
-| `ratio` / `taxRate` | number | 85% / 10%（計算に使った値を凍結） |
+| `ratio` / `taxRate` | number | 85% / 10%（計算に使った値を凍結）。`ratio` は発行ごとに変えられる（IHI の 90% の月など・2026-10-20） |
+| `ratioNote` | string? | 割合を 85% から変えた理由 |
 | `sheets` | 配列 | 工種ごとの枚 `PrimeSheet`（`tradeName,docNo,gcAmount,borrowed[],wageDeductions[],base,ratioAmount,amount,tax,total,memo,source,warnings,…`）。**`wageDeductions[].amount` と `memo` は個人の給与**（API は pay.view の無い人に伏せる） |
 | `files` | 配列 | `{path,name,contentType,size,kind,parseError}`。`kind` = `statement`（大林組の控え）/ `memo`（控除計算書）/ `other` |
 | `warnings` | string[] | 読み取り全体の注意 |
