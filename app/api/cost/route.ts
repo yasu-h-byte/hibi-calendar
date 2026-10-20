@@ -23,6 +23,9 @@ import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 import { AttendanceEntry } from '@/types'
 import { todayJstDate } from '@/lib/date-utils'
+import { listPrimeBundlesForYm } from '@/lib/prime-invoice-store'
+import { resolveSiteParties, hasRole, type CompanyLike } from '@/lib/companies'
+import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 
 /** Map frontend period param to compute buildYMList mode */
 function toMode(period: string): string {
@@ -54,6 +57,11 @@ export async function POST(request: NextRequest) {
     if (!site) return NextResponse.json({ error: '現場が見つかりません' }, { status: 404 })
 
     const key = `${siteId}_${ym}`
+    // 山岡への請求書が発行済みの月は、請求額は請求書から自動で入る。手で変えると食い違うので止める（画面の読み取り専用と同じ判定・2026-10-20）
+    const issuedPrime = (await listPrimeBundlesForYm(ym)).find(b => b.siteId === siteId && b.status === 'issued')
+    if (issuedPrime) {
+      return NextResponse.json({ error: `この月は山岡への請求書 ${issuedPrime.no} が発行済みで、請求額はその請求書から自動で入っています。直すときは「山岡への請求書」で取り消して作り直してください` }, { status: 409 })
+    }
     const prevRaw = data.billing?.[key]
     const prev = (Array.isArray(prevRaw) ? prevRaw : typeof prevRaw === 'number' ? [prevRaw] : []).filter(v => v !== 0)
     const arr = (Array.isArray(amounts) ? amounts : [Number(amounts) || 0]).map(v => Number(v) || 0).filter(v => v !== 0)
@@ -161,6 +169,21 @@ export async function GET(request: NextRequest) {
     }
     estMonths = estMonthSet.size
 
+    // 山岡への請求書（lib/prime-invoice.ts・2026-10-20）: 発行済みの月は、現場の請求額が請求書から自動で入るので手で変えない（画面は読み取り専用・POST も止める）
+    const primeLocks = new Map<string, { no: string }>()
+    for (const m of ymRange) {
+      for (const b of await listPrimeBundlesForYm(m)) if (b.status === 'issued') primeLocks.set(`${b.siteId}_${m}`, { no: b.no })
+    }
+    const companiesForParties = (main.subcons || []) as unknown as CompanyLike[]
+    /** 請求先が一次（山岡建設工業など）の自社現場か（工種サイトは親で判定） */
+    const billsToPrime = (siteId: string) => {
+      const root = main.sites.find(x => x.id === calendarSiteIdOf(main.sites as never, siteId)) || main.sites.find(x => x.id === siteId)
+      if (!root) return false
+      const p = resolveSiteParties(root as never, companiesForParties)
+      const co = p.billToId ? companiesForParties.find(x => x.id === p.billToId) : undefined
+      return p.siteType === 'direct' && !!co && hasRole(co, 'prime')
+    }
+
     // Build per-site data
     const sites = allSites
       .filter(s => siteFilter === 'all' || s.id === siteFilter)
@@ -170,12 +193,16 @@ export async function GET(request: NextRequest) {
       // Billing: sum across months using getBillTotal
       let billingRaw = 0
       const billingByMonth: Record<string, number[]> = {}
+      const billingLocked: Record<string, { no: string }> = {}
       for (const m of ymRange) {
         const billingKey = `${rawSite.id}_${m}`
         const billingArr = main.billing[billingKey] || []
         billingByMonth[m] = billingArr
         billingRaw += getBillTotal(main, rawSite.id, m)
+        const lock = primeLocks.get(billingKey)
+        if (lock) billingLocked[m] = lock
       }
+      const primeBilled = billsToPrime(rawSite.id)
 
       // 出向控除: 人件費のみ差引（売上は既に控除済みの値が入力されているためそのまま）
       const dispatchDeduction = sd.dispatchDeduction || 0
@@ -197,6 +224,10 @@ export async function GET(request: NextRequest) {
         billing,
         billingRaw: Math.round(billingRaw),
         billingByMonth,
+        // 山岡への請求書が発行済みの月（ym → 番号）。この月の請求額は請求書から自動で入り、手で変えない
+        billingLocked,
+        // 請求先が一次（山岡建設工業など）の自社現場。請求額は「山岡への請求書」で発行すると自動で入る
+        primeBilled,
         cost: Math.round(cost),
         costRaw: Math.round(sd.cost),
         dispatchDeduction: Math.round(dispatchDeduction),

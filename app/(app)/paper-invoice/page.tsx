@@ -177,7 +177,7 @@ export default function PaperInvoicePage() {
       <PageHeader
         group="請求・原価"
         title="紙の請求書の控え"
-        sub="手作りで出した請求書（応援の請求書・山岡建設工業などの一次への請求書）を入れて、システムの計算や現場の請求額と見比べます。応援の請求書はしばらく手作りで発行するので、システムで未発行でも問題ありません"
+        sub="手作りで出した応援の請求書を入れて、システムの計算と見比べます。応援の請求書はしばらく手作りで発行するので、システムで未発行でも問題ありません。山岡建設工業などの一次への請求書は「山岡への請求書」で発行します（2026年10月20日〜）"
         actions={
           <>
             <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
@@ -280,7 +280,7 @@ export default function PaperInvoicePage() {
           )}
 
           <p className="text-xs text-hibi-sub dark:text-gray-400 leading-relaxed">
-            山岡建設工業などの一次への請求書は、同じ現場・同じ月の全部（工種ごとの何枚でも）を足して、原価・収益で入れた現場の請求額（税抜）と比べます。1,000円以内の差は端数としてほぼ一致にしています。
+            山岡建設工業などの一次への請求書は、2026年10月20日からは<a href="/prime-invoice" className="font-bold text-hibi-navy dark:text-blue-300 hover:underline">「山岡への請求書」</a>で大林組の控えから作って発行します（ここには新しく入れません）。それより前に入れた控えは、同じ現場・同じ月の全部を足して、原価・収益の現場の請求額（税抜）と比べます。1,000円以内の差は端数としてほぼ一致にしています。
             システムの数字は、発行済み（または承認待ち）ならその内容、まだなら出面から作る下書きです。
             応援の請求書は残業を人工に換算して含めるので、手作りが「残業 ◯h」の別行なら、人工と残業の欄で差が出ます。
           </p>
@@ -644,9 +644,12 @@ function PaperInvoiceModal({ mode, rec, ym, companies, primeSites, onClose, onDo
               <optgroup label="応援の請求書（同業者・HFU）">
                 {companies.filter(c => c.kind !== 'prime').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </optgroup>
-              <optgroup label="一次への請求書（山岡建設工業など）">
-                {companies.filter(c => c.kind === 'prime').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </optgroup>
+              {/* 一次（山岡建設工業など）への請求書は「山岡への請求書」で発行する（2026-10-20）。新規には出さず、過去の記録の修正のときだけ選べる */}
+              {(mode === 'edit' || companies.some(c => c.kind === 'prime' && c.id === companyId)) && (
+                <optgroup label="一次への請求書（山岡建設工業など・2026年10月20日より前の記録）">
+                  {companies.filter(c => c.kind === 'prime').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </optgroup>
+              )}
             </select>
           </label>
           <label className="block">

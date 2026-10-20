@@ -15,6 +15,8 @@
  * 権限: 見る = invoice.view ／ 登録・修正 = invoice.paper ／ 削除 = invoice.approve（lib/permissions.ts）
  *
  * 一次（山岡建設工業など）へ出した請求書（2026-10-05）: 現場（siteId）必須・工種（trade）任意。見比べは現場ごとの合計 vs 現場の請求額（primeComparisons）。
+ *   2026-10-20〜 一次への請求書はシステムの「山岡への請求書」（/prime-invoice）で作るので、**新しく入れるのは止める**（prepare / commit を拒否）。
+ *   過去に入れた記録は見る・直す・消すだけできる
  * lite=1（請求・支払の一覧の「紙で発行済み」）には一次の分を入れない（応援の請求書の話なので）
  */
 import { NextRequest, NextResponse } from 'next/server'
@@ -265,6 +267,11 @@ export async function POST(request: NextRequest) {
   const main = await getMainData()
 
   // ── アップロード準備（署名つきURLを出すだけ）──
+  // 一次（山岡建設工業など）への請求書は「山岡への請求書」で発行する（2026-10-20）。紙の控えとして新しく入れない
+  if ((action === 'prepare' || action === 'commit') && typeof body.companyId === 'string' && isPrimeCompany(main, body.companyId)) {
+    return NextResponse.json({ error: '山岡建設工業などの一次への請求書は、「請求・支払」→「山岡への請求書」で大林組の控えから作って発行します（2026年10月20日〜）。紙の控えとしては入れません' }, { status: 400 })
+  }
+
   if (action === 'prepare') {
     // commit と同じ項目チェックを先にする（commit で落ちる内容なら、そもそもアップロードさせない）
     const parsed = parseFields(body, main, false)
