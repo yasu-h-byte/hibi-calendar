@@ -7,7 +7,7 @@ import type { MainData } from '@/lib/compute'
 import {
   parseMoneyToken, parseGcStatement, parseMemo, looksLikeGcStatement, looksLikeMemo, computeSheetAmounts, buildSheet, recomputeSheet,
   assembleSheets, matchMemoToSheet, sumSheets, primePeriodOf, primeBillingPeriodOf, defaultPrimeInvoiceDate, reiwaDate, primeOtRate,
-  aggregatePrimeManDays, comparePrimeManDays, maskPrimeBundleForViewer, sanitizeSheetEdit, parseRatioPercent, comparePrimeWithRemittance, PRIME_INVOICE_RATIO,
+  aggregatePrimeManDays, checkPrimeOverall, memoManDayRows, maskPrimeBundleForViewer, sanitizeSheetEdit, parseRatioPercent, comparePrimeWithRemittance, PRIME_INVOICE_RATIO,
   type GcStatement, type MemoParsed, type PrimeInvoiceBundle,
 } from '@/lib/prime-invoice'
 
@@ -279,16 +279,24 @@ describe('出面との検算（前月21日〜当月20日）', () => {
     expect(agg.rows.some(r => r.key === 'w4')).toBe(false)
     expect(agg.activeDays).toEqual([{ ym: '202608', day: 21 }, { ym: '202609', day: 1 }, { ym: '202609', day: 2 }, { ym: '202609', day: 4 }, { ym: '202609', day: 10 }, { ym: '202609', day: 20 }])
   })
-  test('メモの内訳と並べる（残業は鳶の次・土工の次で割り当て）', () => {
+  test('全枚の合計 vs 出面の総人工 × 常用単価（2026-10-20 代表: メモは手間契約1本分なので比べない）', () => {
     const agg = aggregatePrimeManDays(main, attD, attSD, ['site1', 'site1_steel'], '202609')
+    // 出面ベース = 3.5×36,000 + 2×5,625 + 3×28,000 + 4.5×4,375 = 240,938
+    const o = checkPrimeOverall([{ gcAmount: 200000 }, { gcAmount: 40000 }], agg)
+    expect(o).toMatchObject({ gcTotal: 240000, sheetCount: 2, deduraAmount: agg.amount, diff: agg.amount - 240000, totalDays: 6.5, tobiDays: 3.5, dokoDays: 3 })
+    expect(o.diffRate).toBeCloseTo(938 / 240000, 6)
+    expect(o.tone).toBe('ok')
+    expect(o.perManDay).toBe(Math.round(240000 / 6.5))
+    expect(checkPrimeOverall([{ gcAmount: 300000 }], agg).tone).toBe('bad')      // −20%
+    expect(checkPrimeOverall([{ gcAmount: 225000 }], agg).tone).toBe('warn')     // +7%
+    expect(checkPrimeOverall([], agg)).toMatchObject({ gcTotal: 0, diffRate: null, tone: 'none' })
+  })
+  test('控除計算書の内訳（参考）: 残業は鳶の次・土工の次で割り当て', () => {
     const memo = (parseMemo(memoLines()) as { ok: true; memo: MemoParsed }).memo
-    const rows = comparePrimeManDays(memo, agg)
-    expect(rows.map(r => [r.label, r.memo, r.dedura])).toEqual([
-      ['鳶 人工', 100.5, 3.5], ['鳶 残業', 8, 2], ['土工 人工', 200, 3], ['土工 残業', 120, 4.5], ['金額（税抜）', 9788000, agg.amount],
+    expect(memoManDayRows(memo).map(r => [r.label, r.qty, r.unit, r.rate, r.amount])).toEqual([
+      ['鳶 人工', 100.5, '人', 36000, 3618000], ['鳶 残業', 8, 'H', 5625, 45000], ['土工 人工', 200, '人', 28000, 5600000], ['土工 残業', 120, 'H', 4375, 525000],
     ])
-    expect(rows[0].diff).toBe(-97)
-    const noMemo = comparePrimeManDays(null, agg)
-    expect(noMemo.every(r => r.memo === null && r.diff === null)).toBe(true)
+    expect(memoManDayRows(null)).toEqual([])
   })
 })
 

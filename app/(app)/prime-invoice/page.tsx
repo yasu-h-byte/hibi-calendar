@@ -24,7 +24,7 @@ import PrimeInvoiceDocument from '@/components/invoice/PrimeInvoiceDocument'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import {
   PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_REQUEST_BYTES, PRIME_INVOICE_MAX_FILES, PRIME_INVOICE_RATIO, parseMoneyToken, parseRatioPercent,
-  type PrimeInvoiceBundle, type PrimeSheet, type PrimeManDays, type PrimeCheckRow, type PrimeInvoiceStatus, type PrimeRemittanceComparison,
+  type PrimeInvoiceBundle, type PrimeSheet, type PrimeManDays, type PrimeOverallCheck, type PrimeMemoRow, type PrimeInvoiceStatus, type PrimeRemittanceComparison,
 } from '@/lib/prime-invoice'
 
 type Bundle = PrimeInvoiceBundle & { wageMasked?: boolean }
@@ -40,7 +40,7 @@ interface MonthData {
 }
 interface DetailData {
   record: Bundle
-  check: { manDays: PrimeManDays; rows: PrimeCheckRow[]; memoSheetIndex: number; approval: { required: boolean; foremanMissing: number; finalMissing: number; message: string } } | null
+  check: { manDays: PrimeManDays; overall: PrimeOverallCheck; memoRows: PrimeMemoRow[]; memoTrade: string; memoSheetIndex: number; approval: { required: boolean; foremanMissing: number; finalMissing: number; message: string } } | null
   storageReady: boolean
 }
 
@@ -420,29 +420,57 @@ export default function PrimeInvoicePage() {
               <div className="bg-white dark:bg-gray-800 rounded-2xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <h3 className="font-bold text-sm">出面との検算（{jpDate(check.manDays.period.from)}〜{jpDate(check.manDays.period.to)}・{rec.siteName}）</h3>
-                  <span className="text-xs text-hibi-sub dark:text-gray-400">山岡が大林組へ出した人工（控除計算書の内訳）と、DEDURA＋ の出面を並べます。{check.memoSheetIndex < 0 && '控除計算書が無い月は出面の値だけを出します。'}</span>
+                  <span className="text-xs text-hibi-sub dark:text-gray-400">大林組への請求額の全枚の合計と、DEDURA＋ の出面の総人工 × 常用単価を比べます（出来高払いの工種は人工と1対1ではないので目安）。</span>
                 </div>
-                <table className="text-sm">
-                  <thead className="text-xs text-hibi-sub dark:text-gray-400"><tr><th className="text-left pr-6 py-1">項目</th><th className="text-right pr-6 py-1">山岡のメモ</th><th className="text-right pr-6 py-1">出面</th><th className="text-right py-1">差（出面−メモ）</th></tr></thead>
-                  <tbody>
-                    {check.rows.map(r => {
-                      const u = r.unit === '円' ? '円' : r.unit === '人' ? '人' : 'h'
-                      const fmt = (v: number) => (r.unit === '円' ? yen(v) : `${Math.round(v * 100) / 100}${u}`)
-                      const tone: ChipTone = r.diff === null ? 'gray' : Math.abs(r.diff) < (r.unit === '円' ? 1000 : 0.01) ? 'green' : 'red'
-                      return (
-                        <tr key={r.label} className="border-t border-hibi-line dark:border-gray-700">
-                          <td className="pr-6 py-1.5 font-bold">{r.label}</td>
-                          <td className="pr-6 py-1.5 text-right tabular-nums">{r.memo === null ? '—' : fmt(r.memo)}</td>
-                          <td className="pr-6 py-1.5 text-right tabular-nums">{fmt(r.dedura)}</td>
-                          <td className="py-1.5 text-right"><Chip tone={tone}>{r.diff === null ? 'メモなし' : signedNum(r.diff, r.unit === '円' ? '円' : u)}</Chip></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                {(() => {
+                  const o = check.overall
+                  const tone: ChipTone = o.tone === 'ok' ? 'green' : o.tone === 'warn' ? 'amber' : o.tone === 'bad' ? 'red' : 'gray'
+                  const ratePct = o.diffRate === null ? '' : `${o.diffRate >= 0 ? '+' : '−'}${(Math.abs(o.diffRate) * 100).toFixed(1)}%`
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/40 px-4 py-3">
+                        <div className="text-2xs text-hibi-sub dark:text-gray-400">大林組への請求額（{o.sheetCount}枚の合計・税抜）</div>
+                        <div className="text-lg font-bold tabular-nums">{yen(o.gcTotal)}</div>
+                      </div>
+                      <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/40 px-4 py-3">
+                        <div className="text-2xs text-hibi-sub dark:text-gray-400">出面ベース（総人工 × 常用単価・税抜）</div>
+                        <div className="text-lg font-bold tabular-nums">{yen(o.deduraAmount)}</div>
+                        <div className="text-2xs text-hibi-sub dark:text-gray-400 tabular-nums">鳶 {o.tobiDays}人・土工 {o.dokoDays}人（残業 {o.tobiOtH}h／{o.dokoOtH}h）</div>
+                      </div>
+                      <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/40 px-4 py-3">
+                        <div className="text-2xs text-hibi-sub dark:text-gray-400">差（出面 − 請求額）</div>
+                        <div className="mt-0.5"><Chip tone={tone}>{o.tone === 'none' ? '比べられません' : `${signedNum(o.diff, '円')}${ratePct ? `（${ratePct}）` : ''}`}</Chip></div>
+                        <div className="text-2xs text-hibi-sub dark:text-gray-400">3%以内は緑・10%以内は黄・それ以上は赤</div>
+                      </div>
+                      <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/40 px-4 py-3">
+                        <div className="text-2xs text-hibi-sub dark:text-gray-400">1人工あたりの請求額</div>
+                        <div className="text-lg font-bold tabular-nums">{o.perManDay === null ? '—' : yen(o.perManDay)}</div>
+                        <div className="text-2xs text-hibi-sub dark:text-gray-400 tabular-nums">総人工 {o.totalDays}人・常用単価 鳶 {yen(check.manDays.rates.tobiRate)}／土工 {yen(check.manDays.rates.dokoRate)}</div>
+                      </div>
+                    </div>
+                  )
+                })()}
+                {check.memoRows.length > 0 && (
+                  <div className="text-xs">
+                    <div className="font-bold text-hibi-sub dark:text-gray-400 mb-1">参考: 控除計算書の内訳（{check.memoTrade || '手間'}の契約1本分だけ。出面全体とは比べません）</div>
+                    <table className="text-xs">
+                      <thead className="text-hibi-sub dark:text-gray-400"><tr><th className="text-left pr-5 py-0.5">項目</th><th className="text-right pr-5">数量</th><th className="text-right pr-5">常用単価</th><th className="text-right">金額</th></tr></thead>
+                      <tbody>
+                        {check.memoRows.map((r, i) => (
+                          <tr key={i} className="border-t border-hibi-line dark:border-gray-700">
+                            <td className="pr-5 py-0.5">{r.label}</td>
+                            <td className="pr-5 text-right tabular-nums">{r.qty ? `${r.qty}${r.unit === 'H' ? 'h' : '人'}` : '—'}</td>
+                            <td className="pr-5 text-right tabular-nums">{r.rate ? yen(r.rate) : '—'}</td>
+                            <td className="text-right tabular-nums">{yen(r.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
                 <div className="text-xs text-hibi-sub dark:text-gray-400">
-                  出面側の単価: 鳶 {yen(check.manDays.rates.tobiRate)}・土工 {yen(check.manDays.rates.dokoRate)}（残業 {yen(check.manDays.rates.tobiOtRate)}／{yen(check.manDays.rates.dokoOtRate)} 毎時）。
-                  他社から借りた人（吉本の志賀さんなど）は出面に無いので、その分はメモの方が多くなります。出向者（山岡が給与を払う人）は人工に含めています。
+                  残業は 常用単価 ÷ 8 × 1.25 で換算（{yen(check.manDays.rates.tobiOtRate)}／{yen(check.manDays.rates.dokoOtRate)} 毎時）。他社から借りた人（吉本の志賀さんなど）は出面に無く、出向者（山岡が給与を払う人）は人工に含めています。
+                  差が大きいときは、出面の入力漏れ・配置の間違い（別の現場の人が入っている）・山岡の出来高の査定を疑ってください。
                 </div>
                 <details className="text-xs">
                   <summary className="cursor-pointer text-hibi-navy dark:text-blue-300">人ごとの内訳（{check.manDays.rows.length}人）</summary>
