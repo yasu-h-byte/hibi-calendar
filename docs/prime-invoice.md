@@ -108,8 +108,10 @@ tax         = floor(amount × 10%)、total = amount + tax
 - Firestore（下書き・申請・発行・取り消し）: `lib/prime-invoice-store.ts`
 - API: `app/api/prime-invoice/route.ts`
 - 画面: `app/(app)/prime-invoice/page.tsx`、印刷面: `components/invoice/PrimeInvoiceDocument.tsx`（山岡の 2023.09版 フォーマットに倣う。
-  2026-10-20 に元の PDF を 96dpi の画像（1123×794px）にして寸法を測り、余白（上 21mm・左 12.5mm・右 7mm）・列幅（左 169mm・間 9mm・右 98mm）・
-  各枠の高さ（px）・文字の大きさを合わせた。`@page` の余白は 0 で、余白は `.prime-page` の padding が持つ。表のセルは height に padding が足されるので 4px 小さく指定）
+  2026-10-20 に元の PDF を 96dpi の画像（1123×794px）にして寸法を測り、余白（上 23mm・左 12.5mm・右 7mm。右が狭いのは元の書式どおり）・列幅（左 169mm・間 9mm・右 98mm）・
+  各枠の高さ（px）・文字の大きさを合わせた。`@page` の余白は 0 で、余白は `.prime-page` の padding が持つ。
+  **行の高さの基準（line-height）は `.prime-root` と表のセルで必ず固定する**（画面の親の 24px を継ぐと枠が 6px ずつ伸びて 232mm になり、5枚が10ページに割れた・2026-10-20 代表指摘）。
+  Chrome では td の height が行の高さそのもの（padding は足されない）。印刷では `.prime-page` を高さ 210mm・はみ出しは切る（1枚 = 必ず1ページ））
 - テスト: `__tests__/primeInvoice.test.ts`（架空の数字。実在の人の給与は書かない）
 
 ## 支払内訳書との突き合わせ（入金のチェック・2026-10-20）

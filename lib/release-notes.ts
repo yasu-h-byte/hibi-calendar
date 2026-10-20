@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261020_prime_invoice_a4',
+    title: '山岡への請求書: 印刷が A4 横 1枚に収まらず 2ページに割れていたのを直しました',
+    content:
+      '1枚の高さが A4 を超えて、工種ごとの請求書が 2ページずつになっていました（5枚で10ページ）。行の高さの基準を印刷面で固定し、各枠の高さを元の書式の罫線に合わせ直したので、1枚 = A4 横 1ページで出ます。右の余白が左より狭いのは元の書式どおりです。',
+    category: 'fix',
+    publishedAt: '2026-10-20T23:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261020_billing_receive_fix',
     title: '請求・原価: 「受け取る」タブが「読み込みに失敗しました」になっていたのを直しました',
     content:

@@ -176,15 +176,18 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         @media print {
           aside, header, nav, .no-print { display: none !important; }
           @page { size: A4 landscape; margin: 0; }
-          .prime-page { page-break-after: always; margin: 0 !important; box-shadow: none !important; }
+          /* 1枚 = A4横 1ページ。はみ出しても次のページに送らない（2026-10-20 行の高さが画面の line-height を継いで 232mm になり、5枚が10ページに割れた） */
+          .prime-page { page-break-after: always; page-break-inside: avoid; margin: 0 !important; box-shadow: none !important; height: 210mm; min-height: 0; overflow: hidden; }
           .prime-page:last-child { page-break-after: auto; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           main, .prime-root { padding: 0 !important; margin: 0 !important; max-width: 100% !important; background: white !important; }
         }
         /* 元の請求書（山岡 2023.09版・A4横）を 96dpi で測った寸法に合わせる（2026-10-20 代表「余白や文字・枠の大きさも元に寄せる」）。
-           左右の列: 左 169mm・間 9mm・右 98mm。上の余白 18mm・左 12.5mm・右 7mm。各枠の高さは px（印刷も 96dpi の px で同じ） */
-        .prime-root { background: white; color: #111; font-family: -apple-system, "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic", sans-serif; font-size: 0.82rem; }
-        .prime-page { position: relative; width: 100%; max-width: 297mm; min-height: 210mm; margin: 0 auto 16px; padding: 21mm 7mm 6mm 12.5mm; background: white; box-shadow: 0 1px 6px rgba(0,0,0,.12); box-sizing: border-box; }
+           左右の列: 左 169mm・間 9mm・右 98mm。上の余白 23mm・左 12.5mm・右 7mm。各枠の高さは px（印刷も 96dpi の px で同じ）。
+           Chrome では td の height が行の高さそのもの（padding は足されない）。行の高さは元の罫線の間隔（明細 23.5px・税 24px・注文 20px など）に合わせる */
+        /* line-height は必ずここで決める（画面の親の 24px を継ぐと、枠の高さが指定より 6px ずつ伸びて A4 に収まらない） */
+        .prime-root { background: white; color: #111; font-family: -apple-system, "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic", sans-serif; font-size: 0.82rem; line-height: 1.25; }
+        .prime-page { position: relative; width: 100%; max-width: 297mm; min-height: 210mm; margin: 0 auto 16px; padding: 23mm 7mm 6mm 12.5mm; background: white; box-shadow: 0 1px 6px rgba(0,0,0,.12); box-sizing: border-box; }
         .prime-watermark { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) rotate(-18deg); font-size: 4.5rem; font-weight: 900; color: rgba(200, 30, 30, .12); letter-spacing: .3em; pointer-events: none; white-space: nowrap; }
         .prime-grid { display: grid; grid-template-columns: 1fr 98mm; gap: 9mm; }
         .prime-row-top { display: grid; grid-template-columns: 45% 1fr; gap: 8mm; align-items: start; min-height: 180px; }
@@ -209,36 +212,38 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         .prime-date-box span, .prime-total-amt { white-space: nowrap; }
         .prime-total-amt { font-size: 1.95rem; font-weight: 800; letter-spacing: 0; }
         .prime-regno-wrap { margin-top: 20px; border: 1px solid #333; padding: 0 0 0; display: block; width: 59%; box-sizing: border-box; }
-        .prime-regno-title { text-align: center; font-size: .8rem; height: 22px; line-height: 22px; border-bottom: 1px solid #333; }
+        .prime-regno-title { text-align: center; font-size: .8rem; height: 18px; line-height: 18px; border-bottom: 1px solid #333; }
         .prime-regno { display: flex; }
         .prime-regno-cell { display: inline-block; flex: 1; height: 36px; border-right: 1px solid #333; text-align: center; line-height: 36px; font-size: 1.35rem; font-weight: 700; }
         .prime-regno-cell:last-child { border-right: none; }
         .prime-table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-        .prime-table th, .prime-table td { border: 1px solid #333; padding: 2px 6px; font-size: .82rem; vertical-align: middle; overflow: hidden; }
+        .prime-table th, .prime-table td { border: 1px solid #333; padding: 2px 6px; font-size: .82rem; line-height: 1.2; vertical-align: middle; overflow: hidden; }
         .prime-table th { font-weight: 600; background: #fff; text-align: center; white-space: nowrap; }
         .prime-site { margin-top: 20px; }
         .prime-site th { width: 70px; font-size: .8rem; padding: 2px 4px; }
-        .prime-site td { height: 41px; }
+        .prime-site td { height: 47px; }
         .prime-site-name { font-size: .92rem; }
         .prime-site-trade { font-size: .84rem; width: 145px; }
         .prime-site th + td + th { width: 70px; }
-        .prime-lines th { height: 16px; }
-        .prime-lines td { height: 18px; }
+        .prime-lines { margin-top: 6px; }
+        .prime-lines th { height: 23px; }
+        .prime-lines td { height: 23px; }
         .prime-c-m { width: 22px; } .prime-c-d { width: 25px; }
         .prime-c-qty { width: 80px; } .prime-c-unit { width: 44px; } .prime-c-rate { width: 90px; } .prime-c-amt { width: 110px; }
         .prime-desc { text-align: center; }
         .prime-num { text-align: right; font-variant-numeric: tabular-nums; }
         .prime-ctr { text-align: center; }
         .prime-right { text-align: right; font-weight: 600; }
-        .prime-sub td { height: 21px; }
+        .prime-sub td { height: 23px; }
         .prime-bold { font-weight: 800; font-size: .95rem; }
-        .prime-taxes th { height: 18px; }
-        .prime-taxes td { height: 20px; }
+        .prime-taxes { margin-top: 7px; }
+        .prime-taxes th { height: 23px; }
+        .prime-taxes td { height: 23px; }
         .prime-taxes th, .prime-taxes td { font-size: .78rem; }
         .prime-tax-h { width: 50%; }
         .prime-tax-l { font-size: .78rem; }
         .prime-op { width: 16px; text-align: center; border-left: none !important; border-right: none !important; padding: 0 !important; }
-        .prime-right-col { padding-top: 0; }
+        .prime-right-col { padding-top: 10px; } /* 元の書式は右の列が左より 10px ほど下から始まる */
         .prime-paykind { margin-top: 0; }
         .prime-paykind td { font-size: .7rem; height: 18px; }
         .prime-paykind-h { width: 44px; }
@@ -248,7 +253,7 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         .prime-order td { height: 17px; }
         .prime-bank { margin-top: 10px; }
         .prime-bank th { width: 108px; font-size: .78rem; }
-        .prime-bank td { height: 16px; text-align: center; }
+        .prime-bank td { height: 18px; padding: 1px 6px; text-align: center; }
         .prime-branch { display: inline-block; min-width: 60%; }
         .prime-branch-suffix { float: right; font-size: .74rem; }
         .prime-no { font-size: .66rem; float: left; }
@@ -257,16 +262,16 @@ export default function PrimeInvoiceDocument({ b }: { b: PrimeInvoiceBundle }) {
         .prime-other { display: inline-block; min-width: 28px; }
         .prime-codes { margin-top: 10px; }
         .prime-codes th { width: 108px; font-size: .76rem; }
-        .prime-codes td { height: 18px; }
+        .prime-codes td { height: 22px; }
         .prime-code-cells { display: flex; gap: 2px; align-items: center; }
         .prime-code-cells span { display: inline-block; width: 15px; height: 17px; border: 1px solid #555; }
         .prime-code-cells .prime-dash { border: none; width: auto; height: auto; line-height: 1; }
         .prime-costs { margin-top: 0; }
-        .prime-costs th { height: 13px; font-size: .78rem; }
-        .prime-costs td { height: 13px; }
+        .prime-costs th { height: 23px; font-size: .78rem; }
+        .prime-costs td { height: 23px; }
         .prime-direct { margin-top: 0; }
         .prime-direct th { width: 48%; font-size: .82rem; }
-        .prime-direct td { height: 47px; vertical-align: top; }
+        .prime-direct td { height: 45px; vertical-align: top; }
         .prime-small { font-size: .66rem; color: #444; }
         .prime-sign { margin-top: 20px; }
         .prime-sign th { font-size: .8rem; height: 21px; }
