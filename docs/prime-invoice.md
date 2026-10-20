@@ -107,7 +107,9 @@ tax         = floor(amount × 10%)、total = amount + tax
 - PDF の文字: `lib/pdf-text.server.ts`
 - Firestore（下書き・申請・発行・取り消し）: `lib/prime-invoice-store.ts`
 - API: `app/api/prime-invoice/route.ts`
-- 画面: `app/(app)/prime-invoice/page.tsx`、印刷面: `components/invoice/PrimeInvoiceDocument.tsx`（山岡の 2023.09版 フォーマットに倣う）
+- 画面: `app/(app)/prime-invoice/page.tsx`、印刷面: `components/invoice/PrimeInvoiceDocument.tsx`（山岡の 2023.09版 フォーマットに倣う。
+  2026-10-20 に元の PDF を 96dpi の画像（1123×794px）にして寸法を測り、余白（上 21mm・左 12.5mm・右 7mm）・列幅（左 169mm・間 9mm・右 98mm）・
+  各枠の高さ（px）・文字の大きさを合わせた。`@page` の余白は 0 で、余白は `.prime-page` の padding が持つ。表のセルは height に padding が足されるので 4px 小さく指定）
 - テスト: `__tests__/primeInvoice.test.ts`（架空の数字。実在の人の給与は書かない）
 
 ## 支払内訳書との突き合わせ（入金のチェック・2026-10-20）
@@ -132,7 +134,7 @@ tax         = floor(amount × 10%)、total = amount + tax
 
 | 場所 | 変更 |
 |---|---|
-| 原価・収益の請求額欄 | 山岡への請求書が**発行済みの月は読み取り専用**（番号とリンクを出す）。API（`/api/cost` POST）でも 409 で止める。請求先が一次の自社現場で未発行の月は、黄色の案内「山岡への請求書を発行すると自動で入ります」を出し、手入力は例外扱い |
+| 原価・収益の請求額欄 | 請求先が一次の自社現場は **2026年9月分以降、手入力欄を出さない**。下書き・確認待ちの請求書があればその税抜を売上に使い（`invoiceBilling`・「請求書（下書き）」表示・見込みにしない）、無ければ「山岡への請求書で作る」の案内だけ。発行済みの月は読み取り専用（番号とリンク）＋ API（`/api/cost` POST）で 409。8月分以前は従来どおり手入力 |
 | 紙の請求書の控え | 一次（山岡建設工業など）への請求書は**新しく入れない**（`prepare`/`commit` を拒否・画面の選択肢からも外す）。2026-10-20 より前に入れた記録は見る・直す・消すだけ。二重請求の防止（紙の控えがある月はシステムから発行しない）は残す |
 | 受け取った請求書 | 外注の請求書と共用なので画面はそのまま。支払内訳書の行に山岡への請求書との見比べの札 |
 | 応援現場の請求額 | 変えない（応援の請求書は手作りのため、原価・収益の手入力が正本のまま） |
