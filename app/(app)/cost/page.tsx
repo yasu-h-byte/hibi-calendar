@@ -17,6 +17,10 @@ import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipT
 interface SiteProfit {
   id: string; name: string
   billing: number; billingRaw?: number; billingByMonth: Record<string, number[]>
+  /** 山岡への請求書が発行済みの月（ym → 番号）。請求額は請求書から自動で入り、手で変えない（2026-10-20） */
+  billingLocked?: Record<string, { no: string }>
+  /** 請求先が一次（山岡建設工業など）の自社現場。請求額は「山岡への請求書」で発行すると自動で入る */
+  primeBilled?: boolean
   cost: number; costRaw?: number; subCost: number; totalCost: number
   profit: number; profitRate: number; workDays: number; subWorkDays: number
   tobiEquiv: number; tobiRate: number; tobiBase: number
@@ -334,6 +338,21 @@ export default function CostPage() {
     const key = `${s.id}_${ym}`
     const rows = billingEdits[key] || [0]
     const ver = billingRowsVersion[key] || 0
+    const lock = s.billingLocked?.[ym]
+    // 山岡への請求書が発行済みの月: 請求書の税抜（工種ごと）が自動で入っている。手で変えない（直すときは請求書を取り消して作り直す）
+    if (lock) {
+      return (
+        <div className="space-y-2">
+          {rows.map((val, ri) => (
+            <div key={ri} className="h-11 flex items-center justify-end px-3 rounded-[10px] bg-hibi-bg dark:bg-gray-700/40 text-base font-bold tabular-nums">{val ? val.toLocaleString() : '—'}</div>
+          ))}
+          {rows.length > 1 && <div className="text-right text-sm font-bold tabular-nums">計 {fmtYen(rows.reduce((a, b) => a + b, 0))}</div>}
+          <p className="text-xs text-hibi-sub dark:text-gray-400">
+            山岡への請求書 <a href={`/prime-invoice?ym=${ym}`} className="font-bold text-hibi-navy dark:text-blue-300 hover:underline">{lock.no}</a> の発行で自動で入りました（工種ごとの税抜）。直すときは請求書を取り消して作り直します
+          </p>
+        </div>
+      )
+    }
     return (
       <div className="space-y-2">
         {rows.map((val, ri) => (
@@ -616,7 +635,7 @@ export default function CostPage() {
                     const sum = rows.reduce((a: number, b: number) => a + b, 0)
                     return (
                       <div key={m} className="flex justify-between px-3 py-2 border-t first:border-t-0 border-hibi-line dark:border-gray-700 tabular-nums">
-                        <span>{ymLabel(m)}</span><span className={sum > 0 ? 'font-bold' : 'text-gray-400'}>{sum > 0 ? fmtYen(sum) : 'まだ'}</span>
+                        <span>{ymLabel(m)}{openSite.billingLocked?.[m] && <span className="ml-2 text-2xs text-hibi-sub dark:text-gray-400">請求書 {openSite.billingLocked[m].no}</span>}</span><span className={sum > 0 ? 'font-bold' : 'text-gray-400'}>{sum > 0 ? fmtYen(sum) : 'まだ'}</span>
                       </div>
                     )
                   })}
@@ -635,8 +654,13 @@ export default function CostPage() {
                   {isEstimate(openSite) && (
                     <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">いまは見込み <b className="tabular-nums text-gray-700 dark:text-gray-200">{fmtYen(openSite.billing)}</b>（人工 × 過去の平均単価）で計算しています。請求額を入れると置き換わります</p>
                   )}
+                  {openSite.primeBilled && !openSite.billingLocked?.[ym] && (
+                    <p className="text-[0.8125rem] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
+                      この現場の請求額は、<a href={`/prime-invoice?ym=${ym}`} className="font-bold underline">山岡への請求書</a>を発行すると自動で入ります（大林組の控えから計算）。ここで手で入れるのは、請求書をまだ作れないときだけにしてください
+                    </p>
+                  )}
                   {billingInputs(openSite)}
-                  <p className="text-xs text-hibi-sub dark:text-gray-400">入れると自動で保存し、粗利を計算し直します。出向中スタッフの分は差し引いた額を入れてください</p>
+                  {!openSite.billingLocked?.[ym] && <p className="text-xs text-hibi-sub dark:text-gray-400">入れると自動で保存し、粗利を計算し直します。出向中スタッフの分は差し引いた額を入れてください</p>}
                 </>
               )}
             </section>
