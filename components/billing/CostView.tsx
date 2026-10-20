@@ -10,7 +10,7 @@ import { currentYmJst, todayJstDate } from '@/lib/date-utils'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { shiftYm } from '@/lib/month-nav'
 import { Icon } from '@/components/ui/Icon'
-import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
+import { TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 
 // ─── Types ───
 
@@ -158,19 +158,18 @@ const visaBadge = (visa: string): string => visaLabel(visa)
 
 // ─── Main Component ───
 
-export default function CostPage() {
+/**
+ * 原価・収益（現場ごとの売上・原価・粗利）。2026-10-20 に「請求・原価」（app/(app)/billing）のタブ①になった。
+ * 月は親（請求・原価）が持ち、ここは期間（1か月／3か月…）だけを持つ。旧 /cost は /billing?tab=sites に転送。
+ */
+export default function CostView({ ym: ymProp, onYmChange }: { ym: string; onYmChange: (ym: string) => void }) {
   const [password, setPassword] = useState('')
   const [data, setData] = useState<CostData | null>(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<PeriodType>('monthly')
   const [siteFilter, setSiteFilter] = useState('all')
-  // 最初に開く月: 毎月10日までは前の月（月初は今月の数字がほとんどなく、大きな赤字に見えるため・2026-10-01 代表）
-  const [ym, setYm] = useState(() => {
-    const today = todayJstDate()
-    if (today.getDate() > 10) return currentYmJst()
-    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
+  const ym = ymProp
+  const setYm = onYmChange
   const [listFilter, setListFilter] = useState<'all' | 'nobill' | 'low'>('all')
   const [openSiteId, setOpenSiteId] = useState<string | null>(null)
   const [showIdleSubcons, setShowIdleSubcons] = useState(false)
@@ -419,18 +418,16 @@ export default function CostPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
-      <PageHeader
-        group="請求・原価"
-        title="原価・収益"
-        sub="現場ごとの売上（請求額）と原価（人件費・外注費）から、儲けを見ます。金額は税抜"
-        actions={<>
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="text-sm text-hibi-sub dark:text-gray-400">現場ごとの売上（請求書）と原価（人件費・外注費）から、儲けを見ます。金額は税抜</p>
+        <div className="ml-auto flex items-center gap-2">
           <Segment value={period} onChange={setPeriod} items={[
             ['monthly', '1か月'], ['3months', '3か月'], ['6months', '6か月'], ['fiscal', '決算期'], ['yearly', '1年'],
           ]} />
           {monthStepper}
-        </>}
-      />
+        </div>
+      </div>
 
       {/* 現場の絞り込み（全現場／1現場。1現場のときはメンバー・職種・推移のグラフが出る） */}
       {data && data.siteList && data.siteList.length > 0 && (

@@ -6,6 +6,8 @@
  *       請求書は「毎月」、原価は「経営」、書類庫は「人・賃金」のように置き場所の理屈が見えなかった。
  *   新: ホーム → 出面・勤怠 → 給与・締め → 請求・原価 → 人・書類 → 賃金・評価 → マスタ・管理。
  *       まとまりの中は、よく使うものを上に置く。
+ *   2026-10-20（代表「頻度などを勘案」）: まとまりを 出面・勤怠（毎日）→ 締め・請求（毎月）→ 人・書類 → 賃金・評価 → その他 に。
+ *       「請求・支払」と「原価・収益」は「請求・原価」の1画面に統合（/billing）。
  * 誰に見せるかは lib/permissions.ts の権限（cap）だけで決める（メニュー側に役割を書かない）。
  *
  * SEARCH_ENTRIES はメニュー検索用。画面の中のタブ・機能まで直接飛べるようにする
@@ -39,43 +41,46 @@ export function visibleMenuItems(user: { role: string; workerId: number }): Menu
 /** 見出しを出さないまとまり（ダッシュボードだけの先頭） */
 export const MENU_HOME_SECTION = 'ホーム'
 
-export const MENU_SECTIONS = [MENU_HOME_SECTION, '出面・勤怠', '給与・締め', '請求・原価', '人・書類', '賃金・評価', 'マスタ・管理'] as const
+export const MENU_SECTIONS = [MENU_HOME_SECTION, '出面・勤怠（毎日）', '締め・請求（毎月）', '人・書類', '賃金・評価', 'その他'] as const
 
+/**
+ * 並び順は使う頻度で（2026-10-20 代表「頻度などを勘案して調整」）:
+ *   毎日（出面・休みの予定・休暇の承認）→ 月に1回の流れ（締め → 請求・原価）→ ときどき（人・道具代・書類）→ 年に数回（賃金・評価）→ その他。
+ *   まとまりの中も、よく使うものを上に。「困ったこと・要望」はいつでも押せるように「その他」の先頭。
+ */
 export const MENU_ITEMS: MenuItem[] = [
   { label: 'ダッシュボード', icon: 'home', href: '/dashboard', section: MENU_HOME_SECTION, cap: 'dashboard.view' },
-  // ── 出面・勤怠（毎日の出面 → 月ごとのカレンダー → 有給・帰国）──
+  // ── 出面・勤怠（毎日）: 毎日の出面 → 今日いない人 → 申請の承認 → 月ごとのカレンダー（25日前後）──
   // PC 版とスマホ版は画面の中で切り替える（両方から相互リンクあり）。メニューは1つ
-  { label: '出面入力', icon: 'clipboard', href: '/attendance', section: '出面・勤怠', cap: 'attendance.view', activePrefixes: ['/attendance/mobile'] },
-  { label: '就業カレンダー', icon: 'calendar', href: '/calendar', section: '出面・勤怠', cap: 'calendar.view' },
-  { label: '休暇管理', icon: 'umbrella', href: '/leave', section: '出面・勤怠', cap: 'leave.view' },
+  { label: '出面入力', icon: 'clipboard', href: '/attendance', section: '出面・勤怠（毎日）', cap: 'attendance.view', activePrefixes: ['/attendance/mobile'] },
   // 休みの予定（2026-10-14）。帰国・有給・欠勤届を見るだけ。職長も見る
-  { label: '休みの予定', icon: 'plane', href: '/time-off', section: '出面・勤怠', cap: 'timeOff.view' },
-  // ── 給与・締め ──
-  { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
+  { label: '休みの予定', icon: 'plane', href: '/time-off', section: '出面・勤怠（毎日）', cap: 'timeOff.view' },
+  { label: '休暇管理', icon: 'umbrella', href: '/leave', section: '出面・勤怠（毎日）', cap: 'leave.view' },
+  { label: '就業カレンダー', icon: 'calendar', href: '/calendar', section: '出面・勤怠（毎日）', cap: 'calendar.view' },
+  // ── 締め・請求（毎月）: 月締め → 請求書・原価 ──
+  { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '締め・請求（毎月）', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
   // 「帳票出力」のメニュー項目は 2026-10-03 に廃止（月次集計・締めのタブだけに。検索からは引ける）
-  // ── 請求・原価 ──
-  { label: '請求・支払', icon: 'receipt', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice', '/subcon-invoice', '/prime-invoice'] },
-  { label: '原価・収益', icon: 'yen', href: '/cost', section: '請求・原価', cap: 'cost.view' },
-  // 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）
-  { label: '経営コックピット', icon: 'trend', external: 'https://keieidashboard.vercel.app/genba', section: '請求・原価', cap: 'cockpit.view' },
-  // ── 人・書類 ──
+  // 2026-10-20 代表: 「請求・支払」と「原価・収益」を1つの画面（3タブ: 現場ごと／出す請求書／受け取る）に統合
+  { label: '請求・原価', icon: 'receipt', href: '/billing', section: '締め・請求（毎月）', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice', '/prime-invoice'] },
+  // 経営コックピット（別サイト）へのリンクは 2026-10-20 にメニューから外した（代表「いらないかも」。ブックマークで開く）
+  // ── 人・書類（ときどき）: 人員 → 道具代（月に数回）→ 書類庫（入社・更新のとき）──
   { label: '人員マスタ', icon: 'users', href: '/workers', section: '人・書類', cap: 'workers.view' },
-  { label: '書類庫', icon: 'folder', href: '/staff-docs', section: '人・書類', cap: 'staffDocs.view' },
   { label: '道具代管理', icon: 'wrench', href: '/tool-budget', section: '人・書類', cap: 'toolBudget.view' },
-  // ── 賃金・評価 ──
+  { label: '書類庫', icon: 'folder', href: '/staff-docs', section: '人・書類', cap: 'staffDocs.view' },
+  // ── 賃金・評価（年に数回）──
   // 評価管理・昇給履歴・賃金制度・賃金分析はハブで国籍別に分岐。昇給履歴は人員マスタのタブだが、こちらを選択中にする
   { label: '賃金・評価', icon: 'star', href: '/compensation', section: '賃金・評価', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis', '/workers?tab=raise-history'] },
   // 職長の評価入力の入口（ハブは職長には見せない）。通知ベルの「評価入力をお願いします」もここから
   // 評価入力は職長（評価者）の入口。給与が見える人は「賃金・評価」の中の「評価の入力が残っている」カードから入るので出さない（2026-10-03 代表 OK）
   { label: '評価入力', icon: 'pen', href: '/evaluation?tab=review', section: '賃金・評価', cap: 'evaluation.input', hideIfCap: 'wage.view' },
-  // ── マスタ・管理 ──
-  { label: '現場マスタ', icon: 'site', href: '/sites', section: 'マスタ・管理', cap: 'masters.view' },
-  { label: '取引先マスタ', icon: 'building', href: '/subcons', section: 'マスタ・管理', cap: 'masters.view' },
-  // 会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴（アクセス履歴もここから）
-  { label: '管理者設定', icon: 'gear', href: '/settings', section: 'マスタ・管理', cap: 'system.admin', activePrefixes: ['/access-log'] },
-  { label: '資料一覧', icon: 'book', href: '/docs', section: 'マスタ・管理', cap: 'docs.view' },
+  // ── その他: 困ったこと（いつでも）→ 資料 → マスタ（単価が変わったとき）→ 管理者設定（まれ）──
   // 困ったこと・要望（2026-10-09）。返信が来たら件数が付く
-  { label: '困ったこと・要望', icon: 'pen', href: '/feedback', section: 'マスタ・管理', cap: 'feedback.post' },
+  { label: '困ったこと・要望', icon: 'pen', href: '/feedback', section: 'その他', cap: 'feedback.post' },
+  { label: '資料一覧', icon: 'book', href: '/docs', section: 'その他', cap: 'docs.view' },
+  { label: '現場マスタ', icon: 'site', href: '/sites', section: 'その他', cap: 'masters.view' },
+  { label: '取引先マスタ', icon: 'building', href: '/subcons', section: 'その他', cap: 'masters.view' },
+  // 会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴（アクセス履歴もここから）
+  { label: '管理者設定', icon: 'gear', href: '/settings', section: 'その他', cap: 'system.admin', activePrefixes: ['/access-log'] },
 ]
 
 /**
@@ -129,14 +134,14 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '帰国情報', where: '休暇管理 → 帰国', href: '/leave?tab=homeleave', cap: 'leave.view', keywords: 'きこく 一時帰国 長期' },
   { label: '有給の手動付与・時季指定・買取', where: '休暇管理 → 有給 → 行を押して右のパネル', href: '/leave', cap: 'leave.manage', keywords: 'ふよ かいとり じきしてい' },
   // 請求
-  { label: '応援の請求書（同業者へ）', where: '請求・支払 → 請求・支払の一覧', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
-  { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求・支払 → 紙の請求書の控え', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
-  { label: '受け取った外注の請求書（保管・出面との見比べ）', where: '請求・支払 → 受け取った請求書', href: '/subcon-invoice', cap: 'invoice.view', keywords: 'うけとった 外注 請求書 紙 写真 スキャン 支払 見比べ' },
-  { label: '山岡への請求書（大林組の控えから自動作成・85%）', where: '請求・支払 → 山岡への請求書', href: '/prime-invoice', cap: 'invoice.view', keywords: 'やまおか 一次 大林 控え 85 控除 借受 笹塚 IHI 請求書' },
-  { label: 'HFU → 日比建設 の請求書', where: '請求・支払 → 一覧 → HFU の「請求書を作る」', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
+  { label: '応援の請求書（同業者へ）', where: '請求・原価 → 出す請求書', href: '/billing?tab=issue', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者 請求 支払' },
+  { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求・原価 → 出す請求書 → 紙で出した控え', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
+  { label: '受け取った外注の請求書・支払内訳書（保管・見比べ）', where: '請求・原価 → 受け取る（支払・入金）', href: '/billing?tab=receive', cap: 'invoice.view', keywords: 'うけとった 外注 請求書 紙 写真 スキャン 支払 入金 支払内訳書 見比べ' },
+  { label: '山岡への請求書（大林組の控えから自動作成・85%）', where: '請求・原価 → 出す請求書 → 山岡への請求書', href: '/prime-invoice', cap: 'invoice.view', keywords: 'やまおか 一次 大林 控え 85 控除 借受 笹塚 IHI 請求書' },
+  { label: 'HFU → 日比建設 の請求書', where: '請求・原価 → 出す請求書 → HFU の行', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
   { label: '請求書の自社情報・振込先', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: '登録番号 インボイス 口座 振込' },
   // 経営
-  { label: '現場の請求額の入力', where: '原価・収益 → 現場別', href: '/cost', cap: 'cost.edit', keywords: 'せいきゅうがく 売上 粗利' },
+  { label: '現場ごとの売上・原価・粗利（請求額）', where: '請求・原価 → 現場ごと', href: '/billing?tab=sites', cap: 'cost.view', keywords: 'げんか しゅうえき せいきゅうがく 売上 粗利 原価 収益' },
   // 人・賃金
   { label: '電話URL・QR（スタッフのスマホ）', where: '人員マスタ → 編集', href: '/workers', cap: 'workers.edit', keywords: 'とーくん url qr マイページ' },
   { label: '昇給履歴', where: '賃金・評価 → 昇給履歴（人員マスタのタブ）', href: '/workers?tab=raise-history', cap: 'wage.view', keywords: 'しょうきゅう りれき' },

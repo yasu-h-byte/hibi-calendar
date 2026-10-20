@@ -249,7 +249,7 @@ export default function PrimeInvoicePage() {
             <div className="flex items-baseline gap-2 flex-wrap">
               <h3 className="font-bold text-sm">支払内訳書との突き合わせ（{ymLabelOf(ym)}）</h3>
               <span className="text-xs text-hibi-sub dark:text-gray-400">発行済みの請求書の税込合計と、「受け取った請求書」に入れた支払内訳書の振込額を会社ごとに比べます。</span>
-              <a href={`/subcon-invoice?ym=${ym}`} className="ml-auto text-xs text-hibi-navy dark:text-blue-300 hover:underline">受け取った請求書を開く</a>
+              <a href={`/billing?tab=receive&ym=${ym}`} className="ml-auto text-xs text-hibi-navy dark:text-blue-300 hover:underline">受け取る（支払・入金）を開く</a>
             </div>
             {Object.entries(data.remittances).map(([cid, r]) => {
               const c = r.comparison

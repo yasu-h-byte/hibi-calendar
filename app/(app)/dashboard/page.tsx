@@ -469,7 +469,7 @@ function MonthCard({ data, ym, loading, error, onPrev, onNext, canCost }: {
               {/* fmtYenMan は「¥2,719万」まで返すので、足すのは「円」だけ（旧は「万円」で万が二重だった） */}
               {s.billing > 0 && <span className="text-sm text-hibi-sub dark:text-gray-400">円</span>}
             </div>
-            {canCost && <MoreLink href="/cost">原価・収益へ</MoreLink>}
+            {canCost && <MoreLink href="/billing?tab=sites">請求・原価へ</MoreLink>}
           </div>
         </div>
       )}
