@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { uploadToStorage } from '@/lib/upload-client'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
@@ -597,8 +598,8 @@ function PaperInvoiceModal({ mode, rec, ym, companies, primeSites, onClose, onDo
       uploadedDocId = docId
       for (let i = 0; i < uploads.length; i++) {
         setBusy(`アップロードしています（${i + 1}/${uploads.length}）`)
-        const res = await fetch(uploads[i].url, { method: 'PUT', headers: { 'Content-Type': uploads[i].contentType }, body: files[i] })
-        if (!res.ok) throw new Error(`アップロードに失敗しました: ${files[i].name}（${res.status}）`)
+        // 直接 PUT → 止められたら API 経由（Preview の CORS・lib/upload-client.ts・2026-10-20）
+        await uploadToStorage(uploads[i], files[i])
       }
       setBusy('登録しています')
       const commit = await postJson('/api/paper-invoice', {
