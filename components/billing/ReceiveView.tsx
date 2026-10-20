@@ -97,7 +97,7 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
     let res: Response, allRes: Response
     try {
       ;[res, allRes] = await Promise.all([
-        fetchWithAuth(`/api/billing?tab=receive&ym=${ym}`, { signal: req.signal }),
+        fetchWithAuth(`/api/subcon-invoice?ym=${ym}`, { signal: req.signal }),
         fetchWithAuth('/api/subcon-invoice?all=1', { signal: req.signal }),
       ])
     } catch (e) {

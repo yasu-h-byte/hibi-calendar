@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261020_billing_receive_fix',
+    title: '請求・原価: 「受け取る」タブが「読み込みに失敗しました」になっていたのを直しました',
+    content:
+      '画面をまとめたときに、届いた請求書・支払内訳書の読み込み先が間違っていました。あわせて「現場ごと」の下の「月ごとの推移」と前月比も、上の合計と同じく山岡への請求書の下書きを売上に使うようにしました（9月の推移だけ大きな赤字に見えていた原因）。',
+    category: 'fix',
+    publishedAt: '2026-10-20T23:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261020_billing_merge',
     title: '「請求・支払」と「原価・収益」を1つの画面「請求・原価」にまとめました',
     content:
