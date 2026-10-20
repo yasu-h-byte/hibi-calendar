@@ -261,9 +261,34 @@ export async function issuePrimeInvoice(args: {
     return { ok: true as const, update }
   })
   if (!done.ok) return done
+  // 現場の請求額（原価・収益・経営コックピットの 13週資金繰りの元）を、発行した請求書の税抜（工種ごと）で上書きする（2026-10-20）
+  //   原価・収益で手で入れた額と、発行した請求書が食い違わないように。取り消しのときは触らない（作り直せば上書きされる）
+  await syncSiteBillingFromInvoice({ ...cur, ...done.update }, actor).catch(e => console.error('[prime-invoice] billing sync failed', id, e))
   await logActivity(actor, direct ? 'primeInvoice.issueDirect' : 'primeInvoice.issue',
     `${labelOf(cur)} 一次への請求書 ${done.update.no}（${cur.sheets.length}枚・税込 ¥${cur.total.toLocaleString()}）を${direct ? `代表が1回で発行（確認1・確認2をまとめて。元の状態: ${cur.status}）` : `確認2して発行（申請: ${cur.requestedByName || cur.requestedBy || '—'}・確認1: ${cur.checkedByName || cur.checkedBy || '—'}）`}`)
   return { ok: true, record: { ...cur, ...done.update } }
+}
+
+/**
+ * 発行した請求書の税抜（枚ごと）を、現場の請求額 demmen/main.billing[`${siteId}_${ym}`] に書く（app/api/cost と同じ書き方・ドット記法でこのキーだけ）。
+ * 原価・収益の画面と経営コックピット（sites[].billing × 1.1 を山岡からの入金予定に使う）が、発行した請求書と同じ額になる。
+ */
+export async function syncSiteBillingFromInvoice(b: PrimeInvoiceBundle, actor: string): Promise<void> {
+  if (!/^[A-Za-z0-9_-]+$/.test(b.siteId)) return
+  const key = `${b.siteId}_${b.ym}`
+  const docRef = doc(db, 'demmen', 'main')
+  const snap = await getDoc(docRef)
+  if (!snap.exists()) return
+  const data = snap.data() as { billing?: Record<string, number[] | number> }
+  const prevRaw = data.billing?.[key]
+  const prev = (Array.isArray(prevRaw) ? prevRaw : typeof prevRaw === 'number' ? [prevRaw] : []).filter(v => v !== 0)
+  const arr = b.sheets.map(s => Math.round(s.amount)).filter(v => v !== 0)
+  await updateDoc(docRef, { [`billing.${key}`]: arr.length > 0 ? arr : [0] })
+  const sum = (xs: number[]) => xs.reduce((s, v) => s + v, 0)
+  if (sum(prev) !== sum(arr) || prev.length !== arr.length || prev.some((v, i) => v !== arr[i])) {
+    await logActivity(actor, 'billing.update',
+      `${b.siteName} ${jpYmOf(b.ym)}の請求額: ${prev.length ? prev.map(v => v.toLocaleString()).join('+') : '未入力'} → ${arr.map(v => v.toLocaleString()).join('+')}（税抜 ${sum(arr).toLocaleString()}円・山岡への請求書 ${b.no} の発行で自動）`)
+  }
 }
 
 /** 差し戻し（確認1・確認2のどちらの段でも。事業責任者・代表）または取り下げ（事務・確認1待ちの間だけ）。下書きに戻す（ファイル・内容は残る） */

@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261020_prime_invoice_remittance',
+    title: '山岡への請求書: 支払内訳書との突き合わせと、原価・収益の請求額への自動反映',
+    content:
+      '山岡から届いた支払内訳書を「受け取った請求書」に入れると、「山岡への請求書」の画面と支払内訳書の行に、発行済みの請求書の税込合計と振込額の見比べ（一致・差）が出ます。'
+      + 'また、山岡への請求書を発行すると、原価・収益の「現場の請求額」が請求書と同じ額に自動で入ります（手で入れ直す必要はありません）。「請求・支払の一覧」にも山岡への請求書のカードを足しました。',
+    category: 'new',
+    publishedAt: '2026-10-20T21:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261020_prime_invoice_ratio',
     title: '山岡への請求書: 割合（85%）を請求書ごとに変えられるようにしました',
     content:

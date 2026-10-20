@@ -27,8 +27,11 @@ import {
   SUBCON_INVOICE_ALLOWED_TYPES, SUBCON_INVOICE_MAX_FILE_BYTES, SUBCON_INVOICE_MAX_FILES,
   docTypeOf, type SubconInvoice, type SubconExpected, type SubconComparison, type SubconDocType,
 } from '@/lib/subcon-invoice'
+import type { PrimeRemittanceComparison } from '@/lib/prime-invoice'
 
 interface MonthData {
+  /** 支払内訳書と、発行済みの山岡への請求書との見比べ（companyId → 比較・番号）。2026-10-20 */
+  primeByCompany?: Record<string, { comparison: PrimeRemittanceComparison; nos: string[] }>
   records: SubconInvoice[]
   expected: Record<string, SubconExpected>
   comparisons: Record<string, SubconComparison & { count: number }>
@@ -49,6 +52,17 @@ function contentTypeOf(f: File): string {
   if (ext === 'pdf') return 'application/pdf'
   if (ext === 'heic' || ext === 'heif') return 'image/heic'
   return ''
+}
+
+/** 支払内訳書: DEDURA＋ で発行した山岡への請求書（税込・同じ月・全現場）との見比べ（2026-10-20）。帳簿との照合は経営コックピット */
+function primeChip(p: { comparison: PrimeRemittanceComparison; nos: string[] } | undefined) {
+  if (!p) return <Chip tone="blue">支払内訳書（帳簿と照合は経営コックピット）</Chip>
+  const c = p.comparison
+  if (c.result === 'noInvoice') return <Chip tone="amber">山岡への請求書が未発行（DEDURA＋）</Chip>
+  if (c.result === 'noRemittance') return <Chip tone="amber">振込額が未入力（請求書 {yen(c.invoiceTotal)}）</Chip>
+  if (c.result === 'match') return <Chip tone="green">山岡への請求書 {yen(c.invoiceTotal)} と一致</Chip>
+  if (c.result === 'close') return <Chip tone="green">ほぼ一致 {signedYen(c.diff)}（請求書 {yen(c.invoiceTotal)}）</Chip>
+  return <Chip tone="red">差 {signedYen(c.diff)}（請求書 {yen(c.invoiceTotal)}・{p.nos.join('・')}）</Chip>
 }
 
 function resultChip(cmp: (SubconComparison & { count?: number }) | undefined) {
@@ -225,7 +239,7 @@ export default function SubconInvoicePage() {
                     <span className="lg:text-right text-[0.9375rem] tabular-nums text-gray-700 dark:text-gray-300">
                       <span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">出面 × 単価</span>{docTypeOf(r) === 'invoice' && data.expected[r.companyId] ? yen(data.expected[r.companyId].cost) : '—'}
                     </span>
-                    <span>{docTypeOf(r) === 'remittance' ? <Chip tone="blue">支払内訳書（帳簿と照合は経営コックピット）</Chip> : resultChip(cmpOf(r))}</span>
+                    <span>{docTypeOf(r) === 'remittance' ? primeChip(data.primeByCompany?.[r.companyId]) : resultChip(cmpOf(r))}</span>
                     <span className="text-xs text-hibi-sub dark:text-gray-400">{r.uploadedByName || '—'}・{r.files.length}ファイル</span>
                   </div>
                 ))}

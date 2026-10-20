@@ -1,7 +1,7 @@
 /**
  * 一次（山岡建設工業など）への請求書 API（2026-10-20）。仕組みは lib/prime-invoice.ts の冒頭と docs/prime-invoice.md。
  *
- * GET  ?ym=YYYYMM                 → その月の請求書（会社×現場ごと）＋ 選べる一次の会社と現場 ＋ 月の一覧
+ * GET  ?ym=YYYYMM                 → その月の請求書（会社×現場ごと）＋ 選べる一次の会社と現場 ＋ 月の一覧 ＋ 支払内訳書との突き合わせ（remittances）
  * GET  ?id=ID                     → 1件（下書き・申請中は 出面との検算 と 承認の有無 も）
  * GET  ?open=ID&i=N               → ファイルを見る署名つきURL（15分）。控除計算書（給与の内訳）は pay.view の人だけ
  * POST multipart/form-data { action:'upload', companyId, siteId, ym, docId?, files[] }
@@ -29,9 +29,13 @@ import { extractPdfLines } from '@/lib/pdf-text.server'
 import {
   PRIME_INVOICE_ALLOWED_TYPES, PRIME_INVOICE_MAX_FILE_BYTES, PRIME_INVOICE_MAX_FILES, PRIME_INVOICE_DOC_ID_RE,
   looksLikeGcStatement, looksLikeMemo, parseGcStatement, parseMemo, assembleSheets, aggregatePrimeManDays, comparePrimeManDays,
-  maskPrimeBundleForViewer, sanitizeSheetEdit, recomputeSheet, primePeriodOf, parseRatioPercent, PRIME_INVOICE_RATIO,
+  maskPrimeBundleForViewer, sanitizeSheetEdit, recomputeSheet, primePeriodOf, parseRatioPercent, comparePrimeWithRemittance, PRIME_INVOICE_RATIO,
+  type PrimeRemittanceComparison,
   type PrimeInvoiceFile, type PrimeInvoiceBundle, type PrimeSheet, type GcStatement, type MemoParsed,
 } from '@/lib/prime-invoice'
+import { db } from '@/lib/firebase'
+import { collection, getDocs, query, where } from '@/lib/fsdb'
+import { docTypeOf, type SubconInvoice } from '@/lib/subcon-invoice'
 import {
   listPrimeBundlesForYm, listPrimeBundlesSummary, getPrimeBundle, createPrimeDraft, updatePrimeDraft,
   requestPrimeInvoice, checkPrimeInvoice, issuePrimeInvoice, rejectPrimeInvoice, voidPrimeInvoice, deletePrimeDraft, primeApprovalGap,
@@ -168,7 +172,21 @@ export async function GET(request: NextRequest) {
     const masked = await Promise.all(records.map(r => maybeMask(request, r)))
     const months: Record<string, number> = {}
     for (const s of summary) months[s.ym] = (months[s.ym] || 0) + 1
-    return NextResponse.json({ ym, records: masked, companies, sites, months, storageReady: !!getStaffDocsBucket() })
+    // 支払内訳書との突き合わせ（会社ごと）: 「受け取った請求書」に種類「支払内訳書」で入れたもの（subconInvoices・同じ月）
+    const remitSnap = await getDocs(query(collection(db, 'subconInvoices'), where('ym', '==', ym)))
+    const remits: SubconInvoice[] = []
+    remitSnap.forEach(d => { const r = { ...(d.data() as unknown as SubconInvoice), id: d.id }; if (docTypeOf(r) === 'remittance') remits.push(r) })
+    const remittances: Record<string, { comparison: PrimeRemittanceComparison; records: { id: string; no: string | null; total: number; uploadedByName: string; files: number }[] }> = {}
+    for (const c of companies) {
+      const issued = records.filter(r => r.companyId === c.id && r.status === 'issued')
+      const xs = remits.filter(r => r.companyId === c.id)
+      if (issued.length === 0 && xs.length === 0) continue
+      remittances[c.id] = {
+        comparison: comparePrimeWithRemittance(issued, xs),
+        records: xs.map(r => ({ id: r.id, no: r.no ?? null, total: r.total, uploadedByName: r.uploadedByName || '', files: r.files?.length || 0 })),
+      }
+    }
+    return NextResponse.json({ ym, records: masked, companies, sites, months, remittances, storageReady: !!getStaffDocsBucket() })
   } catch (e) {
     console.error('[prime-invoice] GET error', e)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

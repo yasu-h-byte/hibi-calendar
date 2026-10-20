@@ -13,6 +13,8 @@
  * 権限: 見る = invoice.view ／ 登録・修正 = invoice.subcon ／ 削除 = invoice.approve（lib/permissions.ts）
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { listPrimeBundlesForYm } from '@/lib/prime-invoice-store'
+import { comparePrimeWithRemittance, type PrimeRemittanceComparison } from '@/lib/prime-invoice'
 import { randomUUID } from 'crypto'
 import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
@@ -180,8 +182,18 @@ export async function GET(request: NextRequest) {
     comparisons[id] = { ...compareSubconInvoice(xs, expected[id]), count: xs.length }
   }
   const names = Object.fromEntries((main.subcons || []).map(s => [s.id, s.name]))
+  // 支払内訳書は、DEDURA＋ で発行した山岡への請求書（税込・同じ会社・同じ月・全現場）と見比べる（2026-10-20）
+  const primeByCompany: Record<string, { comparison: PrimeRemittanceComparison; nos: string[] }> = {}
+  const remitCos = [...new Set(records.filter(r => docTypeOf(r) === 'remittance').map(r => r.companyId))]
+  if (remitCos.length > 0) {
+    const issued = (await listPrimeBundlesForYm(ym)).filter(b => b.status === 'issued')
+    for (const id of remitCos) {
+      const mine = issued.filter(b => b.companyId === id)
+      primeByCompany[id] = { comparison: comparePrimeWithRemittance(mine, records.filter(r => docTypeOf(r) === 'remittance' && r.companyId === id)), nos: mine.map(b => b.no) }
+    }
+  }
   return NextResponse.json({
-    ym, records, expected, comparisons,
+    ym, records, expected, comparisons, primeByCompany,
     missing: missingSubconInvoices(expected, invoices, names),
     companies: selectableCompanies(main),
     storageReady: !!getStaffDocsBucket(),

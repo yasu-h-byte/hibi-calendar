@@ -7,7 +7,7 @@ import type { MainData } from '@/lib/compute'
 import {
   parseMoneyToken, parseGcStatement, parseMemo, looksLikeGcStatement, looksLikeMemo, computeSheetAmounts, buildSheet, recomputeSheet,
   assembleSheets, matchMemoToSheet, sumSheets, primePeriodOf, primeBillingPeriodOf, defaultPrimeInvoiceDate, reiwaDate, primeOtRate,
-  aggregatePrimeManDays, comparePrimeManDays, maskPrimeBundleForViewer, sanitizeSheetEdit, parseRatioPercent, PRIME_INVOICE_RATIO,
+  aggregatePrimeManDays, comparePrimeManDays, maskPrimeBundleForViewer, sanitizeSheetEdit, parseRatioPercent, comparePrimeWithRemittance, PRIME_INVOICE_RATIO,
   type GcStatement, type MemoParsed, type PrimeInvoiceBundle,
 } from '@/lib/prime-invoice'
 
@@ -289,6 +289,18 @@ describe('出面との検算（前月21日〜当月20日）', () => {
     expect(rows[0].diff).toBe(-97)
     const noMemo = comparePrimeManDays(null, agg)
     expect(noMemo.every(r => r.memo === null && r.diff === null)).toBe(true)
+  })
+})
+
+describe('支払内訳書との突き合わせ（入金のチェック）', () => {
+  test('発行済みの税込合計 vs 振込額', () => {
+    expect(comparePrimeWithRemittance([{ total: 11571127 }, { total: 2129930 }], [{ total: 13701057 }])).toMatchObject({ invoiceTotal: 13701057, invoiceCount: 2, remittanceTotal: 13701057, remittanceCount: 1, diff: 0, result: 'match' })
+    expect(comparePrimeWithRemittance([{ total: 1000000 }], [{ total: 999560 }]).result).toBe('close')     // 振込手数料など 1,000円以内
+    expect(comparePrimeWithRemittance([{ total: 1000000 }], [{ total: 900000 }])).toMatchObject({ diff: -100000, result: 'diff' })
+    expect(comparePrimeWithRemittance([], [{ total: 900000 }]).result).toBe('noInvoice')
+    expect(comparePrimeWithRemittance([{ total: 1000000 }], []).result).toBe('noRemittance')
+    // 振込額が未入力（0）の内訳書は「届いた」とだけ数える
+    expect(comparePrimeWithRemittance([{ total: 1000000 }], [{ total: 0 }])).toMatchObject({ remittanceCount: 1, remittanceTotal: 0, result: 'noRemittance' })
   })
 })
 

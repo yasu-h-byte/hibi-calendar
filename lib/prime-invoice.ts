@@ -724,6 +724,49 @@ export function comparePrimeManDays(memo: MemoParsed | null, agg: PrimeManDays):
 }
 
 // ─────────────────────────────────────────────
+// 支払内訳書との突き合わせ（入金のチェック・2026-10-20）
+// ─────────────────────────────────────────────
+
+/** 発行済みの税込合計と、支払内訳書の振込額の差がこの範囲なら「ほぼ一致」（端数・振込手数料） */
+export const PRIME_REMITTANCE_CLOSE_YEN = 1_000
+
+export type PrimeRemittanceResult = 'match' | 'close' | 'diff' | 'noRemittance' | 'noInvoice'
+
+export interface PrimeRemittanceComparison {
+  /** 発行済みの山岡への請求書の税込合計（同じ会社・同じ月・全現場） */
+  invoiceTotal: number
+  invoiceCount: number
+  /** 支払内訳書の振込額の合計（同じ会社・同じ月。振込額が未入力の内訳書は数えない） */
+  remittanceTotal: number
+  remittanceCount: number
+  /** 振込額 − 請求書 */
+  diff: number
+  result: PrimeRemittanceResult
+}
+
+/**
+ * 同じ一次の会社・同じ対象月について、発行済みの請求書（税込）と届いた支払内訳書（振込額）を見比べる（純粋）。
+ * 支払内訳書は「受け取った請求書」に種類「支払内訳書」で入れたもの（lib/subcon-invoice.ts・docType remittance）。
+ * 振込額が 0（未入力）の内訳書は、届いたことだけ数えて金額には入れない。
+ */
+export function comparePrimeWithRemittance(
+  issued: { total: number }[],
+  remittances: { total: number }[],
+): PrimeRemittanceComparison {
+  const invoiceTotal = issued.reduce((s, b) => s + Math.round(b.total), 0)
+  const withAmount = remittances.filter(r => r.total > 0)
+  const remittanceTotal = withAmount.reduce((s, r) => s + Math.round(r.total), 0)
+  const diff = remittanceTotal - invoiceTotal
+  let result: PrimeRemittanceResult
+  if (issued.length === 0) result = 'noInvoice'
+  else if (withAmount.length === 0) result = 'noRemittance'
+  else if (diff === 0) result = 'match'
+  else if (Math.abs(diff) <= PRIME_REMITTANCE_CLOSE_YEN) result = 'close'
+  else result = 'diff'
+  return { invoiceTotal, invoiceCount: issued.length, remittanceTotal, remittanceCount: remittances.length, diff, result }
+}
+
+// ─────────────────────────────────────────────
 // 給与の伏せ字（pay.view の無い人）
 // ─────────────────────────────────────────────
 
