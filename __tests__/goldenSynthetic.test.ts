@@ -12,7 +12,8 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { computeMonthly, type MainData, type RawWorker } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData, type RawWorker } from '@/lib/compute'
 import { calcMonthlyAllowances } from '@/lib/allowance'
 import type { AttendanceEntry } from '@/types'
 

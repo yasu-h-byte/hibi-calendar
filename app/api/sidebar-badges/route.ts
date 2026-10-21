@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sitesNeedingCalendar } from '@/lib/site-hierarchy'
 import { checkApiAuth } from '@/lib/auth'
-import { computeMonthly } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
 import { getMainData, getAttData } from '@/lib/compute.server'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 

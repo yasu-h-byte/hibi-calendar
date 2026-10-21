@@ -10,7 +10,8 @@
  * 検証戦略: 帰国あり/なしを同一勤務データで比較し、「欠勤が消える」ことを確認する。
  */
 import { describe, test, expect } from 'vitest'
-import { computeMonthly, countHomeLeaveDaysInRange, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { countHomeLeaveDaysInRange, type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
 function buildMain(overrides: Partial<MainData>): MainData {

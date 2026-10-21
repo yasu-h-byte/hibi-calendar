@@ -19,7 +19,9 @@
  *   - 計算式は仕様書 (docs/salary-calculation.md) を真の元とする
  */
 import { describe, test, expect } from 'vitest'
-import { computeMonthly, calculateVietnameseSalary, getWorkerDailyRate, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { calculateVietnameseSalary } from '@/lib/compute-vn-salary'
+import { getWorkerDailyRate, type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
 describe('getWorkerDailyRate (原価用の日額換算)', () => {

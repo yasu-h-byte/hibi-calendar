@@ -16,7 +16,8 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
 const DIR = join(__dirname, 'fixtures', 'golden')

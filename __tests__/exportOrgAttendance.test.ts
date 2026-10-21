@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateOrgAttendance, generateMonthlyExcel } from '@/lib/export'
-import type { WorkerMonthly } from '@/lib/compute'
+import type { WorkerMonthly } from '@/lib/compute-monthly'
 import * as XLSX from 'xlsx-js-style'
 
 /**

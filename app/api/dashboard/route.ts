@@ -824,7 +824,7 @@ export async function GET(request: NextRequest) {
       //    過去月の閲覧では検出をスキップする（過去は月次集計画面で確認する運用）。
       const payrollWorkers: PayrollLite[] = []
       if (ym === nowYm) {
-        const { computeMonthly } = await import('@/lib/compute')
+        const { computeMonthly } = await import('@/lib/compute-monthly')
         const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
         const attNow = await loadAtt(ym)
         const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}

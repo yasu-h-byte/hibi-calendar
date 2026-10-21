@@ -9,7 +9,17 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  computeMonthly, compute, calcTobiEquiv, createDispatchChecker, isDispatched, PAY_NOTES_FROM_YM, JP_WEEK_OVER40_NOTE_FROM_YM, OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM, type MainData,
+  computeMonthly,
+  PAY_NOTES_FROM_YM,
+} from '@/lib/compute-monthly'
+import {
+  compute,
+  calcTobiEquiv,
+  createDispatchChecker,
+  isDispatched,
+  JP_WEEK_OVER40_NOTE_FROM_YM,
+  OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM,
+  type MainData,
 } from '@/lib/compute'
 import { validatePayrolls, buildAuditChecks, type PayrollSnapshot, type PayrollAuditWorker } from '@/lib/payroll-validator'
 import type { AttendanceEntry } from '@/types'

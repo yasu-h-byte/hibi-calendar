@@ -20,6 +20,8 @@
  */
 import {
   computeMonthly,
+} from './compute-monthly'
+import {
   type MainData,
 } from './compute'
 import {

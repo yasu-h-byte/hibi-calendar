@@ -17,8 +17,15 @@ import {
   calcManDays, calcOvertimeHours, type AttendanceEntry, type SiteWorkSchedule,
 } from '@/types'
 import {
-  calcTobiEquiv, getSiteRates, parseDKey, parseSdKey, isDispatched,
-  type MainData, type ComputeResult, type CompanyPaymentTerms, type RawSubcon,
+  calcTobiEquiv,
+  getSiteRates,
+  parseDKey,
+  parseSdKey,
+  isDispatched,
+  type MainData,
+  type ComputeResult,
+  type CompanyPaymentTerms,
+  type RawSubcon,
 } from './compute'
 import { buildPeerStatements } from './peer-statement'
 import { isTobiGroup, isDokoGroup } from './jobs'

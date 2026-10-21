@@ -12,7 +12,8 @@
  *   全社所定 (prescribedDays = main.workDays[ym]) をそのまま採用。
  */
 import { describe, test, expect } from 'vitest'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 
 function attKey(siteId: string, workerId: number, ym: string, day: number): string {
   return `${siteId}_${workerId}_${ym}_${day}`

@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
 /**
