@@ -146,10 +146,12 @@ export interface IntegrationHfuWorkforce {
   heads: number
   /** その月に人工がある HFU 所属の作業員 */
   workingHeads: number
-  /** 人工（鳶・土工。夜勤1.5・休業補償などは請求書と同じ扱い） */
+  /** 人工（鳶・土工。夜勤1.5・休業補償などは請求書と同じ扱い。待機の日数は含めない） */
   workDays: number
   /** 残業（時間） */
   otHours: number
+  /** 待機の日数（現場の都合で休ませた日。HFU → 日比建設 の待機料の数量・2026-10-21。10月分より前は常に 0） */
+  standbyDays: number
   /** 社内単価での額（税抜・円。単価が未設定なら 0） */
   amount: number
   /** 社内単価（鳶・土工。未設定は 0） */
@@ -193,8 +195,9 @@ function buildHfuWorkforce(
   return {
     heads,
     workingHeads: working.size,
-    workDays: r1(lines.filter(l => l.unit !== 'h').reduce((t, l) => t + l.days, 0)),
+    workDays: r1(lines.filter(l => !l.unit).reduce((t, l) => t + l.days, 0)),
     otHours: r1(lines.filter(l => l.unit === 'h').reduce((t, l) => t + l.days, 0)),
+    standbyDays: r1(lines.filter(l => l.unit === 'standby').reduce((t, l) => t + l.days, 0)),
     amount: draft?.subtotal || 0,
     tobiRate: main.hfuInvoice?.tobiRate || 0,
     dokoRate: main.hfuInvoice?.dokoRate || 0,

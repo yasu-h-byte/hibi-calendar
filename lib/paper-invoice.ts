@@ -168,7 +168,7 @@ export const isManDayUnit = (unit: string) => /^(人工|人|工)$/.test((unit ||
 
 /**
  * 紙の請求書とシステムの数字を見比べる（純粋計算）。
- * 人工の合計: 紙は単位が「人工」の行の数量、システムは unit の無い行（人工）の days。
+ * 人工の合計: 紙は単位が「人工」の行の数量、システムは unit の無い行（人工）の days（残業 'h'・待機料 'standby' は入れない）。
  * 残業時間の合計: 紙は単位が「h・時間」の行、システムは unit 'h' の行（HFU → 日比建設 の残業の行）。
  * 応援の請求書は残業を人工に換算して含めるので、システム側の残業時間は 0 になる（人工の差として出る）。
  */
@@ -177,7 +177,7 @@ export function comparePaperWithSystem(paper: Pick<PaperInvoice, 'subtotal' | 't
   const hasLines = lines.length > 0
   const paperDays = hasLines ? round2(lines.filter(l => isManDayUnit(l.unit)).reduce((s, l) => s + (l.qty || 0), 0)) : null
   const paperOtHours = hasLines ? round2(lines.filter(l => isHourUnit(l.unit)).reduce((s, l) => s + (l.qty || 0), 0)) : null
-  const systemDays = round2(sys.lines.filter(l => l.unit !== 'h').reduce((s, l) => s + l.days, 0))
+  const systemDays = round2(sys.lines.filter(l => !l.unit).reduce((s, l) => s + l.days, 0))
   const systemOtHours = round2(sys.lines.filter(l => l.unit === 'h').reduce((s, l) => s + l.days, 0))
   const totalDiff = paper.total - sys.total
   return {

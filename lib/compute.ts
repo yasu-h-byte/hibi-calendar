@@ -158,6 +158,11 @@ export interface HfuInvoiceSettings {
   tobiRate: number
   /** 土工 1人工あたりの単価（税抜） */
   dokoRate: number
+  /**
+   * 待機料の率（%・既定 60）。現場の都合で休ませた日（出面の 0.6補）を「日数 × 1人工の単価 × 率」で請求する
+   * （2026-10-21 代表決定・2026年10月分から）。0 なら待機料の行を出さない。未保存（undefined）は既定の 60
+   */
+  standbyRatePct?: number
   /** 未設定なら翌月末払い */
   paymentTerms?: CompanyPaymentTerms
 }

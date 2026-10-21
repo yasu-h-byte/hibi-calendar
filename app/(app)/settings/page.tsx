@@ -43,6 +43,8 @@ interface HfuInvoiceForm {
   profile: CompanyProfile
   tobiRate: number
   dokoRate: number
+  /** 待機料の率（%・既定 60）。現場の都合で休ませた日 × 1人工の単価 × 率（2026-10-21・10月分〜） */
+  standbyRatePct: number
   payMonthOffset: 1 | 2
   payDay: 'end' | number
 }
@@ -55,7 +57,7 @@ interface HfuInvoiceForm {
  */
 const EMPTY_HFU_INVOICE: HfuInvoiceForm = {
   profile: { ...EMPTY_COMPANY_PROFILE, name: '', nameEn: '', invoicePrefix: 'HFU' },
-  tobiRate: 0, dokoRate: 0, payMonthOffset: 1, payDay: 'end',
+  tobiRate: 0, dokoRate: 0, standbyRatePct: 60, payMonthOffset: 1, payDay: 'end',
 }
 
 /** 請求書の発行者情報の入力欄（日比建設の自社情報・HFU の情報で共通） */
@@ -424,6 +426,7 @@ export default function SettingsPage() {
         profile: { ...EMPTY_HFU_INVOICE.profile, ...(h.profile || {}), bank: { ...EMPTY_HFU_INVOICE.profile.bank, ...(h.profile?.bank || {}) } },
         tobiRate: h.tobiRate || 0,
         dokoRate: h.dokoRate || 0,
+        standbyRatePct: typeof h.standbyRatePct === 'number' ? h.standbyRatePct : 60,
         payMonthOffset: h.paymentTerms?.payMonthOffset === 2 ? 2 : 1,
         payDay: h.paymentTerms?.payDay ?? 'end',
       })
@@ -632,11 +635,11 @@ export default function SettingsPage() {
   }
 
   const handleSaveHfuInvoice = async () => {
-    const { profile, tobiRate, dokoRate, payMonthOffset, payDay } = hfuInvoice
+    const { profile, tobiRate, dokoRate, standbyRatePct, payMonthOffset, payDay } = hfuInvoice
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, paymentTerms: { closing: 'end', payMonthOffset, payDay } } }),
+      body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, standbyRatePct, paymentTerms: { closing: 'end', payMonthOffset, payDay } } }),
     })
     if (!res.ok) return failReason(res, '管理者パスワードでログインしているか確認してください')
     showMessage('success', 'HFU → 日比建設 の請求書の設定を保存しました')
@@ -896,6 +899,7 @@ export default function SettingsPage() {
               HFU 所属の作業員が働いた人工（全現場）を、HFU から日比建設へ請求する請求書の設定です。
               金額は 人工 × 下の単価（税抜）。残業は「時間 × 残業単価（単価÷8×1.25）」の別の行になります（従来の請求書と同じ）。
               土工のいない月は土工の単価が空欄でも発行できます。宛先には上の「請求書の自社情報」（日比建設）の住所を印字します。
+              現場の都合で休ませた日（出面の 0.6補）は、2026年10月分から「待機料」の行（日数 × 1人工の単価 × 下の率）で請求します。率を 0 にすると出しません。
             </p>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
@@ -907,6 +911,12 @@ export default function SettingsPage() {
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">土工 1人工の単価（税抜・円）</label>
                 <input type="number" min={0} value={hfuInvoice.dokoRate || ''} onChange={e => setHfuInvoice(h => ({ ...h, dokoRate: Number(e.target.value) || 0 }))}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">待機料の率（1人工の単価に対する %・既定 60）</label>
+                <input type="number" min={0} max={100} value={hfuInvoice.standbyRatePct} onChange={e => setHfuInvoice(h => ({ ...h, standbyRatePct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums" />
+                <p className="text-2xs text-gray-400 mt-1">鳶 {hfuInvoice.tobiRate.toLocaleString()}円 なら 1日 {Math.round(hfuInvoice.tobiRate * hfuInvoice.standbyRatePct / 100).toLocaleString()}円</p>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">支払月（月末締め）</label>
