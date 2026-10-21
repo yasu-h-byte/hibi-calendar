@@ -82,12 +82,17 @@ export async function getAttendanceHistory(opts?: {
   limitCount?: number
 }): Promise<AttendanceHistoryEntry[]> {
   const col = collection(db, COLLECTION)
-  const cons = []
-  if (opts?.ym) cons.push(where('ym', '==', opts.ym))
-  cons.push(orderBy('at', 'desc'))
-  cons.push(limit(opts?.limitCount || 100))
-  const snap = await getDocs(query(col, ...cons))
-  return snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<AttendanceHistoryEntry, 'id'>) }))
+  const n = opts?.limitCount || 100
+  const toEntry = (d: { id: string; data: () => unknown }) => ({ id: d.id, ...(d.data() as Omit<AttendanceHistoryEntry, 'id'>) })
+  if (opts?.ym) {
+    // 2026-10-21 総点検（Preview で発見・本番も同じ）: `where('ym') + orderBy('at')` は Firestore の複合インデックスが要り、
+    //   無いので「変更履歴」が月を指定すると 500 になっていた。月の絞り込みだけで読み、並べ替えは手元で行う
+    //   （1 か月の履歴は多くても数百件）。インデックスの有無に依存しない
+    const snap = await getDocs(query(col, where('ym', '==', opts.ym)))
+    return snap.docs.map(toEntry).sort((a, b) => (b.at || '').localeCompare(a.at || '')).slice(0, n)
+  }
+  const snap = await getDocs(query(col, orderBy('at', 'desc'), limit(n)))
+  return snap.docs.map(toEntry)
 }
 
 /** 保持期間を過ぎた履歴を削除して件数を返す（日次 cron から呼ぶ） */

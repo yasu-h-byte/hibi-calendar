@@ -30,8 +30,14 @@ export async function GET(request: NextRequest) {
   const a = await requireAdmin(request)
   if (a.error) return a.error
   const ym = request.nextUrl.searchParams.get('ym') || undefined
-  const items = await getAttendanceHistory({ ym, limitCount: 100 })
-  return NextResponse.json({ items })
+  try {
+    const items = await getAttendanceHistory({ ym, limitCount: 100 })
+    return NextResponse.json({ items })
+  } catch (e) {
+    // 読めなかった理由を画面に返す（旧: そのまま落ちて本文なしの 500。画面は「サーバが受け付けませんでした」としか出せなかった）
+    console.error('[attendance/history] GET error:', e)
+    return NextResponse.json({ error: `変更履歴を読めませんでした: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {
