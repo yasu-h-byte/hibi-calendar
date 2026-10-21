@@ -31,7 +31,8 @@
  */
 
 import { isWorkingDay } from './attendance'
-import { getAttData, getMainData, parseDKey, type MainData } from './compute'
+import { parseDKey, type MainData } from './compute'
+import { getAttData, getMainData } from './compute.server'
 import { getAllActiveHomeLeaves } from './homeLeave'
 import { addMonthsSafe } from './date-utils'
 import type { AttendanceEntry } from '@/types'

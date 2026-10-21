@@ -103,7 +103,7 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
  */
 async function isTokenHolderActive(workerId: number): Promise<boolean> {
   try {
-    const { getMainData } = await import('@/lib/compute')
+    const { getMainData } = await import('@/lib/compute.server')
     const main = (await getMainData()) as unknown as { workers?: { id: number; retired?: string }[] }
     const w = (main.workers || []).find(x => x.id === workerId)
     if (!w) return false
@@ -295,7 +295,7 @@ export async function getCallerPermRole(request: NextRequest): Promise<PermRole 
   const auth = await getApiAuthUser(request)
   if (!auth.authorized) return null
   if (auth.actor === 'super-admin') return 'owner'
-  const { getMainData } = await import('@/lib/compute')
+  const { getMainData } = await import('@/lib/compute.server')
   const main = await getMainData()
   const workers = mapRawWorkers((main.workers || []) as unknown[])
   const w = workers.find(x => x.id === auth.actor)
@@ -315,7 +315,7 @@ export async function getApiRole(request: NextRequest, ym?: string): Promise<Api
   // 個人パスワード → 人員マスタから実ロールを解決
   // 2026-10-02: getMainData（30秒キャッシュ）経由に。requireCap / callerCan が1リクエストで何度も呼ぶため、
   //   毎回 main（約260KB）を読み直していた（CLAUDE.md「読み取り回数を増やさない」）
-  const { getMainData } = await import('@/lib/compute')
+  const { getMainData } = await import('@/lib/compute.server')
   const main = (await getMainData()) as unknown as Record<string, unknown>
   // ⚠️ Firestore の生データは職種が `job`（Worker 型は `jobType`）。必ず mapRawWorkers で写像してから
   //   buildAuthUser に渡す（2026-09-26: 生のまま渡すと jobType が空になり、事務・役員の役割を取り違えた）

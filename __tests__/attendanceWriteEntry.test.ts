@@ -47,7 +47,7 @@ describe('出面を書くファイルは共通の入口を通す', () => {
     })
   }
   /** 共通の入口そのもの */
-  const ENTRY_FILES = ['lib/attendance.ts', 'lib/attendance-save.ts']
+  const ENTRY_FILES = ['lib/attendance.ts', 'lib/attendance.server.ts', 'lib/attendance-save.ts']
   /**
    * 直接書くことを認めているファイル（理由つき）。ここに足すときは、共通の入口を通せない理由を書くこと。
    * 2026-10-02 時点で lib/attendance-save.ts を通していない既存の経路（別の担当が直す・または性質上まとめ書き）

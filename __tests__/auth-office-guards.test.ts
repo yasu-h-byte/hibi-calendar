@@ -18,7 +18,7 @@ const main = {
 }
 vi.mock('@/lib/firebase', () => ({ db: {} }))
 // 役割の解決は getMainData（30秒キャッシュ）経由（2026-10-02）
-vi.mock('@/lib/compute', () => ({ getMainData: async () => structuredClone(main) }))
+vi.mock('@/lib/compute.server', () => ({ getMainData: async () => structuredClone(main) }))
 vi.mock('@/lib/fsdb', () => ({
   doc: () => ({}),
   getDoc: async () => ({ exists: () => true, data: () => structuredClone(main) }),

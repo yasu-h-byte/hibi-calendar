@@ -28,7 +28,7 @@ vi.mock('@/lib/fsdb', () => ({
   collection: () => ({}), runTransaction: async () => {},
   getDocs: async () => ({ docs: [{ id: '104_2026-05-07', data: () => structuredClone(evaluationDoc) }] }),
 }))
-vi.mock('@/lib/compute', () => ({
+vi.mock('@/lib/compute.server', () => ({
   getMainData: async () => ({ workers: [
     { id: 104, name: 'フン', visa: 'tokutei1', job: 'tobi', hireDate: '2024-05-07' },
     { id: 30, name: '白戸', visa: 'none', job: 'shokucho' },

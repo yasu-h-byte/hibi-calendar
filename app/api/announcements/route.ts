@@ -8,7 +8,7 @@ import { mergeAnnouncements, type Announcement } from '@/lib/release-notes'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { permRoleOf } from '@/lib/permissions'
 import { currentYmJst } from '@/lib/date-utils'
-import { getMainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {

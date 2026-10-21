@@ -19,8 +19,12 @@
  *   連続リロードで再読しない）
  */
 import {
-  computeMonthly, loadMonthlyAllowances, type MainData,
+  computeMonthly,
+  type MainData,
 } from './compute'
+import {
+  loadMonthlyAllowances,
+} from './compute.server'
 import type { AttendanceEntry } from '@/types'
 import { getMonthlyCalendars } from './repositories/calendarRepo'
 import { getAllActiveHomeLeaves, type HomeLeaveEntry } from './homeLeave'

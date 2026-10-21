@@ -18,14 +18,15 @@ vi.mock('@/lib/fsdb', () => ({
   collection: () => null, getDocs: async () => ({ docs: [] }), query: () => null, where: () => null,
 }))
 vi.mock('@/lib/firestore-safe', () => ({ ensureDocExists: async () => {} }))
-vi.mock('@/lib/compute', () => ({
+vi.mock('@/lib/compute.server', () => ({
   invalidateAttDataCache: () => {},
   getMainData: async () => ({ sites: [], workers: [], plData: {} }),
 }))
 const recompute = vi.fn(async () => ({ updated: false }))
 vi.mock('@/lib/leave-carry', () => ({ recomputeNextCarryOver: recompute }))
 
-import { setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
+import { computeAttendanceDeleteFields } from '@/lib/attendance'
+import { setAttendanceEntry } from '@/lib/attendance.server'
 
 beforeEach(() => { recompute.mockClear(); writes.length = 0 })
 

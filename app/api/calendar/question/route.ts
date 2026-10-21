@@ -12,7 +12,7 @@ import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { collection, addDoc, getDocs, query, where, doc, updateDoc } from '@/lib/fsdb'
-import { getWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken } from '@/lib/workers.server'
 
 export const dynamic = 'force-dynamic'
 

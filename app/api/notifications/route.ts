@@ -7,7 +7,8 @@ import { permRoleOf } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs, doc, getDoc } from '@/lib/fsdb'
 import { backupHealth, type LastBackupInfo } from '@/lib/backup-plan'
-import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
+import { parseDKey, getAssign } from '@/lib/compute'
+import { getMainData, getAttData } from '@/lib/compute.server'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 import { todayJstIso, addMonthsSafe, todayJstDate, localMidnight, addDaysIso } from '@/lib/date-utils'
@@ -147,7 +148,8 @@ export async function GET(request: NextRequest) {
     //   確定済み月は5分キャッシュ（getAttDataCached）を使う。
     const allAttForPL: Record<string, Record<string, unknown>> = {}
     {
-      const { getAttDataCached, isClosedMonthYm } = await import('@/lib/compute')
+      const { isClosedMonthYm } = await import('@/lib/compute')
+      const { getAttDataCached } = await import('@/lib/compute.server')
       const yms: string[] = []
       for (let i = -24; i <= 12; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1)

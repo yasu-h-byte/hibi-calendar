@@ -4,9 +4,6 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import {
   compute,
-  getMainData,
-  getAttData,
-  getMultiMonthAttData,
   calcTobiEquiv,
   getSiteRates,
   getBillTotal,
@@ -15,6 +12,11 @@ import {
   buildYMList,
   parseDKey,
 } from '@/lib/compute'
+import {
+  getMainData,
+  getAttData,
+  getMultiMonthAttData,
+} from '@/lib/compute.server'
 import { applyPayrollCosts, type MonthAtt } from '@/lib/payroll-cost'
 import { reportSitesForPeriod } from '@/lib/report-sites'
 import { logActivity } from '@/lib/activity'

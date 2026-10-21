@@ -46,7 +46,8 @@
  */
 
 import { isWorkingDay } from './attendance'
-import { getAttData, getMainData, parseDKey, type MainData } from './compute'
+import { parseDKey, type MainData } from './compute'
+import { getAttData, getMainData } from './compute.server'
 import { enumerateYmsBack } from './attendance-rate'
 import type { AttendanceEntry } from '@/types'
 

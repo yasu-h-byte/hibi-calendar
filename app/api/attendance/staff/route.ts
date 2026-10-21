@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken, mapRawWorkers, hourlyRateOn, isEmployedOn, findWorkerByToken } from '@/lib/workers'
+import { mapRawWorkers, hourlyRateOn, isEmployedOn, findWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken } from '@/lib/workers.server'
 import {
-  getAttendanceDoc,
-  getApprovalForDay,
   getEntryStatus,
   ymKey,
   attKey,
   formatDateJP,
   formatDateShort,
 } from '@/lib/attendance'
+import {
+  getAttendanceDoc,
+  getApprovalForDay,
+} from '@/lib/attendance.server'
 import { attendanceDateError, dayApprovalOf, writeAttendanceEntry } from '@/lib/attendance-save'
 import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
@@ -17,7 +20,8 @@ import { calendarSiteIdOf, workTypeFamilyIds, familyEntrySiteId, staffEntryTarge
 import { AttendanceEntry, SiteWorkSchedule, withDerivedOvertime } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween, currentYmJst } from '@/lib/date-utils'
-import { getAttData, parseDKey } from '@/lib/compute'
+import { parseDKey } from '@/lib/compute'
+import { getAttData } from '@/lib/compute.server'
 import { sitesOfWorkerForMonth } from '@/lib/roster'
 import { defaultStaffSiteId } from '@/lib/staff-default-site'
 import { isWorkDayOf } from '@/lib/attendance-missing'
@@ -532,7 +536,7 @@ export async function POST(request: NextRequest) {
     {
       // 2026-10-02 総合点検: 旧実装は worker.org を渡していたが、Worker 型に org は無く常に undefined
       //   ＝「両社とも締めたときだけ」拒否になっていた。人員マスタの会社で判定する
-      const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+      const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
       const lockErr = await checkMonthLockedForWorkers(ym, [worker.id])
       if (lockErr) {
         return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể thay đổi` }, { status: 409 })
@@ -566,7 +570,8 @@ export async function POST(request: NextRequest) {
     // 保存前のこの日のエントリ（ガードで読んだ出面を使い回す。次期繰越の再計算を有給の増減に絞るため）
     let prevStaffEntry: AttendanceEntry | null | undefined
     try {
-      const { detectMultiSiteConflict, getAttendanceDoc, attKey } = await import('@/lib/attendance')
+      const { detectMultiSiteConflict, attKey } = await import('@/lib/attendance')
+      const { getAttendanceDoc } = await import('@/lib/attendance.server')
       const attDoc = await getAttendanceDoc(ym)
 
       // 2026-08-27 追加（有給総点検・第3回）: 承認済み有給(p)の日をスタッフが
@@ -662,7 +667,7 @@ export async function POST(request: NextRequest) {
         //   以前はスマホに選択肢が無く、本人が「その他」＋メモ「60%」で出して欠勤扱いになっていた
         //   （201・2026-08-26）。本人の入力 → 職長の確認、の流れは出勤と同じ。
         //   カレンダーの休みの日は給料の対象外なので入れさせない
-        const { isScheduledWorkDay } = await import('@/lib/attendance')
+        const { isScheduledWorkDay } = await import('@/lib/attendance.server')
         const compDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
         if (!await isScheduledWorkDay(siteId, compDate)) {
           return NextResponse.json(

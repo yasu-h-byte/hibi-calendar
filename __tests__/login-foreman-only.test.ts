@@ -12,8 +12,8 @@ vi.mock('@/lib/fsdb', () => ({
 vi.mock('@/lib/accessLog', () => ({ recordAccess: async () => {}, getRequestIp: () => '' }))
 vi.mock('@/lib/sites', () => ({ getSites: async () => [] }))
 // 退職の判定（isAlreadyRetired）は本物を使う（2026-10-02 総合点検: ログインは !w.retired でなく退職日で判定）
-vi.mock('@/lib/workers', async (orig) => ({
-  ...(await orig<typeof import('@/lib/workers')>()),
+vi.mock('@/lib/workers.server', async (orig) => ({
+  ...(await orig<typeof import('@/lib/workers.server')>()),
   getWorkers: async () => [
     { id: 1, name: '日比政仁', jobType: 'yakuin', retired: '' },
     { id: 10, name: '白戸', jobType: 'shokucho', retired: '' },

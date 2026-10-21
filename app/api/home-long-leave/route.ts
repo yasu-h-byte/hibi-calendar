@@ -3,7 +3,7 @@ import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole } from '@/lib/a
 import { currentYmJst } from '@/lib/date-utils'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
-import { getWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken } from '@/lib/workers.server'
 import { ymKey } from '@/lib/attendance'
 import { getForemenOfWorkerSites, managerByToken } from '@/lib/foreman-todo'
 
@@ -223,8 +223,8 @@ export async function POST(request: NextRequest) {
       //   12ヶ月で打ち切る（旧: 1日ずつ約290万回転で checkMonthLocked を叩き
       //   タイムアウト＋クォータ浪費の恐れがあった）。ロック判定は本人の org で行う
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const { getWorkers } = await import('@/lib/workers')
+        const { checkMonthLocked } = await import('@/lib/locks.server')
+        const { getWorkers } = await import('@/lib/workers.server')
         const company = (await getWorkers()).find(w => w.id === data.workerId)?.company
         const org = company === 'HFU' ? 'hfu' : company ? 'hibi' : undefined
         let ymCur = data.startDate.slice(0, 7).replace('-', '')

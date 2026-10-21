@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap, callerCan } from '@/lib/auth'
-import { getMainData, getAttData } from '@/lib/compute'
+import { getMainData, getAttData } from '@/lib/compute.server'
 import { ymKey } from '@/lib/attendance'
 import type { LeaveLedgerWorker, LeaveLedgerRecord } from '@/lib/export'
 import { generateLeaveLedger, leaveLedgerToBuffer, leaveLedgerFilename, parseLedgerScope, parseLedgerRange } from '@/lib/leave-ledger'

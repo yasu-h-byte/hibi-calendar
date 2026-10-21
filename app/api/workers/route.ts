@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import {
-  WORKER_OFFICE_KEYS, WORKER_PUBLIC_KEYS, WORKER_OWNER_ONLY_KEYS, WORKER_WRITABLE_BASE_KEYS, WORKER_WRITABLE_PAY_KEYS,
-  WORKER_CLEARABLE_KEYS, getWorkers, isOfficeSideWorker,
+  WORKER_OFFICE_KEYS,
+  WORKER_PUBLIC_KEYS,
+  WORKER_OWNER_ONLY_KEYS,
+  WORKER_WRITABLE_BASE_KEYS,
+  WORKER_WRITABLE_PAY_KEYS,
+  WORKER_CLEARABLE_KEYS,
+  isOfficeSideWorker,
 } from '@/lib/workers'
+import {
+  getWorkers,
+} from '@/lib/workers.server'
 import {
   addWorker,
   updateWorker,

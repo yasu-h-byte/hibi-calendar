@@ -12,14 +12,22 @@
 import { db } from './firebase'
 import { doc, getDoc, getDocs, collection, query, where } from './fsdb'
 import {
-  getAttendanceDoc, getApprovalForDay, setApprovalForDay, getEntryStatus, getStaffSites,
+  getEntryStatus,
 } from './attendance'
+import {
+  getAttendanceDoc,
+  getApprovalForDay,
+  setApprovalForDay,
+  getStaffSites,
+} from './attendance.server'
 import { workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from './site-hierarchy'
 import { computeForemanSites, approvingForemenOfSite, buildAuthUser, isManagerRole } from './auth'
 import { todayJstIso, addMonthsSafe, addDaysIso } from './date-utils'
 import type { AttendanceEntry, AttendanceApproval, Site } from '@/types'
-import { getAssign, parseDKey, getMainData, type MainData } from './compute'
-import { getWorkerByToken, isEmployedOn, isHiredByMonth, isStillActiveForMonth } from './workers'
+import { getAssign, parseDKey, type MainData } from './compute'
+import { getMainData } from './compute.server'
+import { isEmployedOn, isHiredByMonth, isStillActiveForMonth } from './workers'
+import { getWorkerByToken } from './workers.server'
 import { evaluateDayInputs, isWorkDayOf, isoOfDay } from './attendance-missing'
 
 /**

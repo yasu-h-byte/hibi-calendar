@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
-import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
-import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
+import { parseDKey, isDispatchedAt } from '@/lib/compute'
+import { getMainData, getMultiMonthAttData } from '@/lib/compute.server'
+import { ymKey, computeAttendanceDeleteFields } from '@/lib/attendance'
+import { setAttendanceEntry } from '@/lib/attendance.server'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap, jpDeemedDate, selectCurrentPeriodRecord, selectEndedPeriodRecord, computeRecordBalance } from '@/lib/leave-compute'
@@ -293,8 +295,8 @@ export async function POST(request: NextRequest) {
       //   ① ロック済み月は拒否（給与確定後のデータ変更防止）
       //   ② カレンダー非稼働日への P は拒否（有給日給の過払い防止）
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const { isScheduledWorkDay } = await import('@/lib/attendance')
+        const { checkMonthLocked } = await import('@/lib/locks.server')
+        const { isScheduledWorkDay } = await import('@/lib/attendance.server')
         const wOrgRec = (data.workers as { id: number; org?: string }[] | undefined)?.find(w => w.id === Number(workerId))
         for (const dateStr of dates) {
           const d0 = new Date(dateStr)
@@ -309,7 +311,8 @@ export async function POST(request: NextRequest) {
         // ③ 多現場重複ガード（2026-08-31 横展開）: 別現場に同日の出面がある日へ P を
         //    入れると出勤と有給の二重払いになる（grid/staff/foreman/承認と同じガード）
         {
-          const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+          const { detectMultiSiteConflict } = await import('@/lib/attendance')
+          const { getAttendanceDoc } = await import('@/lib/attendance.server')
           const sitesAllD = (data.sites || []) as { id: string; name?: string }[]
           const attCache: Record<string, Awaited<ReturnType<typeof getAttendanceDoc>>> = {}
           for (const dateStr of dates) {

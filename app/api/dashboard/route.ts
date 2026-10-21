@@ -6,9 +6,6 @@ import { db } from '@/lib/firebase'
 import { collection, getDocs } from '@/lib/fsdb'
 import {
   compute,
-  getMainData,
-  getAttData,
-  getAttDataCached,
   isClosedMonthYm,
   calcTobiEquiv,
   getSiteRates,
@@ -20,6 +17,11 @@ import {
   parseDKey,
   parseSdKey,
 } from '@/lib/compute'
+import {
+  getMainData,
+  getAttData,
+  getAttDataCached,
+} from '@/lib/compute.server'
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isAlreadyRetired, isEmployedOn } from '@/lib/workers'

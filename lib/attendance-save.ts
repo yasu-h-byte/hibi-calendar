@@ -28,7 +28,8 @@ import { doc, updateDoc, deleteField } from '@/lib/fsdb'
 import { withDerivedOvertime, type AttendanceEntry, type Site } from '@/types'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 import { approvalGap } from './approval-gap'
-import { attKey, computeAttendanceDeleteFields, setAttendanceEntry } from './attendance'
+import { attKey, computeAttendanceDeleteFields } from './attendance'
+import { setAttendanceEntry } from './attendance.server'
 import { recordAttendanceChange } from './attendance-history'
 import { ensureDocExists } from './firestore-safe'
 
@@ -122,7 +123,7 @@ export async function writeAttendanceEntry(args: {
   const ref = doc(db, 'demmen', `att_${ym}`)
   await ensureDocExists(ref)
   await updateDoc(ref, { [`d.${attKey(siteId, workerId, ym, day)}`]: deleteField() })
-  try { (await import('./compute')).invalidateAttDataCache(ym) } catch { /* ignore */ }
+  try { (await import('./compute.server')).invalidateAttDataCache(ym) } catch { /* ignore */ }
   // 有給を消したら次期の繰越を計算し直す（保存側は setAttendanceEntry が行う）
   if (prevEntry === undefined || prevEntry?.p) {
     try {
@@ -159,7 +160,7 @@ export async function moveAttendanceEntry(args: {
   if (moved.st && moved.et) {
     let ws: Site['workSchedule']
     try {
-      const { getMainData } = await import('./compute')
+      const { getMainData } = await import('./compute.server')
       ws = (await getMainData()).sites.find(s => s.id === toSiteId)?.workSchedule as Site['workSchedule']
     } catch { /* 読めなければ標準の休憩で数える */ }
     moved = withDerivedOvertime(moved, ws)
@@ -172,6 +173,6 @@ export async function moveAttendanceEntry(args: {
     [`d.${attKey(toSiteId, workerId, ym, day)}`]: moved,          // 非空のマップ（上で確かめた）
     [`d.${attKey(fromSiteId, workerId, ym, day)}`]: deleteField(),
   })
-  try { (await import('./compute')).invalidateAttDataCache(ym) } catch { /* ignore */ }
+  try { (await import('./compute.server')).invalidateAttDataCache(ym) } catch { /* ignore */ }
   return moved
 }

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
-import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey, setAttendanceEntry, isScheduledWorkDay, computeAttendanceDeleteFields, createsWork, attKey, getApprovalForDay } from '@/lib/attendance'
-import { getMainData } from '@/lib/compute'
+import { getWorkerByToken } from '@/lib/workers.server'
+import { ymKey, computeAttendanceDeleteFields, createsWork, attKey } from '@/lib/attendance'
+import { getStaffSites, setAttendanceEntry, isScheduledWorkDay, getApprovalForDay } from '@/lib/attendance.server'
+import { getMainData } from '@/lib/compute.server'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { logActivity } from '@/lib/activity'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'
@@ -37,7 +38,7 @@ async function inspectDayBeforePaidLeave(
   /** 多現場重複の判定に渡す出面（空エントリを除いたもの） */
   attForConflict: Record<string, AttendanceEntry>
 }> {
-  const { getAttendanceDoc } = await import('@/lib/attendance')
+  const { getAttendanceDoc } = await import('@/lib/attendance.server')
   const attDoc = await getAttendanceDoc(ym)
   const key = attKey(siteId, workerId, ym, day)
   const existing = attDoc[key]
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
 
       // 締め済みの月への申請は入口で拒否（2026-09-02 追加。旧は承認時に初めて 409 だった）
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
+        const { checkMonthLocked } = await import('@/lib/locks.server')
         const lockErr = await checkMonthLocked(ym, worker.company === 'HFU' ? 'hfu' : 'hibi')
         if (lockErr) {
           return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể xin nghỉ phép` }, { status: 409 })
@@ -674,7 +675,7 @@ export async function POST(request: NextRequest) {
       //   失敗したら revoked 化せずに中断する（旧: catch で握りつぶして revoked に更新 →
       //   「取消済みなのに p が残り残数が戻らない」状態を作っていた）
       try {
-        const { removePaidLeaveForDay } = await import('@/lib/attendance')
+        const { removePaidLeaveForDay } = await import('@/lib/attendance.server')
         const removed = await removePaidLeaveForDay(data.workerId, data.date)
         if (removed.length === 0) console.warn(`[revoke] 対象日に p が見つかりません: wid=${data.workerId} ${data.date}`)
       } catch (delErr) {
@@ -846,7 +847,7 @@ export async function POST(request: NextRequest) {
         //   日付変更すると旧 p が残り、残数が1日余計に減って給与も有給2日扱いになっていた。
         //   ヘルパーは dot-notation で .p だけ消す（併存フィールドは温存＝IM-11 の方針維持）
         try {
-          const { removePaidLeaveForDay } = await import('@/lib/attendance')
+          const { removePaidLeaveForDay } = await import('@/lib/attendance.server')
           await removePaidLeaveForDay(data.workerId, data.date)
         } catch (delErr) {
           console.error('[modify_date] 旧日の p 削除失敗:', delErr)

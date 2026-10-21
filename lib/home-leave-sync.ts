@@ -1,8 +1,9 @@
 import { db } from './firebase'
 import { doc, updateDoc, deleteField, getDocs, query, collection, where } from '@/lib/fsdb'
 import { ensureDocExists } from './firestore-safe'
-import { getAttendanceDoc, attKey, getStaffSites, ymKey } from './attendance'
-import { checkMonthLocked } from './locks'
+import { attKey, ymKey } from './attendance'
+import { getAttendanceDoc, getStaffSites } from './attendance.server'
+import { checkMonthLocked } from './locks.server'
 import type { AttendanceEntry } from '@/types'
 import { currentYmJst } from '@/lib/date-utils'
 
@@ -238,7 +239,7 @@ export async function syncHomeLeaveAttendance(
   // ② 同一人の「他の承認済み帰国期間」がカバーする日の hk は消さない。
   //    期間が重複して登録されていた場合、片方の削除がもう片方の hk を
   //    巻き添えで消していた（excludeDocId = 操作中のレコード自身）
-  const { getWorkers } = await import('./workers')
+  const { getWorkers } = await import('./workers.server')
   const workerCompany = (await getWorkers()).find(w => w.id === workerId)?.company
   const workerOrg = workerCompany === 'HFU' ? 'hfu' : workerCompany ? 'hibi' : undefined
   const protectRanges: HomeLeaveRange[] = []

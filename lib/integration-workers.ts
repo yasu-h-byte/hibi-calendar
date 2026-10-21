@@ -285,7 +285,7 @@ export function buildWorkersResult(input: {
 /** 台帳・帰国・締めの記録を読んで組み立てる（サーバーだけ）。months は既定 72（今月から6年） */
 export async function loadIntegrationWorkers(opts: { months?: number } = {}): Promise<IntegrationWorkersResult> {
   const [{ getMainData }, { mapRawWorkers }, { getAllActiveHomeLeaves }, { db }, { doc, getDoc }, { todayJstIso, currentYmJst }] = await Promise.all([
-    import('@/lib/compute'),
+    import('@/lib/compute.server'),
     import('@/lib/workers'),
     import('@/lib/homeLeave'),
     import('@/lib/firebase'),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCap } from '@/lib/auth'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, getSubconRate } from '@/lib/compute'
+import { computeMonthly, getSubconRate } from '@/lib/compute'
+import { getMainData, getAttData, loadMonthlyAllowances } from '@/lib/compute.server'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 import {

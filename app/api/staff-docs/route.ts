@@ -18,7 +18,7 @@ import { randomUUID } from 'crypto'
 import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc } from '@/lib/fsdb'
-import { getMainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
 import { logActivity } from '@/lib/activity'
 import {
   STAFF_DOC_TYPES, STAFF_DOC_ALLOWED_TYPES, STAFF_DOC_MAX_FILE_BYTES, STAFF_DOC_MAX_FILES,

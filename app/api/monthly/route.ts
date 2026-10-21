@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, parseDKey } from '@/lib/compute'
+import { computeMonthly, parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, loadMonthlyAllowances } from '@/lib/compute.server'
 import { isMonthLockedInLocks, orgKeyOf } from '@/lib/locks'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
       {
         // 2026-10-02 総合点検: 旧ルールの固定月給の人は HFU にもいる。旧実装は日比建設の締めしか見ず、
         //   HFU を締めた後でも所定日数を変えられた（HFU の確定額が動く）。どちらかが締め済みなら拒否
-        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         const lockErr = await checkMonthLockedForWorkers(ym, [], 'either')
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }

@@ -9,7 +9,7 @@ vi.mock('@/lib/fsdb', () => ({
   getDoc: async () => ({ exists: () => true, data: () => ({ userPasswords: { '50': 'pw-jimu', '51': 'pw-retired' } }) }),
 }))
 // 通行証の持ち主が在籍しているかは人員マスタ（getMainData）で見る（2026-10-02 総合点検）
-vi.mock('@/lib/compute', () => ({
+vi.mock('@/lib/compute.server', () => ({
   getMainData: async () => ({
     workers: [
       { id: 10, name: '職長', job: 'shokucho', retired: '' },

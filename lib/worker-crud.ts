@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { db } from './firebase'
 import { doc, getDoc, runTransaction } from '@/lib/fsdb'
-import { invalidateMainCache } from './compute'
+import { invalidateMainCache } from './compute.server'
 import type { ScheduledWorkerChange, ScheduledWorkerChangeField } from '@/types'
 
 export interface WorkerData {

@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken, isEmployedOn } from '@/lib/workers'
+import { isEmployedOn } from '@/lib/workers'
+import { getWorkerByToken } from '@/lib/workers.server'
 import {
-  getAttendanceDoc,
-  getApprovalForDay,
-  setApprovalForDay,
-  getForemanSite,
   getEntryStatus,
   ymKey,
   formatDateKanji,
   formatDateShort,
 } from '@/lib/attendance'
+import {
+  getAttendanceDoc,
+  getApprovalForDay,
+  setApprovalForDay,
+  getForemanSite,
+} from '@/lib/attendance.server'
 import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { staffEntryTarget, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays, siteRosterFromMain, loadSiteRoster } from '@/lib/foreman-todo'
-import { getMainData, getAttData, parseDKey } from '@/lib/compute'
+import { parseDKey } from '@/lib/compute'
+import { getMainData, getAttData } from '@/lib/compute.server'
 import { canDriveDefault, driversByDayForSite } from '@/lib/allowance'
 import { todayJstDate } from '@/lib/date-utils'
 import {
@@ -289,7 +293,7 @@ export async function POST(request: NextRequest) {
           error: 'この日は最終承認済みのため取り消せません。管理者に連絡してください。',
         }, { status: 409 })
       }
-      const { removeForemanApprovalForDay } = await import('@/lib/attendance')
+      const { removeForemanApprovalForDay } = await import('@/lib/attendance.server')
       await removeForemanApprovalForDay(site.id, ym, day)
       return NextResponse.json({ success: true })
     }
@@ -328,7 +332,7 @@ export async function POST(request: NextRequest) {
       // 2026-06-12 (監査 Sprint2-B): ロック済み月への職長編集を拒否（給与確定後のデータ変更防止）
       {
         // その人の会社が締め済みなら拒否（会社なしで呼ぶと「両社とも締めたときだけ」になる・2026-10-02 総合点検）
-        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         const lockErr = await checkMonthLockedForWorkers(ym, [workerId])
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
@@ -464,7 +468,7 @@ export async function POST(request: NextRequest) {
       // 有給・0.6補（会社都合の休み）は、カレンダーの仕事の日だけ（スタッフのスマホと同じ決まり・2026-10-02 総合点検）
       //   旧: 0.6補は職長・PC・一括入力から休みの日にも入れられ、休業手当（60%）の過払いになりえた
       if (choice === 'leave' || (choice === 'comp' && foremanPrevEntry?.w !== 0.6)) {
-        const { isScheduledWorkDay: iswd } = await import('@/lib/attendance')
+        const { isScheduledWorkDay: iswd } = await import('@/lib/attendance.server')
         if (!await iswd(site.id, dayIso)) {
           return NextResponse.json({
             error: choice === 'leave'
@@ -542,7 +546,7 @@ export async function POST(request: NextRequest) {
 
       // 2026-06-12 (監査 Sprint2-B): ロック済み月の現場間移動を拒否
       {
-        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         const lockErr = await checkMonthLockedForWorkers(ym, [workerId])
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }

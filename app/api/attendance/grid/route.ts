@@ -4,12 +4,13 @@ import {
   orderSitesWithWorkTypes, isWorkTypeSite, workTypeSitesOf, parentAndWorkTypeSiteIds,
   findWorkTypeDuplicates, planDayWorkTypeMoves, type WorkTypeDuplicate,
 } from '@/lib/site-hierarchy'
-import { getMainData, getAttData, getAssign, invalidateAttDataCache, parseDKey } from '@/lib/compute'
+import { getAssign, parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, invalidateAttDataCache } from '@/lib/compute.server'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { entryPlace } from '@/lib/foreman-todo'
 import { approvalDateError } from '@/lib/attendance-authz'
 import { attendanceDateError, dayApprovalOf, finalApprovedEditError, writeAttendanceEntry, COMP_NON_WORKING_DAY_MESSAGE } from '@/lib/attendance-save'
-import { getApprovalForDay } from '@/lib/attendance'
+import { getApprovalForDay } from '@/lib/attendance.server'
 import { isStillActiveForMonth, isHiredByMonth, isEmployedOn } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
@@ -543,7 +544,7 @@ export async function POST(request: NextRequest) {
       if (ym) {
         // 2026-10-02 総合点検: 判定は lib/locks.ts に一本化（旧: ここで自前に書き、30秒キャッシュの人員マスタを
         //   使っていたので、締めた直後は古い状態で通った）。人の出面はその人の会社、外注の人工は両社とも締めたとき
-        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         const lockErr = body.workerId !== undefined
           ? await checkMonthLockedForWorkers(String(ym), [body.workerId])
           : await checkMonthLockedForWorkers(String(ym), [], 'both')
@@ -574,7 +575,7 @@ export async function POST(request: NextRequest) {
           const { todayJstIso } = await import('@/lib/date-utils')
           const dateErr = leaveRequestDateError(targetDate, todayJstIso())
           if (dateErr) {
-            const { getAttendanceDoc } = await import('@/lib/attendance')
+            const { getAttendanceDoc } = await import('@/lib/attendance.server')
             const cur = (await getAttendanceDoc(body.ym)) as Record<string, { p?: number } | null>
             const had = cur[`${body.siteId}_${body.workerId}_${body.ym}_${body.day}`]?.p
             if (!had) {
@@ -624,7 +625,7 @@ export async function POST(request: NextRequest) {
             code: 'RETIRED',
           }, { status: 409 })
         }
-        const { isScheduledWorkDay } = await import('@/lib/attendance')
+        const { isScheduledWorkDay } = await import('@/lib/attendance.server')
         if (body.siteId && !await isScheduledWorkDay(String(body.siteId), targetDate)) {
           if (!body.allowNonWorkingDay) {
             return NextResponse.json({
@@ -651,7 +652,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '所定日数は 0〜31 の数字で入れてください' }, { status: 400 })
       }
       {
-        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         const lockErr = await checkMonthLockedForWorkers(ym, [], 'either')
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
@@ -796,7 +797,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'siteId, ym, days, toSiteId は必須です' }, { status: 400 })
       }
       // 日ごとの工種の切り替えは、その日の全員の出面を移す。どちらかの会社が締め済みなら拒否（2026-10-02 総合点検）
-      const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+      const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
       const lockErr = await checkMonthLockedForWorkers(String(sdwYm), [], 'either')
       if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
 
@@ -880,7 +881,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'siteId, ym, day, workerId/subconId, toSiteId は必須です' }, { status: 400 })
       }
       // 人の出面はその人の会社、外注の人工は両社とも締めたとき（2026-10-02 総合点検）
-      const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+      const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
       const lockErr = mwtWorkerId !== undefined
         ? await checkMonthLockedForWorkers(String(mwtYm), [mwtWorkerId])
         : await checkMonthLockedForWorkers(String(mwtYm), [], 'both')
@@ -986,7 +987,7 @@ export async function POST(request: NextRequest) {
         const r = await breakCheckResponse(siteId, String(ym), [Number(day)], body.ackBreakCheck)
         if (r) return r
       }
-      const { setForemanApprovalForDay } = await import('@/lib/attendance')
+      const { setForemanApprovalForDay } = await import('@/lib/attendance.server')
       // 承認者はログインした本人（2026-10-01。旧: 画面から送られた approvedBy をそのまま記録していた）
       const au = await getApiAuthUser(request)
       await setForemanApprovalForDay(siteId, ym, day, au.authorized && typeof au.actor === 'number' ? au.actor : 0)
@@ -1005,7 +1006,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'この日は最終承認済みのため取り消せません。管理者に連絡してください。' }, { status: 409 })
         }
       }
-      const { removeForemanApprovalForDay } = await import('@/lib/attendance')
+      const { removeForemanApprovalForDay } = await import('@/lib/attendance.server')
       await removeForemanApprovalForDay(siteId, ym, day)
       return NextResponse.json({ success: true })
     }
@@ -1034,7 +1035,7 @@ export async function POST(request: NextRequest) {
         const r = await breakCheckResponse(siteId, String(ym), [Number(day)], body.ackBreakCheck)
         if (r) return r
       }
-      const { setFinalApprovalForDay } = await import('@/lib/attendance')
+      const { setFinalApprovalForDay } = await import('@/lib/attendance.server')
       // 承認者はログインした本人（職長承認と同じ・2026-10-01）
       const au = await getApiAuthUser(request)
       await setFinalApprovalForDay(siteId, ym, day, au.authorized && typeof au.actor === 'number' ? au.actor : 0)
@@ -1049,7 +1050,7 @@ export async function POST(request: NextRequest) {
       }
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
-      const { removeFinalApprovalForDay } = await import('@/lib/attendance')
+      const { removeFinalApprovalForDay } = await import('@/lib/attendance.server')
       await removeFinalApprovalForDay(siteId, ym, day)
       return NextResponse.json({ success: true })
     }
@@ -1133,7 +1134,7 @@ export async function POST(request: NextRequest) {
             // 0.6補（会社都合の休み）はカレンダーの仕事の日だけ（スタッフのスマホと同じ決まり・2026-10-02 総合点検）。
             //   旧: PC・一括入力からは休みの日にも入れられ、休業手当（60%）の過払いになりえた。すでに 0.6補の日の保存し直しは止めない
             if ((entry as AttendanceEntry).w === 0.6 && existing?.w !== 0.6) {
-              const { isScheduledWorkDay } = await import('@/lib/attendance')
+              const { isScheduledWorkDay } = await import('@/lib/attendance.server')
               if (!await isScheduledWorkDay(String(siteId), dayIso)) {
                 return NextResponse.json({ error: COMP_NON_WORKING_DAY_MESSAGE, code: 'COMP_NON_WORKING_DAY' }, { status: 400 })
               }

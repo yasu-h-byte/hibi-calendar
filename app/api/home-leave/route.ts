@@ -3,7 +3,8 @@ import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, updateDoc, deleteDoc, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
-import { getWorkers, resolveWorkerName } from '@/lib/workers'
+import { resolveWorkerName } from '@/lib/workers'
+import { getWorkers } from '@/lib/workers.server'
 import { HOME_LEAVE_SENTINEL_END } from '@/lib/homeLeave'
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -43,8 +44,8 @@ async function findLockedMonthInRanges(
   workerId: number,
   ranges: { startDate?: string; endDate?: string }[],
 ): Promise<string | null> {
-  const { checkMonthLocked } = await import('@/lib/locks')
-  const { getWorkers } = await import('@/lib/workers')
+  const { checkMonthLocked } = await import('@/lib/locks.server')
+  const { getWorkers } = await import('@/lib/workers.server')
   const company = (await getWorkers()).find(w => w.id === Number(workerId))?.company
   const org = company === 'HFU' ? 'hfu' : company ? 'hibi' : undefined
   const seen = new Set<string>()

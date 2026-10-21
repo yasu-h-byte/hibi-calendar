@@ -58,7 +58,7 @@ describe('出面を書く API は、会社なしの checkMonthLocked を使わ�
   test('checkMonthLocked( の呼び出しは、必ず会社（第2引数）を渡す', () => {
     const bad: string[] = []
     for (const f of [...files(path.join(ROOT, 'app')), ...files(path.join(ROOT, 'lib'))]) {
-      if (f.endsWith(path.join('lib', 'locks.ts'))) continue
+      if (f.endsWith(path.join('lib', 'locks.ts')) || f.endsWith(path.join('lib', 'locks.server.ts'))) continue
       const src = readFileSync(f, 'utf8')
       src.split('\n').forEach((line, i) => {
         // checkMonthLocked(x) … 引数が1つだけの呼び出し
