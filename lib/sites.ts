@@ -1,5 +1,4 @@
-import { db } from './firebase'
-import { doc, getDoc } from '@/lib/fsdb'
+import { getMainData } from './compute.server'
 import { Site, SiteAssign, Worker } from '@/types'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'
 
@@ -10,10 +9,9 @@ interface MainDoc {
 }
 
 async function getMainDoc(): Promise<MainDoc> {
-  const docRef = doc(db, 'demmen', 'main')
-  const docSnap = await getDoc(docRef)
-  if (!docSnap.exists()) return {}
-  return docSnap.data() as MainDoc
+  // 人員マスタは getMainData（30 秒キャッシュ・2026-10-21 総点検。旧: 毎回 demmen/main を読み直し、
+  //   カレンダーの読み込み（lib/calendar-matrix.ts）では同じリクエスト内で main を 2 回読んでいた）
+  return (await getMainData()) as unknown as MainDoc
 }
 
 export async function getSites(): Promise<Site[]> {

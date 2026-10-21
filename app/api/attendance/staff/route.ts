@@ -20,8 +20,8 @@ import { calendarSiteIdOf, workTypeFamilyIds, familyEntrySiteId, staffEntryTarge
 import { AttendanceEntry, SiteWorkSchedule, withDerivedOvertime } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween, currentYmJst } from '@/lib/date-utils'
-import { parseDKey } from '@/lib/compute'
-import { getAttData } from '@/lib/compute.server'
+import { parseDKey, isClosedMonthYm } from '@/lib/compute'
+import { getAttData, getAttDataCached, getMainData } from '@/lib/compute.server'
 import { sitesOfWorkerForMonth } from '@/lib/roster'
 import { defaultStaffSiteId } from '@/lib/staff-default-site'
 import { isWorkDayOf } from '@/lib/attendance-missing'
@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
     //   main ドキュメント（約260KB）を getWorkerByToken / getStaffSites / getSites /
     //   siteNames / workSchedule がそれぞれ再読しており、読みだけで数秒かかっていた。
     //   1回だけ読んで全てをここから導出する（月初の「入力できない」障害の対処）。
-    const mainSnapOnce = await getDoc(doc(db, 'demmen', 'main'))
-    const mainRaw = (mainSnapOnce.exists() ? mainSnapOnce.data() : {}) as {
+    //   2026-10-21 総点検: その 1 回も getMainData（30 秒キャッシュ）に寄せた（通行証の判定と同じ読みを使い回す）
+    const mainRaw = (await getMainData()) as unknown as {
       workers?: unknown[]
       sites?: { id: string; name: string; archived?: boolean; workSchedule?: unknown; parentId?: string; workType?: string }[]
       assign?: Record<string, { workers?: number[]; defaultWorkType?: Record<string, string>; dayWorkType?: Record<string, Record<string, string>> }>
@@ -379,7 +379,10 @@ export async function GET(request: NextRequest) {
                 periodYms.push(ymKey(cur.getFullYear(), cur.getMonth() + 1))
                 cur.setMonth(cur.getMonth() + 1)
               }
-              const atts = await Promise.all(periodYms.map(pymL => getAttData(pymL)))
+              // 当月・前月は上で読んだものを使い回し（同じ att を二度読まない・CLAUDE.md）、確定月はキャッシュ版（2026-10-21 総点検）
+              const atts = await Promise.all(periodYms.map(pymL =>
+                pymL in attMonthCache ? Promise.resolve({ d: attMonthCache[pymL] })
+                  : isClosedMonthYm(pymL, tIso) ? getAttDataCached(pymL) : getAttData(pymL)))
               for (const att of atts) Object.assign(attEntries, att.d)
             }
             const bal = computeLeaveBalanceFromAtt(worker.id, plRecords as never[], attEntries, todayStr, {
@@ -485,8 +488,7 @@ export async function POST(request: NextRequest) {
 
     // Check site exists and is active + 現場の勤務時間設定を取得
     // 2026-09-02 高速化: POST でも main を1回だけ読んで全てを導出
-    const mainSnapPost = await getDoc(doc(db, 'demmen', 'main'))
-    const mainRawPost = (mainSnapPost.exists() ? mainSnapPost.data() : {}) as {
+    const mainRawPost = (await getMainData()) as unknown as {
       sites?: { id: string; name?: string; archived?: boolean; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string }; parentId?: string }[]
       assign?: WorkTypeAssignMap
     }

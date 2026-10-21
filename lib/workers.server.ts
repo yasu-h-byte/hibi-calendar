@@ -6,10 +6,9 @@
  * /workers・/settings・/evaluation など 10 画面のクライアント JS に Firebase Web SDK（約100KB）が載っていた。
  */
 import 'server-only'
-import { db } from './firebase'
-import { doc, getDoc } from '@/lib/fsdb'
 import type { Worker } from '@/types'
 import { mapRawWorkers, findWorkerByToken } from './workers'
+import { getMainData } from './compute.server'
 
 /**
  * 人員マスタの読み出し。
@@ -21,14 +20,10 @@ import { mapRawWorkers, findWorkerByToken } from './workers'
  *    漏れは `__tests__/workersMapping.test.ts` が検出する。
  */
 export async function getWorkers(): Promise<Worker[]> {
-  const docRef = doc(db, 'demmen', 'main')
-  const docSnap = await getDoc(docRef)
-
-  if (!docSnap.exists()) {
-    return []
-  }
-
-  return mapRawWorkers(docSnap.data().workers || [])
+  // 2026-10-21 総点検: 人員マスタは getMainData（30 秒キャッシュ）から。旧は毎回 demmen/main（約 260KB）を読み直し、
+  //   スマホ・職長・マイページの API が 1 リクエストで main を 2〜3 回読んでいた。
+  //   書き込みの直後は lib/fsdb.ts の registerMainWriteHook が同一インスタンスのキャッシュを消す。
+  return mapRawWorkers((await getMainData()).workers)
 }
 
 export async function getWorkerByToken(token: string, opts: { allowGrace?: boolean } = {}): Promise<Worker | null> {

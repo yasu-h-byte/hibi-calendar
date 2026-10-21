@@ -26,6 +26,7 @@ vi.mock('@/lib/fsdb', () => ({
   setDoc: async (ref: unknown, data: unknown) => { calls.audit.push({ ref, data }) },
   getDocs: async () => ({ forEach: () => {} }),
   collection: () => ({}),
+  registerMainWriteHook: () => {},   // lib/compute.server.ts が読み込み時に呼ぶ
 }))
 vi.mock('@/lib/activity', () => ({ logActivity: async () => {} }))
 vi.mock('@/lib/auth', () => ({
@@ -54,7 +55,11 @@ const asJimu = () => { caller.actor = 303; caller.caps = new Set(['workers.view'
 const asOwner = () => { caller.actor = 'super-admin'; caller.caps = new Set(['workers.view', 'workers.edit', 'workers.editPay', 'pay.view', 'system.admin']) }
 const asForeman = () => { caller.actor = 2; caller.caps = new Set() }
 
-beforeEach(() => { calls.update = []; calls.add = []; calls.gen = []; calls.revoke = []; calls.audit = [] })
+beforeEach(async () => {
+  calls.update = []; calls.add = []; calls.gen = []; calls.revoke = []; calls.audit = []
+  // getWorkers は getMainData（30 秒キャッシュ）を通るので、ケースごとにキャッシュを消す（2026-10-21）
+  ;(await import('@/lib/compute.server')).invalidateMainCache()
+})
 
 describe('update: 許可リストと「消す」', () => {
   test('知らない項目（token・scheduledChanges など）は 400', async () => {

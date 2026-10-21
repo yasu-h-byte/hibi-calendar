@@ -3,7 +3,7 @@ import { doc, updateDoc, deleteField, getDocs, query, collection, where } from '
 import { ensureDocExists } from './firestore-safe'
 import { attKey, ymKey } from './attendance'
 import { getAttendanceDoc, getStaffSites } from './attendance.server'
-import { checkMonthLocked } from './locks.server'
+import { loadLockContext } from './locks.server'
 import type { AttendanceEntry } from '@/types'
 import { currentYmJst } from '@/lib/date-utils'
 
@@ -239,9 +239,8 @@ export async function syncHomeLeaveAttendance(
   // ② 同一人の「他の承認済み帰国期間」がカバーする日の hk は消さない。
   //    期間が重複して登録されていた場合、片方の削除がもう片方の hk を
   //    巻き添えで消していた（excludeDocId = 操作中のレコード自身）
-  const { getWorkers } = await import('./workers.server')
-  const workerCompany = (await getWorkers()).find(w => w.id === workerId)?.company
-  const workerOrg = workerCompany === 'HFU' ? 'hfu' : workerCompany ? 'hibi' : undefined
+  // 締めの判定は人の会社で（lib/locks.ts・2026-10-21 総点検。旧: 会社を自前で判定し月ごとに main を読み直していた）
+  const lockCtx = await loadLockContext()
   const protectRanges: HomeLeaveRange[] = []
   try {
     const othersSnap = await getDocs(query(
@@ -275,7 +274,7 @@ export async function syncHomeLeaveAttendance(
   if (fromYm > toYm) return result
 
   for (const ym of monthsInclusive(fromYm, toYm)) {
-    if (await checkMonthLocked(ym, workerOrg)) {
+    if (lockCtx.isLocked(ym, workerId)) {
       result.lockedMonths.push(ym)
       continue
     }

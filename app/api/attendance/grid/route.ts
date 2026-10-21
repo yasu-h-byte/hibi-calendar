@@ -28,11 +28,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 独立した 2 つの read を並列化（1 RTT 削減）
-    const [main, att] = await Promise.all([
-      getMainData(),
-      getAttData(ym),
-    ])
+    const main = await getMainData()
+    // 職長は担当現場だけ（POST と同じ判定・lib/attendance-authz.ts。2026-10-21 総点検。旧: GET は任意の現場を読めた＝画面が絞っているだけ）
+    {
+      const { checkGridForemanScope } = await import('@/lib/attendance-authz')
+      const scope = await checkGridForemanScope(request, main, siteId, ym)
+      if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status })
+    }
+    const att = await getAttData(ym)
     // 運転記録: att_ドキュメントの drv マップ（`${親siteId}_${ym}_${day}` → {am,pm}）から
     // この現場の分だけ day キーに直して返す。工種サイトの画面でも親＋工種のキーをまとめて見せる（2026-10-02・決まりは lib/allowance.ts）
     const { driversByDayForSite } = await import('@/lib/allowance')

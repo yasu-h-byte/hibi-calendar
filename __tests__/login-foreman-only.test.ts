@@ -8,6 +8,7 @@ vi.mock('@/lib/firebase', () => ({ db: {} }))
 vi.mock('@/lib/fsdb', () => ({
   doc: () => ({}),
   getDoc: async () => ({ exists: () => true, data: () => ({ userPasswords: {}, mforeman: {} }) }),
+  registerMainWriteHook: () => {},   // lib/compute.server.ts が読み込み時に呼ぶ
 }))
 vi.mock('@/lib/accessLog', () => ({ recordAccess: async () => {}, getRequestIp: () => '' }))
 vi.mock('@/lib/sites', () => ({ getSites: async () => [] }))

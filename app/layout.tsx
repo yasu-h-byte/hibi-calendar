@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { BIZ_UDPGothic } from 'next/font/google'
 import './globals.css'
 
@@ -34,11 +34,14 @@ export const metadata: Metadata = {
     ],
     apple: '/brand/apple-touch-icon.png',
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    viewportFit: 'cover',
-  },
+}
+
+// Next 14 では viewport は metadata と別に書く（2026-10-21 総点検。旧: metadata.viewport で非推奨の警告）
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#1B2A4A',
 }
 
 export default function RootLayout({
@@ -49,7 +52,6 @@ export default function RootLayout({
   return (
     <html lang="ja" className={udFont.variable}>
       <head>
-        <meta name="theme-color" content="#1B2A4A" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

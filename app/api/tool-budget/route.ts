@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
+import { getMainData } from '@/lib/compute.server'
 import { isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 import { getWorkerByToken } from '@/lib/workers.server'
 import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, receiptPeriodOf, type ToolBudgetPeriod, findDuplicatePurchase } from '@/lib/tool-budget-period'
@@ -135,9 +136,8 @@ export async function GET(request: NextRequest) {
     const tbData = await getToolBudgetData()
 
     // 対象スタッフ取得
-    const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-    const workers: { id: number; name: string; visa: string; job?: string; org?: string; retired?: string; hireDate?: string }[] =
-      mainSnap.exists() ? (mainSnap.data().workers || []) : []
+    // 人員マスタは getMainData（30 秒キャッシュ・2026-10-21 総点検）
+    const workers = (await getMainData()).workers as { id: number; name: string; visa: string; job?: string; org?: string; retired?: string; hireDate?: string }[]
     // filter に直接渡すと第2引数(index)が todayIso と衝突するのでラップする
     const targetWorkers = workers.filter(w => isToolBudgetEligible(w))
 

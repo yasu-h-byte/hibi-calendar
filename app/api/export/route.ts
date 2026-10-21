@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
         } else {
           // Generate for all subcons in one workbook
           // We'll create individual workbooks merged: one sheet per subcon
-          const XLSX = await import('xlsx')
+          const XLSX = await import('xlsx-js-style')
           const wb = XLSX.utils.book_new()
 
           const { canBorrowFrom } = await import('@/lib/companies')

@@ -17,6 +17,7 @@ import { AttendanceEntry, AttendanceApproval, Site, withDerivedOvertime } from '
 import { ensureDocExists } from './firestore-safe'
 import { currentYmJst } from '@/lib/date-utils'
 import { attKey, computeAttendanceDeleteFields, paidLeaveChanged } from './attendance'
+import { getMainData } from './compute.server'
 
 /**
  * カレンダー上の「出勤予定日」かを判定（2026-06-12 監査 Sprint2-B で共通化）。
@@ -295,8 +296,8 @@ export async function removeFinalApprovalForDay(
 // ────────────────────────────────────────
 
 export async function getStaffSites(workerId: number, ymOverride?: string): Promise<{ id: string; name: string }[]> {
-  const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
-  if (!mainDoc.exists()) return []
+  // 人員マスタは getMainData（30 秒キャッシュ・2026-10-21 総点検。旧: 毎回 demmen/main を読み直し）
+  const main = await getMainData()
 
   // 2026-09-02: 対象月（申請日の月）を渡せるようにした。旧は常に「今月」の配置で
   //   現場を決めていたため、来月から別現場へ移る人の来月分の有給が旧現場に書かれ、
@@ -305,7 +306,7 @@ export async function getStaffSites(workerId: number, ymOverride?: string): Prom
   //   旧は `massign[その月] ?? assign` で、PC の出面画面・給与計算・職長の名簿と食い違っていた
   const ym = ymOverride ? ymOverride.replace('-', '') : currentYmJst()
   const { sitesOfWorkerForMonth } = await import('./roster')
-  return sitesOfWorkerForMonth(mainDoc.data() as import('./roster').AssignSource, workerId, ym)
+  return sitesOfWorkerForMonth(main, workerId, ym)
 }
 
 // ────────────────────────────────────────
@@ -327,11 +328,9 @@ export async function getStaffSites(workerId: number, ymOverride?: string): Prom
 export async function getForemanSite(
   foremanId: number, ym?: string, preferSiteId?: string | null,
 ): Promise<(Site & { foremanSites: { id: string; name: string }[] }) | null> {
-  const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
-  if (!mainDoc.exists()) return null
-  const data = mainDoc.data()
-  const sites = (data.sites || []) as (Site & { parentId?: string })[]
-  const mforeman = (data.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
+  const data = await getMainData()
+  const sites = data.sites as unknown as (Site & { parentId?: string })[]
+  const mforeman = data.mforeman as Record<string, { foreman?: number; wid?: number }>
   const ymKey6 = (ym || currentYmJst()).replace('-', '')
   const { foremenOfSiteForMonth } = await import('./foremen')
   const mine = sites.filter(s => !s.archived && !s.parentId && foremenOfSiteForMonth(s, mforeman, ymKey6).includes(foremanId))
@@ -349,16 +348,13 @@ export async function getForeignWorkersForSite(
   /** 対象月 'YYYYMM'（省略=今月）。前月の承認では前月の配置で数える（2026-10-01） */
   ymOverride?: string,
 ): Promise<{ id: number; name: string; nameVi?: string; visa: string }[]> {
-  const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
-  if (!mainDoc.exists()) return []
-
-  const data = mainDoc.data()
-  const workers = (data.workers || []) as Record<string, unknown>[]
+  const data = await getMainData()
+  const workers = data.workers as unknown as Record<string, unknown>[]
   const ym = ymOverride ? ymOverride.replace('-', '') : currentYmJst()
   // 2026-10-02 総合点検: 配置は getAssign（過去12か月の月別配置をさかのぼる）に寄せる（lib/roster.ts）。
   //   旧は `massign[その月] ?? assign` で、職長の名簿（lib/foreman-todo.ts）と食い違っていた
   const { workerIdsOfSiteForMonth } = await import('./roster')
-  const workerIds = new Set(workerIdsOfSiteForMonth(data as import('./roster').AssignSource, siteId, ym))
+  const workerIds = new Set(workerIdsOfSiteForMonth(data, siteId, ym))
 
   return workers
     .filter(w => {

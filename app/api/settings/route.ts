@@ -50,8 +50,10 @@ export async function GET(request: NextRequest) {
     const action = request.nextUrl.searchParams.get('action')
     // 2026-09-26: 既定単価（action なし・現場マスタが読む）以外はすべて代表だけ（lib/permissions.ts system.admin）。
     //   旧: 自社・HFU の振込先などをどの個人パスワードでも読めた
-    if (action) {
-      const denied = await requireCap(request, 'system.admin')
+    //   2026-10-21 総点検: 既定単価（とび・土工の単価）も現場マスタと同じ masters.view に絞る（旧: ログインしていれば職長でも読めた。
+    //   /api/sites は同じ単価を masters.view 以外に伏せているので、そろえた）
+    {
+      const denied = await requireCap(request, action ? 'system.admin' : 'masters.view')
       if (denied) return denied
     }
     const result = await getMainDoc()

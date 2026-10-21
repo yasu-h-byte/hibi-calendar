@@ -6,7 +6,6 @@ import { getWorkerByToken } from '@/lib/workers.server'
 import { ymKey, computeAttendanceDeleteFields, createsWork, attKey } from '@/lib/attendance'
 import { getStaffSites, setAttendanceEntry, isScheduledWorkDay, getApprovalForDay } from '@/lib/attendance.server'
 import { getMainData } from '@/lib/compute.server'
-import { isMonthLockedInLocks } from '@/lib/locks'
 import { logActivity } from '@/lib/activity'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import type { AttendanceEntry } from '@/types'
@@ -148,8 +147,8 @@ export async function POST(request: NextRequest) {
 
       // 締め済みの月への申請は入口で拒否（2026-09-02 追加。旧は承認時に初めて 409 だった）
       {
-        const { checkMonthLocked } = await import('@/lib/locks.server')
-        const lockErr = await checkMonthLocked(ym, worker.company === 'HFU' ? 'hfu' : 'hibi')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
+        const lockErr = await checkMonthLockedForWorkers(ym, [worker.id])
         if (lockErr) {
           return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể xin nghỉ phép` }, { status: 409 })
         }
@@ -409,10 +408,10 @@ export async function POST(request: NextRequest) {
 
       // 2026-06-12 (監査 Sprint2-B): 月次ロック済み月への有給承認を拒否。
       //   締め（給与確定）後に p:1 が書き込まれると支払額とシステムが食い違う
+      //   2026-10-21 総点検: 30秒キャッシュの人員マスタで判定していた（締めた直後は古い状態で通る）→ 読み直して人の会社で判定
       {
-        const mainForLock = await getMainData()
-        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
-        if (isMonthLockedInLocks(mainForLock.locks, data.ym, wOrg)) {
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
+        if (await checkMonthLockedForWorkers(data.ym, [data.workerId])) {
           return NextResponse.json({ error: `${data.ym.slice(0, 4)}年${parseInt(data.ym.slice(4, 6))}月は月次締め済みのため承認できません。先に月次集計画面でロックを解除してください`, status: 409 }, { status: 409 })
         }
       }
@@ -661,9 +660,8 @@ export async function POST(request: NextRequest) {
       // 2026-06-12 (監査 Sprint2-B): ロック済み月の有給取消は拒否（支払額確定後のデータ変更防止）
       const attYm = data.date.replace(/-/g, '').slice(0, 6)
       {
-        const mainForLock = await getMainData()
-        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
-        if (isMonthLockedInLocks(mainForLock.locks, attYm, wOrg)) {
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
+        if (await checkMonthLockedForWorkers(attYm, [data.workerId])) {
           return NextResponse.json({ error: `${attYm.slice(0, 4)}年${parseInt(attYm.slice(4, 6))}月は月次締め済みのため取消できません。先にロックを解除してください` }, { status: 409 })
         }
       }
@@ -761,10 +759,10 @@ export async function POST(request: NextRequest) {
       }
       // ② 旧日付・新日付の月がロック済みなら拒否（締め後の支払額変更防止）
       {
-        const mainForLock = await getMainData()
-        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
+        const { loadLockContext } = await import('@/lib/locks.server')
+        const lockCtx = await loadLockContext()
         for (const checkYm of [data.ym, newYm]) {
-          if (isMonthLockedInLocks(mainForLock.locks, checkYm, wOrg)) {
+          if (lockCtx.isLocked(checkYm, data.workerId)) {
             return NextResponse.json({ error: `${checkYm.slice(0, 4)}年${parseInt(checkYm.slice(4, 6))}月は月次締め済みのため日付変更できません。先にロックを解除してください` }, { status: 409 })
           }
         }

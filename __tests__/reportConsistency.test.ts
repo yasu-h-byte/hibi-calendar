@@ -6,7 +6,7 @@
  * 架空の人・金額のみ。
  */
 import { describe, it, expect } from 'vitest'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { computeMonthly, type MainData, type RawWorker } from '@/lib/compute'
 import { generateMonthlyExcel, generateOrgAttendance, sitesForMonthSheets } from '@/lib/export'
 import { buildAuditChecks, type PayrollAuditWorker } from '@/lib/payroll-validator'

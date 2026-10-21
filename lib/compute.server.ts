@@ -104,9 +104,11 @@ export async function getAttData(ym: string): Promise<{
  * 数十回読むのが遅さの主因だった。**呼び出し側は「前月より前の確定済み月」にだけ使うこと**
  * （当月・前月は入力中で、出面グリッドの再取得が古い値を返すと入力が消えて見える）。
  * 同一インスタンス内の setAttendanceEntry で無効化するが、別インスタンスの書き込みは
- * TTL（5分）まで反映されない。確定済み月の集計表示にはその遅延で十分。
+ * TTL まで反映されない。確定済み月の集計表示にはその遅延で十分。
+ * 2026-10-21 総点検: 5 分 → 30 分。通知ベル（10 分ごと）・ダッシュボード・サイドバーが同じ確定月を
+ * 何度も読み直していた。確定月（前月より前）の訂正は稀で、訂正した本人の画面は同一インスタンスで即反映される。
  */
-const ATT_CACHE_TTL_MS = 5 * 60_000
+const ATT_CACHE_TTL_MS = 30 * 60_000
 
 const attDocCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof getAttData>> }>()
 

@@ -12,7 +12,8 @@
  * プロジェクション（変換）するだけ。
  */
 import { db } from './firebase'
-import { doc, getDoc, collection, query, where, getDocs } from '@/lib/fsdb'
+import { collection, query, where, getDocs } from '@/lib/fsdb'
+import { getMainData } from './compute.server'
 import { getAllSitesWithWorkersForMonth } from './sites'
 import { siteNeedsCalendar } from './site-hierarchy'
 import { isSupportSite } from './companies'
@@ -99,12 +100,13 @@ export async function loadCalendarMatrix(ym: string): Promise<CalendarMatrix> {
  * loadCalendarMatrix が担当。
  */
 async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
-  const [siteCalSnap, signSnap, allSitesWithWorkers, homeLeaves, mainDoc] = await Promise.all([
+  // main は getMainData（30 秒キャッシュ・2026-10-21 総点検。旧: 同じ関数内で getAllSitesWithWorkersForMonth と合わせて 2 回読んでいた）
+  const [siteCalSnap, signSnap, allSitesWithWorkers, homeLeaves, mainData] = await Promise.all([
     getDocs(query(collection(db, 'siteCalendar'), where('ym', '==', ym))),
     getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ym))),
     getAllSitesWithWorkersForMonth(ym),
     getAllActiveHomeLeaves(),
-    getDoc(doc(db, 'demmen', 'main')),
+    getMainData(),
   ])
 
   // siteCalendar
@@ -143,7 +145,6 @@ async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
   //   - massign[siteId_ym] が存在すればそれを優先（月別オーバーライド）
   //   - そうでなければ assign[siteId] (デフォルト)
   // 修正時の再署名フィルタに使用
-  const mainData = mainDoc.exists() ? mainDoc.data() : {}
   const assignMap = (mainData.assign || {}) as Record<string, { workers?: number[] }>
   const massignMap = (mainData.massign || {}) as Record<string, { workers?: number[] }>
   const ymCompact = ym.replace('-', '')  // "YYYY-MM" → "YYYYMM"
@@ -157,7 +158,7 @@ async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
   }
 
   // 全期間帰国 + 署名対象外国人
-  const allRawWorkers = (mainData.workers || []) as Record<string, unknown>[]
+  const allRawWorkers = mainData.workers as unknown as Record<string, unknown>[]
   const ymKey = normalizeYm(ym)
   const fullMonthHlIds = new Set(
     allRawWorkers

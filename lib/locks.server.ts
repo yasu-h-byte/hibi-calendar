@@ -4,37 +4,17 @@
  * 純粋な判定（isMonthLockedInLocks / isMonthLockedForWorkers / orgKeyOf / ymOfDate）は lib/locks.ts のまま。
  * 画面（スマホ出面など）は lib/locks.ts だけを import するので、Firebase Web SDK がクライアント JS に載らない。
  *
- * ⚠️ 会社なしの checkMonthLocked(ym) は「両社とも締めたときだけ」拒否になる。人に付く書き込みは
- *    checkMonthLockedForWorkers を使う（CLAUDE.md「並べる方式をやめ、既定を安全側にする」）
+ * 会社なしで呼べた checkMonthLocked(ym, org?) は 2026-10-21 に廃止（org が undefined だと「両社とも締めたときだけ」
+ * 拒否になり、人員マスタに無い人・会社を自前で判定した経路が抜けていた）。人に付く書き込みは
+ * checkMonthLockedForWorkers（1 回）か loadLockContext（何か月・何人も）を使う。
  */
 import 'server-only'
 import { db } from './firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { isMonthLockedInLocks, isMonthLockedForWorkers } from './locks'
 
-/**
- * Firestore からロック状態を取得して判定。ロック済みならエラーメッセージを返す。
- * 判定不能（読み取り失敗）時は null（= 書込許可）。ロック判定のために業務を止めない。
- *
- * @param ym  YYYYMM
- * @param org 'hibi' | 'hfu' | ワーカーの org 値（日比/HFU表記も可）。省略時は全体ロックのみ判定
- */
-export async function checkMonthLocked(ym: string, org?: string): Promise<string | null> {
-  if (!/^\d{6}$/.test(ym)) return null
-  try {
-    const snap = await getDoc(doc(db, 'demmen', 'main'))
-    const locks = snap.exists() ? (snap.data().locks as Record<string, unknown> | undefined) : undefined
-    if (isMonthLockedInLocks(locks, ym, org)) {
-      return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月は月次締め（ロック）済みのため変更できません。変更が必要な場合は月次集計画面でロックを解除してください`
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-/** 締めのメッセージ（checkMonthLocked と同じ文言） */
-function lockedMessage(ym: string): string {
+/** 締めのメッセージ（締め済みのときに API が返す文言） */
+export function lockedMessage(ym: string): string {
   return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月は月次締め（ロック）済みのため変更できません。変更が必要な場合は月次集計画面でロックを解除してください`
 }
 
@@ -71,7 +51,7 @@ export async function checkMonthLockedForWorkers(
 
 /**
  * 締めの状態と人員マスタを1回だけ読み、何人・何か月ぶんも判定するための入れ物（一覧の処理用）。
- * 読めなければ「締めていない」扱い（checkMonthLocked と同じ・締めの判定のために業務を止めない）
+ * 読めなければ「締めていない」扱い（締めの判定のために業務を止めない）
  */
 export async function loadLockContext(): Promise<{ isLocked: (ym: string, workerId: number) => boolean }> {
   try {

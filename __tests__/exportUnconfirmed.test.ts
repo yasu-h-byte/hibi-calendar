@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { markUnconfirmedWorkbook, UNCONFIRMED_SHEET_NAME } from '@/lib/export'
 
 describe('締める前の帳票の「未確定」印（2026-09-30）', () => {

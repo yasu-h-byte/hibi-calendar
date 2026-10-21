@@ -20,7 +20,8 @@ import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays, siteRos
 import { parseDKey } from '@/lib/compute'
 import { getMainData, getAttData } from '@/lib/compute.server'
 import { canDriveDefault, driversByDayForSite } from '@/lib/allowance'
-import { todayJstDate } from '@/lib/date-utils'
+import { todayJstDate, todayJstIso } from '@/lib/date-utils'
+import { approvalDateError } from '@/lib/attendance-authz'
 import {
   attendanceDateError, isoOfYmDay, dayApprovalOf, finalApprovedEditError, writeAttendanceEntry, moveAttendanceEntry,
   COMP_NON_WORKING_DAY_MESSAGE,
@@ -254,6 +255,11 @@ export async function POST(request: NextRequest) {
     if (action === 'approve') {
       const { year, month, day } = body
       const ym = ymKey(year, month)
+      // 先の日・実在しない日は承認しない（PC の承認・まとめ承認と同じ決まり。2026-10-21 総点検で横展開）
+      {
+        const dateErr = approvalDateError(ym, day, todayJstIso())
+        if (dateErr) return NextResponse.json({ error: dateErr }, { status: 400 })
+      }
       // 2026-09-02 追加（大川さんの 9/1 誤承認事故の再発防止）:
       //   誰も入力していない日を承認するとスタッフ入力がロックされ、
       //   「9月から入力できない」状態を作ってしまう。全員未入力の日は拒否する。

@@ -295,15 +295,15 @@ export async function POST(request: NextRequest) {
       //   ① ロック済み月は拒否（給与確定後のデータ変更防止）
       //   ② カレンダー非稼働日への P は拒否（有給日給の過払い防止）
       {
-        const { checkMonthLocked } = await import('@/lib/locks.server')
+        const { loadLockContext, lockedMessage } = await import('@/lib/locks.server')
         const { isScheduledWorkDay } = await import('@/lib/attendance.server')
-        const wOrgRec = (data.workers as { id: number; org?: string }[] | undefined)?.find(w => w.id === Number(workerId))
+        // 2026-10-21 総点検: 人員マスタに無い人は会社なし（両社締めでないと通る）になっていた → 人の会社で判定（lib/locks.ts）
+        const lockCtx = await loadLockContext()
         for (const dateStr of dates) {
           const d0 = new Date(dateStr)
           if (isNaN(d0.getTime())) continue
           const ymCheck = ymKey(d0.getFullYear(), d0.getMonth() + 1)
-          const lockErr = await checkMonthLocked(ymCheck, wOrgRec?.org)
-          if (lockErr) return NextResponse.json({ error: `${dateStr}: ${lockErr}` }, { status: 409 })
+          if (lockCtx.isLocked(ymCheck, Number(workerId))) return NextResponse.json({ error: `${dateStr}: ${lockedMessage(ymCheck)}` }, { status: 409 })
           if (!await isScheduledWorkDay(siteId, dateStr)) {
             return NextResponse.json({ error: `${dateStr} は出勤予定日ではないため有給にできません（休日・所定休は対象外）` }, { status: 400 })
           }

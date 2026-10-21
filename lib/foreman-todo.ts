@@ -23,6 +23,7 @@ import {
 import { workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from './site-hierarchy'
 import { computeForemanSites, approvingForemenOfSite, buildAuthUser, isManagerRole } from './auth'
 import { todayJstIso, addMonthsSafe, addDaysIso } from './date-utils'
+import { approvalDateError } from './attendance-authz'
 import type { AttendanceEntry, AttendanceApproval, Site } from '@/types'
 import { getAssign, parseDKey, type MainData } from './compute'
 import { getMainData } from './compute.server'
@@ -258,8 +259,9 @@ export async function approveDaysForSite(siteId: string, ym: string, days: numbe
   const skipped: { day: number; reason: string }[] = []
   for (const dd of days) {
     const d = Number(dd)
-    if (!Number.isInteger(d) || d < 1 || d > 31) { skipped.push({ day: d, reason: '不正な日付' }); continue }
-    if (isoOf(ym, d) > today) { skipped.push({ day: d, reason: '未来日' }); continue }
+    // 先の日・実在しない日は承認しない（PC の承認と同じ関数で判定。2026-10-21 総点検で一本化。旧: 31日までを無条件に通していた）
+    const dateErr = approvalDateError(ym, d, today)
+    if (dateErr) { skipped.push({ day: d, reason: dateErr }); continue }
     const ev = evaluateSiteDay(att, family, workers, ym, d, isWorkDayOf(d))
     if (ev.missingNames.length > 0) {
       skipped.push({ day: d, reason: `未入力: ${ev.missingNames.join('、')}` })
@@ -294,10 +296,9 @@ export function foremanParentSites(worker: { id: number; jobType?: string }, sit
  */
 export async function getForemenOfWorkerSites(workerId: number): Promise<Set<number>> {
   const result = new Set<number>()
-  const staffSites = await getStaffSites(workerId)
-  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-  const main = mainSnap.exists() ? mainSnap.data() : {}
-  const sites = (main.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
+  // 人員・現場マスタは getMainData（30 秒キャッシュ・2026-10-21 総点検。旧: 帰国申請 1 件ごとに main を 2 回読んでいた）
+  const [staffSites, main] = await Promise.all([getStaffSites(workerId), getMainData()])
+  const sites = main.sites as { id: string; foremen?: number[]; foreman?: number }[]
   const ym = todayJstIso().slice(0, 7).replace('-', '')
   for (const ss of staffSites) {
     const site = sites.find(s => s.id === ss.id)

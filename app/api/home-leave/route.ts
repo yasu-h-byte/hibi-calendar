@@ -44,10 +44,9 @@ async function findLockedMonthInRanges(
   workerId: number,
   ranges: { startDate?: string; endDate?: string }[],
 ): Promise<string | null> {
-  const { checkMonthLocked } = await import('@/lib/locks.server')
-  const { getWorkers } = await import('@/lib/workers.server')
-  const company = (await getWorkers()).find(w => w.id === Number(workerId))?.company
-  const org = company === 'HFU' ? 'hfu' : company ? 'hibi' : undefined
+  // 2026-10-21 総点検: 人員マスタを 1 回読み、人の会社で判定（旧: 月ごとに main を読み直し・会社を自前で判定）
+  const { loadLockContext } = await import('@/lib/locks.server')
+  const lockCtx = await loadLockContext()
   const seen = new Set<string>()
   for (const r of ranges) {
     if (!r?.startDate || !r?.endDate || !ISO_DATE_RE.test(r.startDate)) continue
@@ -62,8 +61,7 @@ async function findLockedMonthInRanges(
     while (ym <= endYm && guard++ < 30) {
       if (!seen.has(ym)) {
         seen.add(ym)
-        const lockErr = await checkMonthLocked(ym, org)
-        if (lockErr) return ym
+        if (lockCtx.isLocked(ym, Number(workerId))) return ym
       }
       const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
       ym = m === 12 ? `${y + 1}01` : `${y}${String(m + 1).padStart(2, '0')}`
