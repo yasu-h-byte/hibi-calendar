@@ -25,8 +25,7 @@ import { SaveButton } from '@/components/ui/SaveButton'
 import { parsePaperNumber, isBlankNumberInput } from '@/lib/paper-invoice'
 import {
   SUBCON_INVOICE_ALLOWED_TYPES, SUBCON_INVOICE_MAX_FILE_BYTES, SUBCON_INVOICE_MAX_FILES,
-  docTypeOf, type SubconInvoice, type SubconExpected, type SubconComparison, type SubconDocType,
-} from '@/lib/subcon-invoice'
+  docTypeOf, type SubconInvoice, type SubconExpected, type SubconComparison, type SubconDocType, explainSubconDiff } from '@/lib/subcon-invoice'
 import type { PrimeRemittanceComparison } from '@/lib/prime-invoice'
 
 interface MonthData {
@@ -65,13 +64,16 @@ function primeChip(p: { comparison: PrimeRemittanceComparison; nos: string[] } |
   return <Chip tone="red">差 {signedYen(c.diff)}（請求書 {yen(c.invoiceTotal)}・{p.nos.join('・')}）</Chip>
 }
 
-function resultChip(cmp: (SubconComparison & { count?: number }) | undefined) {
+function resultChip(cmp: (SubconComparison & { count?: number }) | undefined, expected?: SubconExpected) {
   if (!cmp) return <Chip tone="gray">—</Chip>
   const suffix = cmp.count && cmp.count >= 2 ? `（${cmp.count}枚の合算）` : ''
   if (cmp.result === 'noWork') return <Chip tone="amber">出面に人工なし</Chip>
   if (cmp.result === 'match') return <Chip tone="green">出面と一致{suffix}</Chip>
-  if (cmp.result === 'close') return <Chip tone="green">ほぼ一致 {signedYen(cmp.diff)}{suffix}</Chip>
-  return <Chip tone="red">差 {signedYen(cmp.diff)}{suffix}</Chip>
+  // 差は「請求書 − 出面」。マイナス = 請求書の方が少ない。金額だけだと税込・税抜で読み違えるので、人工で言い換えを添える（2026-10-21）
+  const why = explainSubconDiff(cmp.diff, expected)
+  const tail = why ? `（${why}）` : ''
+  if (cmp.result === 'close') return <Chip tone="green">ほぼ一致 {signedYen(cmp.diff)}{tail}{suffix}</Chip>
+  return <Chip tone="red">{cmp.diff < 0 ? '請求書が少ない' : '請求書が多い'} {signedYen(cmp.diff)}{tail}{suffix}</Chip>
 }
 
 /**
@@ -198,7 +200,7 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
               <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">行を押すと、出面との見比べが右に開きます</span>
             </div>
             <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_140px_140px_200px_150px] gap-3.5 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
-              <span>外注先</span><span className="text-right">請求書（税込）</span><span className="text-right">出面 × 単価（税抜）</span><span>見比べ</span><span>入れた人</span>
+              <span>外注先</span><span className="text-right">請求書（税抜）</span><span className="text-right">出面 × 単価（税抜）</span><span>見比べ（請求書 − 出面）</span><span>入れた人</span>
             </div>
             {records.length === 0 && missing.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この月に入れた請求書はありません</div>
@@ -214,13 +216,20 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
                       {docTypeOf(r) === 'remittance' && <span className="block text-xs text-hibi-sub dark:text-gray-400">支払内訳書</span>}
                       {r.no && <span className="block text-xs text-hibi-sub dark:text-gray-400">{r.no}</span>}
                     </span>
-                    <span className="lg:text-right text-[1.0625rem] font-bold tabular-nums text-gray-900 dark:text-white">
-                      <span className="lg:hidden mr-2 text-xs font-normal text-hibi-sub dark:text-gray-400">{docTypeOf(r) === 'remittance' ? '振込額' : '請求書'}</span>{docTypeOf(r) === 'remittance' && !r.total ? '—' : yen(r.total)}
+                    <span className="lg:text-right tabular-nums text-gray-900 dark:text-white">
+                      <span className="lg:hidden mr-2 text-xs font-normal text-hibi-sub dark:text-gray-400">{docTypeOf(r) === 'remittance' ? '振込額' : '請求書（税抜）'}</span>
+                      {docTypeOf(r) === 'remittance'
+                        ? <span className="text-[1.0625rem] font-bold">{r.total ? yen(r.total) : '—'}</span>
+                        : <>
+                            {/* 出面 × 単価（税抜）と同じ土俵で読めるよう税抜を主にし、税込は小さく（2026-10-21 代表「税抜と税込だからわかりづらい」） */}
+                            <span className="block text-[1.0625rem] font-bold">{cmpOf(r) ? yen(cmpOf(r)!.invoiceExTax) : yen(r.total)}</span>
+                            <span className="block text-xs font-normal text-hibi-sub dark:text-gray-400">税込 {yen(r.total)}{cmpOf(r)?.exTaxEstimated ? '（÷1.1）' : ''}</span>
+                          </>}
                     </span>
                     <span className="lg:text-right text-[0.9375rem] tabular-nums text-gray-700 dark:text-gray-300">
                       <span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">出面 × 単価</span>{docTypeOf(r) === 'invoice' && data.expected[r.companyId] ? yen(data.expected[r.companyId].cost) : '—'}
                     </span>
-                    <span>{docTypeOf(r) === 'remittance' ? primeChip(data.primeByCompany?.[r.companyId]) : resultChip(cmpOf(r))}</span>
+                    <span>{docTypeOf(r) === 'remittance' ? primeChip(data.primeByCompany?.[r.companyId]) : resultChip(cmpOf(r), data.expected[r.companyId])}</span>
                     <span className="text-xs text-hibi-sub dark:text-gray-400">{r.uploadedByName || '—'}・{r.files.length}ファイル</span>
                   </div>
                 ))}
@@ -259,7 +268,7 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
           )}
 
           <p className="text-xs text-hibi-sub dark:text-gray-400 leading-relaxed">
-            出面 × 単価は税抜です。請求書の税抜小計を入れていないときは、税込 ÷ 1.1 で見比べます。
+            請求書も出面 × 単価も税抜で並べています（請求書の税抜小計を入れていないときは、税込 ÷ 1.1）。差はマイナスなら請求書の方が少ない、プラスなら多い。
             紙の請求書は、スキャン・写真を入れたあとも捨てずに保管してください。
           </p>
         </>
@@ -331,16 +340,17 @@ function Detail({ rec, sameCompany, exp, cmp, onClose, onOpenFile, onEdit, onDel
           <h3 className="text-base font-bold text-gray-900 dark:text-white">請求書と出面の見比べ（税抜）</h3>
           <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-sm tabular-nums">
             {[
-              { label: `請求書${cmp.count >= 2 ? `（${cmp.count}枚の合算）` : ''}${cmp.exTaxEstimated ? '（税込 ÷ 1.1）' : ''}`, value: yen(cmp.invoiceExTax) },
-              { label: '出面 × 単価', value: yen(cmp.expected) },
+              { label: `請求書の税込${cmp.count >= 2 ? `（${cmp.count}枚の合算）` : ''}`, value: yen(sameCompany.reduce((t, r) => t + (r.total || 0), 0)) },
+              { label: `請求書の税抜${cmp.exTaxEstimated ? '（税込 ÷ 1.1）' : ''}`, value: yen(cmp.invoiceExTax) },
+              { label: '出面 × 単価（税抜）', value: yen(cmp.expected) },
             ].map(r => (
               <div key={r.label} className="flex justify-between gap-3 px-3 py-2 border-t first:border-t-0 border-hibi-line dark:border-gray-700">
                 <span>{r.label}</span><span className="font-bold">{r.value}</span>
               </div>
             ))}
             <div className="flex justify-between gap-3 px-3 py-2 border-t border-hibi-line dark:border-gray-700">
-              <span className="font-bold">差（請求書 − 出面）</span>
-              <span className={`font-bold ${cmp.result === 'diff' ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>{signedYen(cmp.diff)}</span>
+              <span className="font-bold">差（請求書 − 出面）{cmp.diff < 0 ? '＝ 請求書の方が少ない' : cmp.diff > 0 ? '＝ 請求書の方が多い' : ''}</span>
+              <span className={`font-bold ${cmp.result === 'diff' ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>{signedYen(cmp.diff)}{explainSubconDiff(cmp.diff, exp) ? `（${explainSubconDiff(cmp.diff, exp)}）` : ''}</span>
             </div>
           </div>
           {sameCompany.length >= 2 && (
