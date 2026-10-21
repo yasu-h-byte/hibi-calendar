@@ -106,7 +106,7 @@ export const STAFF_DOC_ALLOWED_TYPES = [
  */
 export function safeFileName(name: string): string {
   const base = (name || 'file').normalize('NFC').split(/[\\/]/).pop() || 'file'
-  // eslint-disable-next-line no-control-regex
+   
   const cleaned = base.replace(/[\u0000-\u001f\u007f#?[\]*]/g, '').replace(/\s+/g, ' ').trim()
   return (cleaned || 'file').slice(0, 120)
 }

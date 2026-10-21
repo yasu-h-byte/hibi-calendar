@@ -25,6 +25,7 @@
  */
 
 import RestMismatchBanner from '../components/RestMismatchBanner'
+import Link from 'next/link'
 import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
@@ -737,7 +738,7 @@ export default function ForemanMobilePage() {
         {siteOptions.length <= 1 && data
           ? <div className="text-sm font-bold text-gray-700">{data.site.name}</div>
           : <div />}
-        <a href="/attendance" className="text-xs font-bold text-blue-600 border border-blue-200 rounded-lg px-2 py-1 bg-white">PC版画面へ</a>
+        <Link href="/attendance" className="text-xs font-bold text-blue-600 border border-blue-200 rounded-lg px-2 py-1 bg-white">PC版画面へ</Link>
       </div>
 
       {/* タブバー */}
