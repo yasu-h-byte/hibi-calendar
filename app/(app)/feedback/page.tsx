@@ -94,7 +94,7 @@ function AttachPicker({ items, onChange }: { items: Attach[]; onChange: (a: Atta
     <div className="flex items-center gap-2 flex-wrap">
       {items.map((a, i) => (
         <span key={i} className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element -- data URL のプレビュー */}
+          { }
           <img src={a.dataUrl} alt={a.name} className="h-14 w-14 object-cover rounded border border-hibi-line dark:border-gray-600" />
           <button type="button" onClick={() => onChange(items.filter((_, j) => j !== i))}
             className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-700 text-white text-xs leading-5 text-center" aria-label="この画像を外す">×</button>
@@ -410,7 +410,7 @@ function ThreadPanel({ id, me, password, onClose, onChanged }: {
                   <div className="flex gap-2 flex-wrap mt-1.5">
                     {m.images.map(im => im.url ? (
                       <a key={im.path} href={im.url} target="_blank" rel="noopener noreferrer" title="大きく見る">
-                        {/* eslint-disable-next-line @next/next/no-img-element -- 署名つきURL（15分）の画像 */}
+                        { }
                         <img src={im.url} alt={im.name} className="h-24 max-w-[180px] object-cover rounded border border-hibi-line dark:border-gray-600" />
                       </a>
                     ) : <span key={im.path} className="text-xs text-hibi-sub">（画像を開けません）</span>)}

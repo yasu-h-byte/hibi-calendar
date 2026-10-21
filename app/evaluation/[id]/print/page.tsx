@@ -225,7 +225,7 @@ export default function PrintEvaluationPage() {
         {/* ── ヘッダ ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1.5px solid #1B2A4A', paddingBottom: 4, marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src="/logo.png" alt="HIBI" style={{ height: 24 }} />
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>HIBI CONSTRUCTION</div>

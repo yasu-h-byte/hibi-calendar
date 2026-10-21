@@ -39,7 +39,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 ## 開発の基本ルール
 
 ### 技術スタック
-- Next.js 14（App Router）+ TypeScript + Tailwind CSS
+- Next.js 15（App Router）+ React 19 + TypeScript + Tailwind CSS
 - Firebase Firestore（プロジェクト: dedura-kanri）
 - Vercel にデプロイ
 
@@ -129,9 +129,10 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 - Firestoreは共有だが、旧アプリからの書き込みは発生しない
 - 新システムに完全移行済み（2026年4月〜）
 
-### ESLint（2026-10-03 導入）
+### ESLint（2026-10-03 導入・2026-10-21 ESLint 9 / flat config へ）
 
-`npm run lint`（`next lint`・設定は `.eslintrc.json`・next/core-web-vitals）。`npm run build` でも自動で走り、**エラーがあるとビルドが失敗する**。
+`npm run lint`（`eslint`・設定は `eslint.config.mjs`・next/core-web-vitals）。`npm run build` でも自動で走り、**エラーがあるとビルドが失敗する**。
+Next 15 / React 19 / ESLint 9 / firebase 13 に 2026-10-21 更新（`generateMetadata` の `params` は Promise・`serverExternalPackages`）。
 `react-hooks/exhaustive-deps` は警告（直せる所から直す。意図して外す依存は `// eslint-disable-next-line react-hooks/exhaustive-deps` に理由を書く）。
 `-eslint/*` の規則は入れていないので、その名前の disable 注記を書かない（「規則が見つからない」エラーになる）。
 
