@@ -11,7 +11,7 @@
 import 'server-only'
 import { db } from './firebase'
 import { doc, getDoc } from '@/lib/fsdb'
-import { isMonthLockedInLocks, isMonthLockedForWorkers } from './locks'
+import { isMonthLockedInLocks, isMonthLockedForWorkers, orgKeyOf } from './locks'
 
 /** 締めのメッセージ（締め済みのときに API が返す文言） */
 export function lockedMessage(ym: string): string {
@@ -46,6 +46,27 @@ export async function checkMonthLockedForWorkers(
     return locked ? lockedMessage(ym) : null
   } catch {
     return null
+  }
+}
+
+/**
+ * 「この日から」（適用開始日 'YYYY-MM-DD'）以降に締め済みの月があれば、その締めのキー（'202609_hibi' など）を返す。
+ * 号俸の改定（app/api/jp-wage/revision）と人員マスタの給与欄の開始日（app/api/workers）で共通（2026-10-21 代表決定）。
+ * 開始日を締め済みの月の途中にすると、按分で締めた月の支給額が変わるため、先に締めを解除してもらう。
+ * @param org 会社（'hibi' / 'hfu'）。渡すとその会社の締めだけ（全体ロック含む）。省略＝どの会社の締めでも
+ */
+export async function lockedMonthsFrom(effectiveIso: string, org?: string): Promise<string[]> {
+  try {
+    const snap = await getDoc(doc(db, 'demmen', 'main'))
+    const locks = ((snap.exists() ? snap.data() : {}) as { locks?: Record<string, boolean> }).locks || {}
+    const fromYm = effectiveIso.slice(0, 4) + effectiveIso.slice(5, 7)
+    const orgKey = org ? orgKeyOf(org) : null
+    return Object.entries(locks)
+      .filter(([k, v]) => v === true && /^\d{6}(_|$)/.test(k) && k.slice(0, 6) >= fromYm)
+      .filter(([k]) => !orgKey || k.length === 6 || k.endsWith('_' + orgKey))
+      .map(([k]) => k)
+  } catch {
+    return []
   }
 }
 

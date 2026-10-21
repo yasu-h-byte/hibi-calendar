@@ -1,4 +1,4 @@
-import { getApiRole, isManagerRole } from "@/lib/auth"
+import { getApiRole, isManagerRole, requireCap } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, getDoc, setDoc } from '@/lib/fsdb'
@@ -27,6 +27,13 @@ export async function POST(request: NextRequest) {
     const calSnap = await getDoc(doc(db, 'siteCalendar', docId))
     const calData = calSnap.exists() ? calSnap.data() : null
     const days: Record<string, DayType> | null = calData?.days || null
+
+    // 提出されていないカレンダーの承認（直接承認）は権限表の calendar.forceApprove（代表）だけ（2026-10-21）。
+    //   旧: 画面は代表にだけボタンを出していたが、サーバは事業責任者でも通していた
+    if (calData?.status !== 'submitted') {
+      const denied = await requireCap(request, 'calendar.forceApprove')
+      if (denied) return NextResponse.json({ error: '提出されていないカレンダーを直接承認できるのは代表だけです。職長の提出を待ってから承認してください' }, { status: 403 })
+    }
 
     // 法令適合チェック（変形労働: 月総枠/法定休日/連続勤務）。前月・翌月のカレンダー込み（2026-10-02 総合点検）
     //   error は無条件ブロック、warn（法定休日のない週など）は例外（4週4日制等）があり得るため確認の上で承認可

@@ -663,7 +663,7 @@ export default function CalendarManagePage() {
                     const isSubmitted = site.status === 'submitted'
                     const canSubmit = !isApproved && !isSubmitted  // 職長: まだ提出していない
                     const canApprove = isSubmitted && can(user, 'calendar.approve')  // 上長: 提出済みを承認
-                    const canForceApprove = !isApproved && !isSubmitted && (user.role === 'admin')  // 管理者: 直接承認
+                    const canForceApprove = !isApproved && !isSubmitted && can(user, 'calendar.forceApprove')  // 代表: 提出なしで直接承認（権限表・2026-10-21）
 
                     const exceedsLimit = (() => {
                       const workCount = Object.values(days).filter(d => d === 'work').length

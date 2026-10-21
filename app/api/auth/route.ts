@@ -9,6 +9,7 @@ import { doc, getDoc } from '@/lib/fsdb'
 import { recordAccess, getRequestIp, AccessRole } from '@/lib/accessLog'
 import { createForemanToken, createOwnerToken, createPersonalToken } from '@/lib/session-token'
 import { verifyPassword, passwordFingerprint } from '@/lib/password'
+import { loginLockedUntil, recordLoginFailure, clearLoginFailures } from '@/lib/login-throttle.server'
 
 /** 長さが違っても時間差が出ない比較（代表・共通パスワード用。2026-10-02 総合点検。旧: `===`） */
 function safeEqual(a: string, b: string): boolean {
@@ -24,6 +25,16 @@ export async function POST(request: NextRequest) {
 
   if (typeof password !== 'string' || !password) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // 試行回数の制限（2026-10-21 代表決定: 15 分で 10 回失敗したら 15 分止める。lib/login-throttle.server.ts）
+  const ip = getRequestIp(request)
+  {
+    const until = await loginLockedUntil(ip)
+    if (until) {
+      const min = Math.max(1, Math.ceil((Date.parse(until) - Date.now()) / 60000))
+      return NextResponse.json({ error: `パスワードの間違いが続いたため、あと ${min} 分ほどログインできません` }, { status: 429 })
+    }
   }
 
   // Super admin login: パスワードだけで直接管理者としてログイン
@@ -42,6 +53,7 @@ export async function POST(request: NextRequest) {
       ip: getRequestIp(request),
     }).catch(() => {})
     // 以降はパスワードではなく代表の通行証を送る（ブラウザにパスワードを残さない・2026-09-26）
+    await clearLoginFailures(ip)
     return NextResponse.json({ user, superAdmin: true, sessionToken: createOwnerToken() })
   }
 
@@ -78,16 +90,19 @@ export async function POST(request: NextRequest) {
             ip: getRequestIp(request),
           }).catch(() => {})
           // 以降はパスワードではなく本人の通行証（パスワードの指紋入り）を送る
+          await clearLoginFailures(ip)
           return NextResponse.json({ user: authUser, directLogin: true, sessionToken: createPersonalToken(worker.id, passwordFingerprint(pw)) })
         }
       }
     }
   }
 
-  // 共通パスワードチェック
+  // 共通パスワードチェック（代表・個人・共通のどれにも合わなかった＝失敗を 1 回数える）
   if (!adminPassword || !safeEqual(password, adminPassword)) {
+    await recordLoginFailure(ip)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  await clearLoginFailures(ip)
 
   if (!workerId) {
     // 名前選択リスト: 職長のみ表示（役員・事務は個別パスワードでログイン）

@@ -17,6 +17,7 @@
 import { timingSafeEqual } from 'crypto'
 import type { NextRequest } from 'next/server'
 import { compute, isClosedMonthYm, getBillTotal, getSubconRate } from '@/lib/compute'
+import { isMonthLockedInLocks } from '@/lib/locks'
 import { getMainData, getAttData, getAttDataCached } from '@/lib/compute.server'
 import { applyPayrollCosts } from '@/lib/payroll-cost'
 import { resolveSiteParties, type CompanyLike } from '@/lib/companies'
@@ -163,6 +164,11 @@ export interface IntegrationMonth {
   generatedAt: string
   /** 月の出面が締まっているか（前月より前）。締まっていない月は数字が動く */
   closed: boolean
+  /**
+   * 月次の締め（給与確定）が済んでいるか。会社別（2026-10-21 代表決定）。
+   * closed は「前月より前か」の目安で、締めとは別。帳票の【未確定】と同じく、確定した数字かはこちらで見る
+   */
+  locked: { hibi: boolean; hfu: boolean }
   sites: IntegrationSite[]
   subcons: IntegrationSubcon[]
   peerBilling: { companyId: string; companyName: string; amount: number }[]
@@ -343,6 +349,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     ym,
     generatedAt: new Date().toISOString(),
     closed,
+    locked: { hibi: isMonthLockedInLocks(main.locks, ym, 'hibi'), hfu: isMonthLockedInLocks(main.locks, ym, 'hfu') },
     sites,
     subcons,
     peerBilling,

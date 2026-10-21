@@ -28,6 +28,19 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261021_audit_decisions',
+    title: '守りを 4 つ足しました（ログインの回数制限・締め前の確認・給与欄の開始日・待機料の承認）',
+    content:
+      'ログイン画面でパスワードの間違いが 15 分に 10 回続くと、15 分ほどログインできなくなります（正しいパスワードを入れれば数え直し）。'
+      + '月次の締めでは「有給精算の未処理の申請」も先に処理してもらうようになりました。'
+      + '人員マスタで時給・日額・月給の「この日から」を締め済みの月に入れると止まります（先に締めを解除してください）。'
+      + 'HFU → 日比建設 の請求書では、待機料だけの日も職長承認・最終承認がそろってから発行できます。',
+    category: 'info',
+    publishedAt: '2026-10-21T22:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261021_system_audit',
     title: '画面の開きが速くなりました（システム全体の総点検）',
     content:

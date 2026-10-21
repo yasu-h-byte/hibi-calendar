@@ -62,6 +62,7 @@ export const BACKUP_EXCLUDED: readonly { coll: string; reason: string }[] = [
   { coll: 'demmen', reason: 'main・toolBudget・system・att_YYYYMM をドキュメント単位で退避（BACKUP_DOCS と att の月ごと）' },
   { coll: 'attendanceHistory', reason: '出面の変更履歴（90日の保険・1件ずつが大きい）。正本は att_YYYYMM' },
   { coll: 'accessLog', reason: 'スタッフのアクセス履歴（消えても業務に影響なし）' },
+  { coll: 'loginThrottle', reason: 'ログインの失敗回数（15 分で消える一時的な記録・lib/login-throttle.server.ts）' },
   { coll: 'workerPhotos', reason: '顔写真（撮り直せる・大きい）' },
 ]
 
