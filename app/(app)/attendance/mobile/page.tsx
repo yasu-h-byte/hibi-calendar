@@ -48,6 +48,8 @@ import { orgKeyOf } from '@/lib/locks'
 import { evaluateDayInputs, isWorkDayOf } from '@/lib/attendance-missing'
 import DriverModal from '../components/DriverModal'
 import { Icon } from '@/components/ui/Icon'
+import { ApprovalTrail, CalendarHistoryModal } from '@/components/calendar/ApprovalTrail'
+import type { CalendarTrailFields } from '@/lib/calendar-approval-trail'
 
 // ── 型 ──
 
@@ -132,6 +134,8 @@ interface CalInfo {
   days: CalDays | null
   status: string | null
   rejectedReason: string | null
+  /** 提出・最終承認・差し戻し・取り消しの「いつ・誰が」（/api/calendar/status が名前つきで返す・2026-10-22） */
+  trail?: CalendarTrailFields | null
   /** この月は就業カレンダーを作らない現場（スポット・工期外。PC のカレンダー画面と同じ判定 siteNeedsCalendar） */
   notNeeded?: boolean
 }
@@ -586,6 +590,7 @@ export default function ForemanMobilePage() {
   const [calDaysLocal, setCalDaysLocal] = useState<CalDays>({})
   const [calDirty, setCalDirty] = useState(false)
   const [calLoading, setCalLoading] = useState(false)
+  const [calHistoryOpen, setCalHistoryOpen] = useState(false)
   const approvedEditWarned = useRef(false)
 
   const fetchCal = useCallback(async () => {
@@ -596,7 +601,7 @@ export default function ForemanMobilePage() {
       const d = res.ok ? await res.json() : null
       const mine = d?.sites?.find((s: { siteId: string }) => s.siteId === siteId)
       const info: CalInfo = mine
-        ? { days: mine.days, status: mine.status, rejectedReason: mine.rejectedReason }
+        ? { days: mine.days, status: mine.status, rejectedReason: mine.rejectedReason, trail: mine as CalendarTrailFields }
         : { days: null, status: null, rejectedReason: null, notNeeded: true }
       setCalInfo(info)
       // 未作成の月は PC 画面と同じ既定値（日曜=off・祝日=holiday・それ以外=work）
@@ -631,7 +636,7 @@ export default function ForemanMobilePage() {
       const res = await fetchWithAuth('/api/calendar/save-days', { password,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteId, ym: calYm7, days: calDaysLocal, updatedBy: userId })
+        body: JSON.stringify({ siteId, ym: calYm7, days: calDaysLocal })
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)
@@ -643,7 +648,7 @@ export default function ForemanMobilePage() {
     } finally {
       setSaving(s => s - 1)
     }
-  }, [password, siteId, calYm7, calDaysLocal, userId])
+  }, [password, siteId, calYm7, calDaysLocal])
 
   const submitCal = useCallback(async () => {
     if (!(await confirmDialog({
@@ -1217,6 +1222,10 @@ export default function ForemanMobilePage() {
                   休日 {Object.values(calDaysLocal).filter(v => v !== 'work').length}日
                 </span>
               </div>
+              {/* 提出: 誰が・いつ ／ 最終承認: 誰が・いつ（PC の就業カレンダー画面と同じ部品・2026-10-22） */}
+              <ApprovalTrail cal={calInfo.trail} onHistory={() => setCalHistoryOpen(true)} className="mt-1.5" />
+              <CalendarHistoryModal open={calHistoryOpen} onClose={() => setCalHistoryOpen(false)}
+                siteId={siteId} siteName={siteOptions.find(s => s.id === siteId)?.name || siteId} ym={calYm7} password={password} />
               {calInfo.status === 'rejected' && calInfo.rejectedReason && (
                 <div className="mt-2 p-2 rounded-lg bg-red-50 text-red-700 text-xs">差し戻し理由: {calInfo.rejectedReason}</div>
               )}

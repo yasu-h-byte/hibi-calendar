@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { ym7 } from '@/lib/ym'
+import { appendCalendarStatusLog } from '@/lib/calendar-status-log.server'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,12 +28,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Calendar not found. Save first.' }, { status: 404 })
     }
 
+    const submittedAt = new Date().toISOString()
     await updateDoc(docRef, {
       status: 'submitted',
-      submittedAt: new Date().toISOString(),
+      submittedAt,
       submittedBy,
       rejectedReason: null,
     })
+    // 「いつ・誰が」の台帳（append-only・2026-10-22）
+    await appendCalendarStatusLog({ siteId, ym, event: 'submit', by: submittedBy, at: submittedAt })
 
     return NextResponse.json({ success: true })
   } catch (error) {

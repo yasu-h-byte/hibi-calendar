@@ -7,6 +7,7 @@ import { DayType } from '@/types'
 import { ym7 } from '@/lib/ym'
 import { checkSiteCalendarLegal, legalBlockResponse } from '@/lib/calendar-legal-check'
 import { countWorkDays } from '@/lib/calendar'
+import { appendCalendarStatusLog } from '@/lib/calendar-status-log.server'
 
 export async function POST(request: NextRequest) {
   // 最終承認は管理者・事業責任者のみ（職長は提出まで）。サーバ側でロール強制。
@@ -43,10 +44,16 @@ export async function POST(request: NextRequest) {
       if (blocked) return blocked
     }
 
+    const approvedAt = new Date().toISOString()
     await updateDoc(doc(db, 'siteCalendar', docId), {
       status: 'approved',
-      approvedAt: new Date().toISOString(),
+      approvedAt,
       approvedBy,
+    })
+    // 「いつ・誰が」の台帳（append-only・2026-10-22）
+    await appendCalendarStatusLog({
+      siteId, ym, event: 'approve', by: approvedBy, at: approvedAt,
+      note: calData?.status !== 'submitted' ? '提出なしで直接承認' : null,
     })
 
     // Auto-calculate work days from the calendar and save per-site

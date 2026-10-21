@@ -27,6 +27,12 @@ export interface SiteCalendarInfo {
   submittedBy: number | null
   approvedBy: number | null
   rejectedReason: string | null
+  /** 提出・差し戻し・取り消しの「いつ・誰が」（2026-10-22 画面に出す） */
+  submittedAt: string | null
+  rejectedBy: number | null
+  rejectedAt: string | null
+  revertedBy: number | null
+  revertedAt: string | null
   /** 最終更新時刻（save-days 経由）。承認後に修正された場合の判定に使う */
   updatedAt: string | null
   /** 承認時刻。再署名要否判定の補助 */
@@ -118,12 +124,18 @@ async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
     siteCalendars[data.siteId] = {
       days: data.days || null,
       status,
-      submittedBy: data.submittedBy || null,
-      approvedBy: data.approvedBy || null,
+      // ID は `?? null`（代表は ID 0 なので `|| null` だと消える・2026-10-22）
+      submittedBy: data.submittedBy ?? null,
+      approvedBy: data.approvedBy ?? null,
       rejectedReason: data.rejectedReason || null,
       updatedAt: data.updatedAt || null,
       approvedAt: data.approvedAt || null,
       updatedBy: data.updatedBy ?? null,
+      submittedAt: data.submittedAt || null,
+      rejectedBy: data.rejectedBy ?? null,
+      rejectedAt: data.rejectedAt || null,
+      revertedBy: data.revertedBy ?? null,
+      revertedAt: data.revertedAt || null,
     }
     if (status === 'approved') approvedSiteIds.add(data.siteId)
   })
