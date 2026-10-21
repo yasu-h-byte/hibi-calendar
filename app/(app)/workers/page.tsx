@@ -182,7 +182,7 @@ export default function WorkersPage() {
     router.replace('/workers', { scroll: false })
   }, [searchParams, workers])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isAdminOrApprover = authUser?.role === 'admin' || authUser?.role === 'approver'
+  const isAdminOrApprover = can(authUser, 'wage.view')   // 権限表（lib/permissions.ts）で判定。旧: role の直書き（2026-10-21 総点検）
   // 給与欄の直接の書き換えは代表だけ（lib/permissions.ts workers.editPay・サーバーも同じ判定）
   const canEditPay = can(authUser, 'workers.editPay')
   // 人員マスタを直せる人（事務＝森田さん・代表）。見るだけの人（政仁さん・役員・ほかの事務）には

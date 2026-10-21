@@ -411,7 +411,7 @@ export default function EvaluationPage() {
     setRecalculatingWeights(false)
   }
 
-  const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
+  const isAdmin = can(authUser, 'wage.view')   // 権限表（lib/permissions.ts）で判定。旧: role の直書き（2026-10-21 総点検）
   // 評価カテゴリのスコープ分担（2026-05-12 ユーザー指示）
   //   - 靖仁さん (admin, id=0): 生活態度のみ評価
   //   - その他評価者: 日本語/勤務態度/職業能力の3つ（生活態度は非表示）

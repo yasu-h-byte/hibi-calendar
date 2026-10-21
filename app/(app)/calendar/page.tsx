@@ -1,6 +1,7 @@
 'use client'
 
 import { siteLeaderLabel } from '@/lib/companies'
+import { can } from '@/lib/permissions'
 import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
@@ -434,7 +435,7 @@ export default function CalendarManagePage() {
   if (!user) return null
 
   // ── 今やること・一覧の選択（2026-10-01）──
-  const canApproveRole = user.role === 'admin' || user.role === 'approver'
+  const canApproveRole = can(user, 'calendar.approve')   // 権限表（lib/permissions.ts）で判定。旧: role の直書き（2026-10-21 総点検）
   const submittedSites = visibleSites.filter(s => s.status === 'submitted')
   const notReadySites = visibleSites.filter(s => !s.status || s.status === 'rejected' || s.status === 'draft')
   const openQuestions = questions.filter(q => !q.resolved).length
@@ -661,7 +662,7 @@ export default function CalendarManagePage() {
                   {(() => {
                     const isSubmitted = site.status === 'submitted'
                     const canSubmit = !isApproved && !isSubmitted  // 職長: まだ提出していない
-                    const canApprove = isSubmitted && (user.role === 'admin' || user.role === 'approver')  // 上長: 提出済みを承認
+                    const canApprove = isSubmitted && can(user, 'calendar.approve')  // 上長: 提出済みを承認
                     const canForceApprove = !isApproved && !isSubmitted && (user.role === 'admin')  // 管理者: 直接承認
 
                     const exceedsLimit = (() => {

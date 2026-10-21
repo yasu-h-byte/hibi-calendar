@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react'
+import { can } from '@/lib/permissions'
 import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
@@ -63,7 +64,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
   const [sortKey, setSortKey] = useState<SortKey>('evalCount')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
+  const isAdmin = can(authUser, 'wage.view')   // 権限表（lib/permissions.ts）で判定。旧: role の直書き（2026-10-21 総点検）
 
   // URL ?worker=N で詳細を自動オープン
   useEffect(() => {

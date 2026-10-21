@@ -23,6 +23,7 @@
  * 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify）に置き換え
  */
 import { Icon } from '@/components/ui/Icon'
+import { can } from '@/lib/permissions'
 import { fmtYen as yen } from '@/lib/format'
 import { Chip, PageHeader } from '@/components/ui/PageParts'
 import InvoiceNav from '@/components/invoice/InvoiceNav'
@@ -140,8 +141,8 @@ function PeerInvoicePageInner() {
   useEffect(() => { load() }, [load])
 
   // 承認フロー（2026-09-26）: 事務（森田さん）が申請 → 事業責任者（政仁さん）・管理者が承認して発行
-  const canIssue = user?.role === 'admin' || user?.role === 'approver'
-  const canRequest = user?.role === 'jimu'
+  const canIssue = can(user, 'invoice.approve')   // 権限表（lib/permissions.ts）で判定。旧: role の直書き（2026-10-21 総点検）
+  const canRequest = can(user, 'invoice.request') && !canIssue   // 事務は申請だけ（承認できる人は申請の欄を出さない）
 
   const post = async (payload: Record<string, unknown>, action: string) => {
     setBusy(true)
