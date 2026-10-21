@@ -3,8 +3,8 @@ import { getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { getAttendanceHistory } from '@/lib/attendance-history'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
-import { getAttendanceDoc } from '@/lib/attendance'
-import { getMainData } from '@/lib/compute'
+import { getAttendanceDoc } from '@/lib/attendance.server'
+import { getMainData } from '@/lib/compute.server'
 import { dayApprovalOf, finalApprovedEditError, writeAttendanceEntry } from '@/lib/attendance-save'
 import { logActivity } from '@/lib/activity'
 import type { AttendanceEntry } from '@/types'
@@ -30,8 +30,14 @@ export async function GET(request: NextRequest) {
   const a = await requireAdmin(request)
   if (a.error) return a.error
   const ym = request.nextUrl.searchParams.get('ym') || undefined
-  const items = await getAttendanceHistory({ ym, limitCount: 100 })
-  return NextResponse.json({ items })
+  try {
+    const items = await getAttendanceHistory({ ym, limitCount: 100 })
+    return NextResponse.json({ items })
+  } catch (e) {
+    // 読めなかった理由を画面に返す（旧: そのまま落ちて本文なしの 500。画面は「サーバが受け付けませんでした」としか出せなかった）
+    console.error('[attendance/history] GET error:', e)
+    return NextResponse.json({ error: `変更履歴を読めませんでした: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -51,7 +57,7 @@ export async function POST(request: NextRequest) {
   // 締め済み月は復元しない（給与確定後のデータ変更を防ぐ既存ルールに合わせる）
   {
     // その人の会社が締め済みなら拒否（2026-10-02 総合点検: 会社なしだと両社とも締めるまで復元できた）
-    const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+    const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
     const lockErr = await checkMonthLockedForWorkers(h.ym, [h.workerId])
     if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
   }

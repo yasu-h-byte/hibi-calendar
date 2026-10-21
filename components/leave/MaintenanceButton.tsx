@@ -10,6 +10,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import MaintenanceModal from './MaintenanceModal'
 
 interface Props {
@@ -24,9 +25,7 @@ export default function MaintenanceButton({ password, onChanged, onOpenGrantModa
 
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/leave/health-check', {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth('/api/leave/health-check', { password })
       if (res.ok) {
         const data = await res.json()
         const c = data.counts || {}

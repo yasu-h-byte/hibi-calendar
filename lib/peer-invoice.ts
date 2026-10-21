@@ -17,8 +17,15 @@ import {
   calcManDays, calcOvertimeHours, type AttendanceEntry, type SiteWorkSchedule,
 } from '@/types'
 import {
-  calcTobiEquiv, getSiteRates, parseDKey, parseSdKey, isDispatched,
-  type MainData, type ComputeResult, type CompanyPaymentTerms, type RawSubcon,
+  calcTobiEquiv,
+  getSiteRates,
+  parseDKey,
+  parseSdKey,
+  isDispatched,
+  type MainData,
+  type ComputeResult,
+  type CompanyPaymentTerms,
+  type RawSubcon,
 } from './compute'
 import { buildPeerStatements } from './peer-statement'
 import { isTobiGroup, isDokoGroup } from './jobs'
@@ -87,9 +94,10 @@ export interface PeerInvoiceLine {
   days: number
   /**
    * 'h' = 残業の行（HFU → 日比建設 の請求書・2026-09-26）。数量は時間、単価は残業単価。
-   * 無ければ人工の行
+   * 'standby' = 待機料の行（HFU → 日比建設 の請求書・2026-10-21）。数量は現場の都合で休ませた日数、単価は 1人工の単価 × 率。
+   * 無ければ人工の行。人工を合計するときは `!unit` で絞る（`unit !== 'h'` だと待機の日数が人工に混ざる）
    */
-  unit?: 'h'
+  unit?: 'h' | 'standby'
   rate: number
   amount: number
 }
@@ -101,6 +109,8 @@ export interface PeerInvoiceDetailCell {
   ot?: number
   /** 夜勤を含む日か */
   night?: boolean
+  /** 待機（現場の都合で休ませた日・出面の 0.6補）。md は 0 で人工に数えず、明細には「待」と印字する（HFU → 日比建設・2026-10-21） */
+  standby?: boolean
 }
 
 export interface PeerInvoiceDetailRow {
@@ -110,6 +120,8 @@ export interface PeerInvoiceDetailRow {
   /** day(1〜31) → セル */
   cells: Record<number, PeerInvoiceDetailCell>
   total: number
+  /** 待機の日数（HFU → 日比建設 の待機料の数量）。0 のときは項目ごと無い（Firestore に undefined を書かない） */
+  standbyDays?: number
 }
 
 export interface PeerInvoiceSiteDetail {
@@ -119,6 +131,8 @@ export interface PeerInvoiceSiteDetail {
   /** day → その日の現場合計人工 */
   dayTotals: Record<number, number>
   siteTotal: number
+  /** 現場の待機の日数の合計（行の standbyDays の和）。0 のときは項目ごと無い */
+  standbyDays?: number
 }
 
 export interface PeerInvoiceCompanyInfo {
@@ -169,8 +183,12 @@ export function buildSiteDetail(
   ym: string,
   siteId: string,
   siteName: string,
-  /** HFU → 日比建設 の請求書は HFU 所属の作業員だけ・外注なしで作る（lib/hfu-invoice.ts） */
-  opts?: { workerFilter?: (w: MainData['workers'][number]) => boolean; includeSubcons?: boolean },
+  /**
+   * HFU → 日比建設 の請求書は HFU 所属の作業員だけ・外注なしで作る（lib/hfu-invoice.ts）。
+   * includeStandby: 現場の都合で休ませた日（w=0.6）を人工 0 の「待機」セルとして明細に出し、日数を数える（待機料・2026-10-21）。
+   * 応援の請求書（既定）は従来どおり除外
+   */
+  opts?: { workerFilter?: (w: MainData['workers'][number]) => boolean; includeSubcons?: boolean; includeStandby?: boolean },
 ): PeerInvoiceSiteDetail {
   const nDays = daysInYm(ym)
   const siteWs = main.sites.find(s => s.id === siteId)?.workSchedule as SiteWorkSchedule | undefined
@@ -189,9 +207,20 @@ export function buildSiteDetail(
     //   2026-10-02 総合点検: 旧は旧アプリの現場別リスト（assign[site].dispatch）だけを見ていて、今のアプリで
     //   出向にした人（dispatchTo）が原価からは差し引かれるのに請求書の人工には残っていた
     if (isDispatched(main, w.id, siteId, ym)) continue
+    if (!isTobiGroup(w.job) && !isDokoGroup(w.job)) continue
+    if (v.w === 0.6 && opts?.includeStandby) {
+      // 待機（現場都合休）: 人工には数えず、日数だけ数えて明細に「待」と出す。出面に入れられるのはカレンダーの仕事の日だけ
+      // （lib/attendance-save.ts）なので、ここで仕事の日かどうかは見直さない
+      const day = parseInt(pk.day, 10)
+      const key = `w${w.id}`
+      let row = rows.get(key)
+      if (!row) { row = { key, label: w.name, isSubcon: false, cells: {}, total: 0 }; rows.set(key, row) }
+      row.cells[day] = { md: 0, standby: true }
+      row.standbyDays = (row.standbyDays || 0) + 1
+      continue
+    }
     const isComp = v.w === 0.6 && w.visa !== 'none'
     if (isComp) continue
-    if (!isTobiGroup(w.job) && !isDokoGroup(w.job)) continue
     const md = calcManDays(v)
     if (md <= 0) continue
     const day = parseInt(pk.day, 10)
@@ -232,8 +261,9 @@ export function buildSiteDetail(
     if (t > 0) dayTotals[d] = Math.round(t * 100) / 100
   }
   const siteTotal = Math.round(sortedRows.reduce((s, r) => s + r.total, 0) * 100) / 100
+  const standbyDays = sortedRows.reduce((s, r) => s + (r.standbyDays || 0), 0)
 
-  return { siteId, siteName, rows: sortedRows, dayTotals, siteTotal }
+  return { siteId, siteName, rows: sortedRows, dayTotals, siteTotal, ...(standbyDays > 0 ? { standbyDays } : {}) }
 }
 
 // ─────────────────────────────────────────────

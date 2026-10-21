@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { readAuth, clearAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import { ToastProvider } from '@/components/Toast'
@@ -22,35 +24,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (!stored) {
       router.push('/')
       return
     }
     try {
-      const parsed = JSON.parse(stored)
+      const parsed = stored
       setUser(parsed.user)
 
       // ハートビート: 管理画面マウント時にアクセス記録を更新
       // 既存の同日レコードがあれば accessCount を増やすだけ（負荷小）
       const password = parsed.password
       if (password && parsed.user) {
-        fetch('/api/heartbeat', {
+        fetchWithAuth('/api/heartbeat', { password,
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-admin-password': password,
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             workerId: parsed.user.workerId,
             workerName: parsed.user.name,
-            role: parsed.user.role,
-          }),
+            role: parsed.user.role
+          })
         }).then(res => {
           // 401 = 保存しているパスワード・通行証がもう使えない（通行証導入前の職長のログイン、
           //   パスワード変更、通行証の期限切れ）。ログインし直してもらう（2026-09-26）
           if (res.status === 401) {
-            localStorage.removeItem('hibi_auth')
+            clearAuth()
             router.push('/?relogin=1')
           }
         }).catch(() => { /* ignore */ })

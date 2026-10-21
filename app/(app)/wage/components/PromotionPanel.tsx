@@ -10,13 +10,15 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
+import { fmtYen as yen } from '@/lib/format'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import {
   promote, dailyForStep, capDaily, GRADE_LABELS, GRADES_IN_ORDER, type JpGrade,
 } from '@/lib/jp-wage'
 import { isAlreadyRetired } from '@/lib/workers'
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 interface W { id: number; name: string; grade: JpGrade | ''; step: number | null; daily: number }
 interface Rec {
@@ -42,8 +44,8 @@ export default function PromotionPanel() {
   const load = useCallback(async (password: string) => {
     try {
       const [wr, pr] = await Promise.all([
-        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-        fetch('/api/jp-wage/promotion', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/workers', { password }),
+        fetchWithAuth('/api/jp-wage/promotion', { password }),
       ])
       if (wr.ok) {
         const j = await wr.json()
@@ -63,8 +65,8 @@ export default function PromotionPanel() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const p = raw ? JSON.parse(raw)?.password : ''
+      const raw = readAuth()
+      const p = raw ? raw?.password : ''
       if (!p) return
       setPw(p); load(p)
     } catch { /* 履歴が出せなくても致命的ではない */ }
@@ -87,10 +89,10 @@ export default function PromotionPanel() {
     }))) return
     setBusy(true); setErr(''); setMsg('')
     try {
-      const res = await fetch('/api/jp-wage/promotion', {
+      const res = await fetchWithAuth('/api/jp-wage/promotion', { password: pw,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({ workerId: target.id, toGrade, addPitch: pitch, reason, at }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workerId: target.id, toGrade, addPitch: pitch, reason, at })
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || `失敗しました（${res.status}）`)

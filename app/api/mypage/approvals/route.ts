@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken } from '@/lib/workers'
-import { getMainData, type MainData } from '@/lib/compute'
-import { getAttendanceDoc, getApprovalForDay, setFinalApprovalForDay } from '@/lib/attendance'
+import { getWorkerByToken } from '@/lib/workers.server'
+import { type MainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
+import { getAttendanceDoc, getApprovalForDay, setFinalApprovalForDay } from '@/lib/attendance.server'
 import { approvingForemenOfSite, isProxyApprovalSite } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { getDocs, collection, query, where } from '@/lib/fsdb'
@@ -11,6 +12,7 @@ import {
 } from '@/lib/foreman-todo'
 import type { AttendanceEntry, Site } from '@/types'
 import { todayJstIso } from '@/lib/date-utils'
+import { approvalDateError } from '@/lib/attendance-authz'
 
 /**
  * マイページの「承認すること」（2026-10-01 代表依頼）
@@ -220,9 +222,12 @@ export async function POST(request: NextRequest) {
     { const r = await breakCheck(); if (r) return r }
     const approvedDays: number[] = []
     const skipped: { day: number; reason: string }[] = []
+    const todayIso = todayJstIso()
     for (const dd of days) {
       const d = Number(dd)
-      if (!Number.isInteger(d) || d < 1 || d > 31) { skipped.push({ day: d, reason: '不正な日付' }); continue }
+      // 先の日・実在しない日は承認しない（PC の最終承認と同じ決まり。2026-10-21 総点検で横展開）
+      const dateErr = approvalDateError(ym, d, todayIso)
+      if (dateErr) { skipped.push({ day: d, reason: dateErr }); continue }
       const cur = await getApprovalForDay(siteId, ym, d)
       if (!cur?.foreman) { skipped.push({ day: d, reason: '職長承認がまだ' }); continue }
       if (cur.final) { skipped.push({ day: d, reason: '最終承認済み' }); continue }

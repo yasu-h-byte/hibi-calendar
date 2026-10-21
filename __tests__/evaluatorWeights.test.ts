@@ -8,8 +8,8 @@ import type { AttendanceEntry } from '@/types'
  * 「共働 0 日 → 0.1」になっていた。評価者本人の同日同現場の出勤も共働として数える。
  */
 const ATT: Record<string, { d: Record<string, AttendanceEntry> }> = {}
-vi.mock('@/lib/compute', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@/lib/compute')>()
+vi.mock('@/lib/compute.server', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@/lib/compute.server')>()
   return {
     ...mod,
     getAttData: vi.fn(async (ym: string) => ATT[ym] ?? { d: {} }),

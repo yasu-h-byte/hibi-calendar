@@ -12,6 +12,8 @@
  */
 
 import { Suspense, useEffect, useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { PageHeader, ToolButton, UnderlineTabs } from '@/components/ui/PageParts'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { GRADE_LABELS } from '@/lib/jp-wage'
@@ -55,8 +57,8 @@ function WageHub() {
   const [allowed, setAllowed] = useState<boolean | null>(null)
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const wid = raw ? JSON.parse(raw)?.user?.workerId : undefined
+      const raw = readAuth()
+      const wid = raw ? raw?.user?.workerId : undefined
       // workerId 0（代表）は falsy なので includes で判定
       setAllowed(typeof wid === 'number' && ALLOWED_VIEWERS.includes(wid))
     } catch { setAllowed(false) }
@@ -66,10 +68,10 @@ function WageHub() {
   useEffect(() => {
     if (allowed !== true) return
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const pw = raw ? JSON.parse(raw)?.password : ''
+      const raw = readAuth()
+      const pw = raw ? raw?.password : ''
       if (!pw) return
-      fetch('/api/workers', { headers: { 'x-admin-password': pw } })
+      fetchWithAuth('/api/workers', { password: pw })
         .then(r => r.ok ? r.json() : null)
         .then(j => {
           if (!j?.workers) return

@@ -12,6 +12,7 @@
  * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { useCallback, useMemo, useState } from 'react'
+import { isEmployedOn } from '@/lib/workers'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import type { AttEntry, Worker, DayType } from '../types'
@@ -71,7 +72,7 @@ export default function BulkEntryModal({
         const onHomeLeave = (homeLeaves || []).some(hl =>
           String(hl.workerId) === String(w.id) && hl.status === 'approved' && iso >= hl.startDate && iso <= hl.endDate)
         // 入社前の日も入れない（2026-10-02 点検: 10/26 入社の人の 10/1〜25 に 0.6補 が入り過払いになりえた）
-        if (kind !== 'clear' && (onHomeLeave || (w.retired && iso > w.retired) || (w.hireDate && iso < w.hireDate))) { skipAbsent++; continue }
+        if (kind !== 'clear' && (onHomeLeave || !isEmployedOn(w, iso))) { skipAbsent++; continue }   // 在籍の判定は lib/workers.ts（2026-10-21）
         // 有給・帰国・試験のマスは「入力済みを変えない」を外しても上書きしない（有給の取り消しは申請の画面から）
         if (cur && (cur.p || cur.hk || cur.exam)) { skipProtected++; continue }
         if (keepExisting && cur && kind !== 'clear') { skipExisting++; continue }

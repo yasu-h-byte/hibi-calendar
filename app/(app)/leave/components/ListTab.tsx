@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { orgKeyOf } from '@/lib/locks'
 import { PLWorker, PendingGrant } from '../types'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -78,8 +79,8 @@ export default function ListTab({
   const groups = useMemo(() => ({
     all: workers,
     jp: workers.filter(isJp),
-    hibiForeign: workers.filter(w => !isJp(w) && w.org !== 'hfu'),
-    hfu: workers.filter(w => w.org === 'hfu'),
+    hibiForeign: workers.filter(w => !isJp(w) && orgKeyOf(w.org) !== 'hfu'),
+    hfu: workers.filter(w => orgKeyOf(w.org) === 'hfu'),
   }), [workers])
 
   const rows = useMemo(() => {
@@ -213,7 +214,7 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
   const a = attentionOf(w)
   const remCls = rem <= 0 ? 'text-red-600 dark:text-red-400' : rem <= 3 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-white'
   const badge = jp ? '日本人' : (VISA_LABEL[w.visa] || w.visa)
-  const orgBadge = w.org === 'hfu' ? 'HFU' : '日比'
+  const orgBadge = orgKeyOf(w.org) === 'hfu' ? 'HFU' : '日比'
   const fiveUsed = Math.min(5, w.periodUsed ?? 0)
 
   return (

@@ -6,9 +6,6 @@ import { db } from '@/lib/firebase'
 import { collection, getDocs } from '@/lib/fsdb'
 import {
   compute,
-  getMainData,
-  getAttData,
-  getAttDataCached,
   isClosedMonthYm,
   calcTobiEquiv,
   getSiteRates,
@@ -20,10 +17,15 @@ import {
   parseDKey,
   parseSdKey,
 } from '@/lib/compute'
+import {
+  getMainData,
+  getAttData,
+  getAttDataCached,
+} from '@/lib/compute.server'
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isAlreadyRetired, isEmployedOn } from '@/lib/workers'
-import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe, addDaysIso, currentYmJst, todayJstDate } from '@/lib/date-utils'
+import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe, addDaysIso, currentYmJst, todayJstDate, jstWallClock } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
 import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter, jpExpectedGrantWithoutRecords } from '@/lib/leave-compute'
 import type { HomeLeaveEntry } from '@/lib/homeLeave'
@@ -43,11 +45,7 @@ export const dynamic = 'force-dynamic'
  * 1日前にずれて表示されない事象への対応。
  */
 function getJstNow(): Date {
-  // toLocaleString('en-CA', { timeZone: 'Asia/Tokyo' }) は "YYYY-MM-DD HH:mm:ss" 形式
-  const jstStr = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Tokyo', hour12: false })
-  // "YYYY-MM-DD, HH:mm:ss" のカンマ区切りを取り除いて T 区切りに
-  const [datePart, timePart] = jstStr.replace(',', '').trim().split(' ')
-  return new Date(`${datePart}T${timePart}`)
+  return jstWallClock()
 }
 
 /**
@@ -826,7 +824,7 @@ export async function GET(request: NextRequest) {
       //    過去月の閲覧では検出をスキップする（過去は月次集計画面で確認する運用）。
       const payrollWorkers: PayrollLite[] = []
       if (ym === nowYm) {
-        const { computeMonthly } = await import('@/lib/compute')
+        const { computeMonthly } = await import('@/lib/compute-monthly')
         const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
         const attNow = await loadAtt(ym)
         const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}

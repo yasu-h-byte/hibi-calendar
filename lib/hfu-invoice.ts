@@ -12,6 +12,13 @@
  * 残業は人工に換算せず、HFU がこれまで手作りしていた請求書（2025-12 分の現物）に合わせて
  * 「鳶 残業 ◯h × 残業単価」の別行にする。残業単価 = 1人工の単価 ÷ 8 × 1.25（円未満四捨五入。30,000 → 4,688）。
  * 請求額は出面明細（buildSiteDetail）の行から直接積み上げるので、明細と本体の人工・残業時間は必ず一致する。
+ *
+ * 待機料（2026-10-21 代表決定・2026年10月分から）: 現場の都合で休ませた日（出面の 0.6補）は、これまで人工に入れず
+ * HFU がその日の給与を持っていた。HFU は日比建設の専属なので、休ませた分は「待機料」として日比建設へ請求する。
+ *   待機料 = 日数 × 1人工の単価 × 率（設定・既定 60%。円未満四捨五入）。現場ごと・鳶/土工ごとの別行
+ *   個人の給与額（時給）は使わない（請求書は給与を見られない人も扱う帳票）。社内単価×60% は外国人の日額を上回るので、
+ *   保証枠内で 100% 払った日（lib/compute.ts COMP_FULL_WITHIN_GUARANTEE_FROM_YM）も HFU の持ち出しにならない
+ *   明細には「待」と印字し、人工の合計には入れない（待機の日数は別の列）
  */
 import type { AttendanceEntry } from '@/types'
 import type { MainData } from './compute'
@@ -32,6 +39,28 @@ export { HFU_INVOICE_COMPANY_ID }
 export const HFU_DEFAULT_INVOICE_PREFIX = 'HFU'
 
 export const isHfuInvoiceCompanyId = (id: string) => id === HFU_INVOICE_COMPANY_ID
+
+/**
+ * 待機料をこの月分から請求する（2026-10-21 代表決定）。
+ * 当初は 10月分からの予定だったが、HFU が手作りで出していた 9月分の請求書（紙の控え）が現場都合休を
+ * 「0.6人工」として人工に含めていた（= 単価×60%・待機料と同じ額）ことが分かり、システムの数字が紙と合うよう
+ * DEDURA＋ で扱う最初の月（9月分）からにした。それより前の月は請求に入れない
+ */
+export const HFU_STANDBY_FROM_YM = '202609'
+/** 待機料の率の既定（%）。設定（hfuInvoice.standbyRatePct）が未保存のときに使う */
+export const HFU_STANDBY_DEFAULT_RATE_PCT = 60
+/** 請求書に印字する待機料の行の名前（「鳶 待機料」のように職種の後ろに付く） */
+export const HFU_STANDBY_LABEL = '待機料'
+
+/** 待機料の単価 = 1人工の単価 × 率%（円未満四捨五入）。30,000 × 60% → 18,000 */
+export function hfuStandbyRate(dayRate: number, ratePct: number): number {
+  return Math.round(dayRate * ratePct / 100)
+}
+
+/** その月に待機料を請求するか（開始月以降で、率が 0 より大きい） */
+export function hfuStandbyEnabled(ym: string, settings: { standbyRatePct?: number } | null | undefined): boolean {
+  return ym >= HFU_STANDBY_FROM_YM && (settings?.standbyRatePct ?? HFU_STANDBY_DEFAULT_RATE_PCT) > 0
+}
 
 const round2 = (v: number) => Math.round(v * 100) / 100
 
@@ -64,6 +93,8 @@ export function buildHfuInvoiceDraft(
   const settings = main.hfuInvoice || null
   const tobiRate = settings?.tobiRate || 0
   const dokoRate = settings?.dokoRate || 0
+  const standbyOn = hfuStandbyEnabled(ym, settings)
+  const standbyPct = settings?.standbyRatePct ?? HFU_STANDBY_DEFAULT_RATE_PCT
   const isHfu = (w: { org?: string }) => isWorkerOfOrg(w, 'hfu')
   const workerById = new Map(main.workers.map(w => [w.id, w]))
 
@@ -81,12 +112,12 @@ export function buildHfuInvoiceDraft(
   const lines: PeerInvoiceLine[] = []
   for (const siteId of siteIds) {
     const siteName = siteBillingName(sites, siteId)
-    const d = buildSiteDetail(main, attD, {}, ym, siteId, siteName, { workerFilter: isHfu, includeSubcons: false })
+    const d = buildSiteDetail(main, attD, {}, ym, siteId, siteName, { workerFilter: isHfu, includeSubcons: false, includeStandby: standbyOn })
     if (d.rows.length === 0) continue
     detail.push(d)
 
-    // 明細の行から鳶/土工の人工と残業時間を積み上げる
-    const sum = { 鳶: { days: 0, ot: 0 }, 土工: { days: 0, ot: 0 } }
+    // 明細の行から鳶/土工の人工・残業時間・待機の日数を積み上げる
+    const sum = { 鳶: { days: 0, ot: 0, standby: 0 }, 土工: { days: 0, ot: 0, standby: 0 } }
     for (const row of d.rows) {
       const w = workerById.get(parseInt(row.key.slice(1), 10))
       if (!w) continue
@@ -94,14 +125,20 @@ export function buildHfuInvoiceDraft(
       if (!role) continue
       sum[role].days += row.total
       sum[role].ot += Object.values(row.cells).reduce((s, c) => s + (c.ot || 0), 0)
+      sum[role].standby += row.standbyDays || 0
     }
     for (const role of ['鳶', '土工'] as const) {
       const rate = role === '鳶' ? tobiRate : dokoRate
-      const days = round2(sum[role].days), ot = round2(sum[role].ot)
+      const days = round2(sum[role].days), ot = round2(sum[role].ot), standby = sum[role].standby
       if (days > 0) lines.push({ siteId, siteName, role, days, rate, amount: Math.round(days * rate) })
       if (ot > 0) {
         const otRate = hfuOtRate(rate)
         lines.push({ siteId, siteName, role, unit: 'h', days: ot, rate: otRate, amount: Math.round(ot * otRate) })
+      }
+      if (standby > 0) {
+        // 待機料: 日数 × (1人工の単価 × 率)。現場ごと・職種ごとの別行（人工 → 残業 → 待機料 の順）
+        const standbyRate = hfuStandbyRate(rate, standbyPct)
+        lines.push({ siteId, siteName, role, unit: 'standby', days: standby, rate: standbyRate, amount: Math.round(standby * standbyRate) })
       }
     }
   }
@@ -109,7 +146,7 @@ export function buildHfuInvoiceDraft(
 
   const byName = (a: { siteName: string }, b: { siteName: string }) => a.siteName.localeCompare(b.siteName, 'ja')
   detail.sort(byName)
-  // 現場ごとに まとめて、その中は 鳶 → 鳶 残業 → 土工 → 土工 残業 の順（lines は現場の順に push 済み）
+  // 現場ごとに まとめて、その中は 鳶 → 鳶 残業 → 鳶 待機料 → 土工 → … の順（lines は現場の順に push 済み）
   const siteOrder = new Map(detail.map((d, i) => [d.siteId, i]))
   lines.sort((a, b) => (siteOrder.get(a.siteId)! - siteOrder.get(b.siteId)!))
 

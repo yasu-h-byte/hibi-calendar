@@ -16,6 +16,8 @@
  */
 
 import { Fragment, Suspense, useEffect, useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import { paySheetFigures, PAID_LEAVE_DAYS, GRADE_LABELS, ageOn, type JpGrade } from '@/lib/jp-wage'
 import PaySheetModern from '@/components/wage/PaySheetModern'
@@ -118,11 +120,11 @@ function SheetBody() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const pw = raw ? JSON.parse(raw)?.password : ''
+      const raw = readAuth()
+      const pw = raw ? raw?.password : ''
       if (!pw) { setErr('ログインが必要です'); return }
       const eff = params.get('effective')
-      fetch(`/api/jp-wage/revision${eff ? `?effective=${eff}` : ''}`, { headers: { 'x-admin-password': pw } })
+      fetchWithAuth(`/api/jp-wage/revision${eff ? `?effective=${eff}` : ''}`, { password: pw })
         .then(async r => { if (!r.ok) throw new Error(`取得に失敗しました（${r.status}）`); return r.json() })
         .then((j: Payload) => setData(j))
         .catch(e => setErr(e instanceof Error ? e.message : '不明なエラー'))

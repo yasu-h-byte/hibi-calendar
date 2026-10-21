@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap } from '@/lib/auth'
-import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
+import { compute } from '@/lib/compute'
+import { getMainData, getMultiMonthAttData } from '@/lib/compute.server'
 import { buildPeerStatements } from '@/lib/peer-statement'
 
 /**

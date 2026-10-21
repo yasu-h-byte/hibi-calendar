@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { fetchWithAuth } from '@/lib/api-client'
 import { calcGrantMonthFromHire, calcLegalPL } from '@/lib/leave-utils'
 import { calcLastUsableDayIso, todayJstIso } from '@/lib/date-utils'
 import { jpDeemedDate } from '@/lib/leave-compute'
@@ -76,17 +78,17 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/leave', {
+      const res = await fetchWithAuth('/api/leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'grant',
           workerId: Number(grantForm.workerId),
           fy: grantForm.grantDate ? grantForm.grantDate.slice(0, 4) : String(new Date().getFullYear()),
           grantDays: grantForm.grantDays,
           grantMonth: grantForm.grantMonth,
-          grantDate: grantForm.grantDate,
-        }),
+          grantDate: grantForm.grantDate
+        })
       })
       // 2026-08-27 修正: 失敗（重複・検証エラー等）を成功扱いにしない。
       //   付与日数は支給額に直結するため、失敗時はフォームを保持して理由を表示する
@@ -121,7 +123,7 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
               aria-invalid={!!workerError}
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
               <option value="">選択してください</option>
-              {workers.map(w => <option key={w.id} value={w.id}>{w.name}（{w.org === 'hfu' ? 'HFU' : '日比'}）</option>)}
+              {workers.map(w => <option key={w.id} value={w.id}>{w.name}（{orgKeyOf(w.org) === 'hfu' ? 'HFU' : '日比'}）</option>)}
             </select>
             <FieldError>{workerError}</FieldError>
           </div>

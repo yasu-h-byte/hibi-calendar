@@ -11,6 +11,7 @@
  *   - complete: 全現場承認済み かつ 全対象者が署名完了
  */
 import { checkApiAuth, requireCap } from '@/lib/auth'
+import { jstWallClock } from '@/lib/date-utils'
 import { NextRequest, NextResponse } from 'next/server'
 import { loadCalendarMatrix, projectSignSites } from '@/lib/calendar-matrix'
 import { summarizeSignStatus } from '@/lib/calendar-sign-status'
@@ -19,7 +20,7 @@ import { ym7 } from '@/lib/ym'
 export const dynamic = 'force-dynamic'
 
 function jstNow(): Date {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  return jstWallClock()
 }
 
 function clampInt(v: string | null, def: number, min: number, max: number): number {

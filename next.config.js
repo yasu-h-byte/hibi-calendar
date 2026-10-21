@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 依存の同梱の起点（Next 15）。worktree（.claude/worktrees/…）で親リポジトリの lockfile を拾って警告が出るのを止める
+  outputFileTracingRoot: __dirname,
   /**
    * セキュリティヘッダ（2026-10-02 総合点検）。
    * - Referrer-Policy: 個人のリンク（/attendance/<合言葉>・/mypage/<合言葉>）から外のサイトへ飛んだとき、URL の合言葉を
@@ -37,17 +39,16 @@ const nextConfig = {
       ],
     }]
   },
-  experimental: {
-    // 【サーバ側】firebase-admin（Node 専用・ネイティブ依存多数）を外部パッケージ扱いに。
-    // サーバ関数バンドルには含めず、node_modules ごと依存トレースして同梱する。
-    // これが無いと require('firebase-admin') が Vercel 上で "Cannot find module" になる。
-    // pdfjs-dist（一次への請求書: 大林組の控え PDF の読み取り・lib/pdf-text.server.ts）も ESM のまま実行時に読む
-    serverComponentsExternalPackages: ['firebase-admin', 'pdfjs-dist'],
-    // pdfjs が実行時にファイルとして読む CMap（日本語フォント）と標準フォントを、API の関数に同梱する
-    outputFileTracingIncludes: {
-      // 2026-10-20 Preview で全部の PDF が読めなかった: 同梱一覧に pdf.worker.mjs（偽のワーカー）と package.json が無かった。build/ ごと入れる
-      '/api/prime-invoice': ['./node_modules/pdfjs-dist/package.json', './node_modules/pdfjs-dist/cmaps/**', './node_modules/pdfjs-dist/standard_fonts/**', './node_modules/pdfjs-dist/legacy/build/**'],
-    },
+  // Next 15: serverComponentsExternalPackages → serverExternalPackages、outputFileTracingIncludes は experimental の外へ（2026-10-21）
+  // 【サーバ側】firebase-admin（Node 専用・ネイティブ依存多数）を外部パッケージ扱いに。
+  // サーバ関数バンドルには含めず、node_modules ごと依存トレースして同梱する。
+  // これが無いと require('firebase-admin') が Vercel 上で "Cannot find module" になる。
+  // pdfjs-dist（一次への請求書: 大林組の控え PDF の読み取り・lib/pdf-text.server.ts）も ESM のまま実行時に読む
+  serverExternalPackages: ['firebase-admin', 'pdfjs-dist'],
+  // pdfjs が実行時にファイルとして読む CMap（日本語フォント）と標準フォントを、API の関数に同梱する
+  outputFileTracingIncludes: {
+    // 2026-10-20 Preview で全部の PDF が読めなかった: 同梱一覧に pdf.worker.mjs（偽のワーカー）と package.json が無かった。build/ ごと入れる
+    '/api/prime-invoice': ['./node_modules/pdfjs-dist/package.json', './node_modules/pdfjs-dist/cmaps/**', './node_modules/pdfjs-dist/standard_fonts/**', './node_modules/pdfjs-dist/legacy/build/**'],
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

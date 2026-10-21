@@ -17,6 +17,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
+import { fmtYen as yen } from '@/lib/format'
 import Link from 'next/link'
 import { PageHeader, Segment, Chip, RowButton } from '@/components/ui/PageParts'
 import { confirmDialog } from '@/lib/confirm-dialog'
@@ -36,7 +39,6 @@ import { WageMap } from './WageMap'
 
 const OWNER_ID = 0 // 日比靖仁
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 const signed = (v: number) => (v >= 0 ? '+' : '−') + '¥' + Math.abs(Math.round(v)).toLocaleString()
 
 export default function WageAnalysisPage() {
@@ -51,10 +53,9 @@ export default function WageAnalysisPage() {
   const load = useCallback(async (password: string, b: WageBasis) => {
     {
       try {
-        const headers = { 'x-admin-password': password }
         const [res, planRes] = await Promise.all([
-          fetch('/api/workers', { headers }),
-          fetch('/api/wage-analysis/plan', { headers }),
+          fetchWithAuth('/api/workers', { password }),
+          fetchWithAuth('/api/wage-analysis/plan', { password }),
         ])
         if (!res.ok || !planRes.ok) throw new Error('取得に失敗しました')
         const { workers } = await res.json()
@@ -92,8 +93,8 @@ export default function WageAnalysisPage() {
   useEffect(() => {
     let password = ''
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const parsed = raw ? JSON.parse(raw) : null
+      const raw = readAuth()
+      const parsed = raw
       password = parsed?.password || ''
       if (parsed?.user?.workerId !== OWNER_ID) { setAllowed(false); return }
       setAllowed(true)
@@ -431,9 +432,9 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
     setBusy(changeId)
     try {
       for (const { row, to } of list) {
-        const res = await fetch('/api/workers', {
+        const res = await fetchWithAuth('/api/workers', { password: pw,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'update', id: row.id,
             hourlyRate: to,
@@ -444,8 +445,8 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
             hourlyRateFrom: c!.effective,
             prevHourlyRate: row.currentHourly,
             rateFrom: c!.effective,
-            prevRate: row.currentHourly * 7,
-          }),
+            prevRate: row.currentHourly * 7
+          })
         })
         if (!res.ok) {
           const j = await res.json().catch(() => ({}))

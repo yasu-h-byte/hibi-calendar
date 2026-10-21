@@ -16,6 +16,9 @@
  */
 
 import { useEffect, useState, useRef } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useParams, useRouter } from 'next/navigation'
 import type { Evaluation, EvaluationScores, EvaluationReview, ABCGrade } from '@/types'
 import { EVALUATION_CATEGORIES } from '@/lib/evaluation-criteria'
@@ -87,15 +90,15 @@ export default function PrintEvaluationPage() {
   const printed = useRef(false)
 
   useEffect(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('hibi_auth') : null
+    const stored = readAuth()
     if (!stored) {
       router.replace('/')
       return
     }
-    const { password } = JSON.parse(stored)
+    const { password } = stored
     ;(async () => {
       try {
-        const res = await fetch('/api/evaluation', { headers: { 'x-admin-password': password } })
+        const res = await fetchWithAuth('/api/evaluation', { password })
         if (!res.ok) {
           setError('評価データの取得に失敗しました')
           setLoading(false)
@@ -140,7 +143,7 @@ export default function PrintEvaluationPage() {
 
   const years = yearsFromHire(worker.hireDate)
   const tenureLabel = years > 0 ? `${years}年` : '1年未満'
-  const orgLabel = worker.org === 'hfu' ? 'HFU' : '日比建設'
+  const orgLabel = orgKeyOf(worker.org) === 'hfu' ? 'HFU' : '日比建設'
   const visaLabel = VISA_LABELS[worker.visa] || worker.visa
   const reviews: EvaluationReview[] = evaluation.reviews || []
   const weights = evaluation.evaluatorWeights || {}
@@ -222,7 +225,7 @@ export default function PrintEvaluationPage() {
         {/* ── ヘッダ ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1.5px solid #1B2A4A', paddingBottom: 4, marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src="/logo.png" alt="HIBI" style={{ height: 24 }} />
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>HIBI CONSTRUCTION</div>

@@ -62,10 +62,15 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
     }
   }, [role, workerId])
 
+  // 10 分ごと。タブが隠れている間は止め、戻ったときに 1 回取り直す（2026-10-21 総点検）。
+  //   旧: 5 分ごと・隠れていても続く。サーバーの確定月キャッシュ（lib/compute.server.ts・旧 5 分）とちょうど同じ間隔で、
+  //   ポーリングのたびにキャッシュが切れて最大 37 か月ぶんの出面を読み直していた（開きっぱなしの PC 1 台で 1 日 1 万読み）。
   useEffect(() => {
     fetchNotifications()
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000)
-    return () => clearInterval(interval)
+    const interval = setInterval(() => { if (!document.hidden) fetchNotifications() }, 10 * 60 * 1000)
+    const onVisible = () => { if (!document.hidden) fetchNotifications() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible) }
   }, [fetchNotifications])
 
   useEffect(() => {

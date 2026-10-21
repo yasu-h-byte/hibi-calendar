@@ -8,6 +8,7 @@
  * - 返信が来ると、メニューの「困ったこと・要望」に件数が付く（開くと消える）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { notify } from '@/lib/notify'
 import { visibleMenuItems } from '@/lib/menu'
@@ -93,7 +94,7 @@ function AttachPicker({ items, onChange }: { items: Attach[]; onChange: (a: Atta
     <div className="flex items-center gap-2 flex-wrap">
       {items.map((a, i) => (
         <span key={i} className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element -- data URL のプレビュー */}
+          { }
           <img src={a.dataUrl} alt={a.name} className="h-14 w-14 object-cover rounded border border-hibi-line dark:border-gray-600" />
           <button type="button" onClick={() => onChange(items.filter((_, j) => j !== i))}
             className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-700 text-white text-xs leading-5 text-center" aria-label="この画像を外す">×</button>
@@ -124,7 +125,7 @@ export default function FeedbackPage() {
   const fetchList = useCallback(async () => {
     if (!password) return
     try {
-      const r = await fetch('/api/feedback', { headers: { 'x-admin-password': password } })
+      const r = await fetchWithAuth('/api/feedback', { password })
       if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('読み込み', j?.error || 'サーバが受け付けませんでした'); return }
       const j = await r.json()
       setList(j.list || [])
@@ -238,10 +239,10 @@ function NewModal({ password, pageOptions, onClose, onCreated }: {
   const send = async () => {
     setTried(true)
     if (err) return null
-    const r = await fetch('/api/feedback', {
+    const r = await fetchWithAuth('/api/feedback', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'create', kind, page, title, text, images }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', kind, page, title, text, images })
     })
     const j = await r.json().catch(() => null)
     if (!r.ok) return { ok: false, error: j?.error || 'サーバが受け付けませんでした' }
@@ -304,7 +305,7 @@ function ThreadPanel({ id, me, password, onClose, onChanged }: {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`/api/feedback?id=${encodeURIComponent(id)}`, { headers: { 'x-admin-password': password } })
+      const r = await fetchWithAuth(`/api/feedback?id=${encodeURIComponent(id)}`, { password })
       const j = await r.json().catch(() => null)
       if (!r.ok) { notify.failed('読み込み', j?.error || 'サーバが受け付けませんでした'); return null }
       setT(j.thread)
@@ -318,10 +319,10 @@ function ThreadPanel({ id, me, password, onClose, onChanged }: {
     load().then(async th => {
       if (!alive || !th) return
       if (isUnreadFor(th, me)) {
-        await fetch('/api/feedback', {
+        await fetchWithAuth('/api/feedback', { password,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-          body: JSON.stringify({ action: 'markRead', id }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'markRead', id })
         }).catch(() => null)
         onChanged()
       }
@@ -335,10 +336,10 @@ function ThreadPanel({ id, me, password, onClose, onChanged }: {
   const send = async () => {
     setTried(true)
     if (err) return null
-    const r = await fetch('/api/feedback', {
+    const r = await fetchWithAuth('/api/feedback', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'reply', id, text, images }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reply', id, text, images })
     })
     const j = await r.json().catch(() => null)
     if (!r.ok) return { ok: false, error: j?.error || 'サーバが受け付けませんでした' }
@@ -351,10 +352,10 @@ function ThreadPanel({ id, me, password, onClose, onChanged }: {
 
   const setStatus = async (status: FeedbackStatus) => {
     try {
-      const r = await fetch('/api/feedback', {
+      const r = await fetchWithAuth('/api/feedback', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'setStatus', id, status }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setStatus', id, status })
       })
       const j = await r.json().catch(() => null)
       if (!r.ok) { notify.failed('状態の変更', j?.error || 'サーバが受け付けませんでした'); return }
@@ -409,7 +410,7 @@ function ThreadPanel({ id, me, password, onClose, onChanged }: {
                   <div className="flex gap-2 flex-wrap mt-1.5">
                     {m.images.map(im => im.url ? (
                       <a key={im.path} href={im.url} target="_blank" rel="noopener noreferrer" title="大きく見る">
-                        {/* eslint-disable-next-line @next/next/no-img-element -- 署名つきURL（15分）の画像 */}
+                        { }
                         <img src={im.url} alt={im.name} className="h-24 max-w-[180px] object-cover rounded border border-hibi-line dark:border-gray-600" />
                       </a>
                     ) : <span key={im.path} className="text-xs text-hibi-sub">（画像を開けません）</span>)}

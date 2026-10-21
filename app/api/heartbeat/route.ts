@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/firebase'
-import { doc, getDoc } from '@/lib/fsdb'
+import { getMainData } from '@/lib/compute.server'
 import { recordAccess, getRequestIp, AccessRole } from '@/lib/accessLog'
 import { getApiAuthUser } from '@/lib/auth'
 
@@ -33,9 +32,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ recorded: false, reason: 'identity not resolved' })
     }
 
-    const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-    const mainData = mainSnap.exists() ? mainSnap.data() : {}
-    const workers = (mainData.workers || []) as { id: number; name: string; org?: string; job?: string; jobType?: string }[]
+    // 人員マスタは getMainData（30 秒キャッシュ・2026-10-21 総点検。旧: 画面を開くたび demmen/main を読み直し）
+    const workers = (await getMainData()).workers as { id: number; name: string; org?: string; job?: string; jobType?: string }[]
     const w = workers.find(x => x.id === auth.actor)
     if (!w) return NextResponse.json({ recorded: false, reason: 'identity not resolved' })
 

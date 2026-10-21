@@ -15,6 +15,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { notify } from '@/lib/notify'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import { RowButton } from '@/components/ui/PageParts'
@@ -57,9 +58,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/leave/health-check', {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth('/api/leave/health-check', { password })
       if (!res.ok) {
         setError(`健全性チェックに失敗しました（HTTP ${res.status}）`)
         return
@@ -80,10 +79,10 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
   ) => {
     setRunning(label)
     try {
-      const res = await fetch('/api/leave', {
+      const res = await fetchWithAuth('/api/leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       })
       if (res.ok) {
         const data = await res.json()

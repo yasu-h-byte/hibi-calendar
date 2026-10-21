@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where } from '@/lib/fsdb'
-import { getMainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
 import { getStaffDocsBucket, signedReadUrl } from '@/lib/storage-admin'
 import {
   FEEDBACK_COL, FEEDBACK_LIMITS, feedbackTextError, unreadAfterPost, isFeedbackKind, isFeedbackStatus,

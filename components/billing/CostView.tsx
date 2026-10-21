@@ -2,6 +2,9 @@
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { useEffect, useState, useCallback } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 import { notify } from '@/lib/notify'
 import { visaLabel } from '@/lib/labels'
@@ -182,8 +185,8 @@ export default function CostView({ ym: ymProp, onYmChange }: { ym: string; onYmC
   const [billingRowsVersion, setBillingRowsVersion] = useState<Record<string, number>>({})
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
-    if (stored) setPassword(JSON.parse(stored).password)
+    const stored = readAuth()
+    if (stored) setPassword(stored.password)
   }, [])
 
   // 月・期間・現場を素早く切り替えたとき、前の条件の応答をあとから画面に出さない（lib/hooks/useLatestRequest・2026-10-02）
@@ -196,7 +199,7 @@ export default function CostView({ ym: ymProp, onYmChange }: { ym: string; onYmC
     const req = latest.begin()
     try {
       const params = new URLSearchParams({ ym, period, site: siteFilter })
-      const res = await fetch(`/api/cost?${params}`, { headers: { 'x-admin-password': password }, signal: req.signal })
+      const res = await fetchWithAuth(`/api/cost?${params}`, { password,  signal: req.signal })
       if (!req.isCurrent()) return
       if (res.ok) {
         const d = await res.json()
@@ -249,10 +252,10 @@ export default function CostView({ ym: ymProp, onYmChange }: { ym: string; onYmC
     // 2026-10-02 総合点検: 旧は res.ok を見ておらず、締め済み・権限なし・通信失敗でも「保存できた」ように見えていた
     let res: Response
     try {
-      res = await fetch('/api/cost', {
+      res = await fetchWithAuth('/api/cost', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteId, ym: month, amounts }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, ym: month, amounts })
       })
     } catch (e) {
       notify.failed('請求額を保存', e); return
@@ -1139,8 +1142,8 @@ function KPILineChart({
 
 /** Site member list grouped by org */
 function SiteMemberList({ members }: { members: SiteMember[] }) {
-  const hibi = members.filter(m => m.org !== 'hfu')
-  const hfu = members.filter(m => m.org === 'hfu')
+  const hibi = members.filter(m => orgKeyOf(m.org) !== 'hfu')
+  const hfu = members.filter(m => orgKeyOf(m.org) === 'hfu')
 
   const renderGroup = (label: string, workers: SiteMember[], badgeClass: string) => {
     if (workers.length === 0) return null

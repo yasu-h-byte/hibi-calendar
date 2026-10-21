@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, afterEach } from 'vitest'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 import type { AttendanceEntry } from '@/types'
 

@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { probeStaffDocsBucket } from '@/lib/storage-admin'
 import { backupHealth, type LastBackupInfo } from '@/lib/backup-plan'
+import { hasDedicatedSessionSecret } from '@/lib/session-token'
 
 /**
  * ヘルス／稼働モード確認エンドポイント（Admin SDK 移行の検証・障害診断用・2026-06〜）
@@ -62,6 +63,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     adminMode,
+    // 通行証の署名鍵に専用の SESSION_SECRET（32 文字以上）が使われているか（2026-10-21。未設定だと鍵がパスワードそのもの）
+    sessionSecret: hasDedicatedSessionSecret(),
     ...diag,
     readOk,
     readError,

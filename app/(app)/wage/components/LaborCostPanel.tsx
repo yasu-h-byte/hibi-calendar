@@ -8,12 +8,12 @@
  * 料率は加入先・年度で変わるので、画面で変えられる（この端末に保存）。
  */
 import { useEffect, useMemo, useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import { ageOn, ANNUAL_DAYS, normalizePaidLeaveDays } from '@/lib/jp-wage'
 import {
   DEFAULT_WELFARE_RATES, WELFARE_RATE_LABELS, laborCostDelta, totalWelfarePercent, type WelfareRates,
 } from '@/lib/labor-cost'
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 const plus = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + '¥' + Math.abs(Math.round(v)).toLocaleString()
 const STORE_KEY = 'hibi_welfare_rates'
 

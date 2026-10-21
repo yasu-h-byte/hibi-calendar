@@ -10,7 +10,7 @@
  * 解決するため、本人のサイン状況だけ返す。
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken } from '@/lib/workers.server'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 
 // query パラメータを使うため強制的に動的レンダリング

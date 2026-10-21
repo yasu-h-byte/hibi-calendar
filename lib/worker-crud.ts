@@ -1,7 +1,8 @@
 import { randomBytes } from 'crypto'
+import { orgKeyOf } from './locks'
 import { db } from './firebase'
 import { doc, getDoc, runTransaction } from '@/lib/fsdb'
-import { invalidateMainCache } from './compute'
+import { invalidateMainCache } from './compute.server'
 import type { ScheduledWorkerChange, ScheduledWorkerChangeField } from '@/types'
 
 export interface WorkerData {
@@ -49,11 +50,6 @@ async function getMainDoc() {
   return { docRef, data: docSnap.data() }
 }
 
-export async function getAllWorkers(): Promise<WorkerData[]> {
-  const { data } = await getMainDoc()
-  return (data.workers || []) as WorkerData[]
-}
-
 /**
  * 社員IDの採番ルール（2026-05-27 〜）
  *
@@ -72,7 +68,7 @@ function assignWorkerId(
 ): number {
   const isForeigner = newWorker.visa !== 'none' && newWorker.visa !== ''
   const isJimu = newWorker.job === 'jimu'
-  const isHfu = newWorker.org === 'hfu'
+  const isHfu = orgKeyOf(newWorker.org) === 'hfu'
 
   let bandStart = 0
   let bandEnd = 0
@@ -272,4 +268,3 @@ export async function applyDueScheduledWorkerChanges(todayIso: string) {
   if (applied.length > 0) invalidateMainCache()
   return applied
 }
-

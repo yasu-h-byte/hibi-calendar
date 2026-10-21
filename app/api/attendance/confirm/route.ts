@@ -13,12 +13,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from '@/lib/fsdb'
-import { mapRawWorkers, findWorkerByToken } from '@/lib/workers'
-import { getMainData } from '@/lib/compute'
-import { getAttendanceDoc } from '@/lib/attendance'
+import { mapRawWorkers, findWorkerByToken, isAlreadyRetired } from '@/lib/workers'
+import { getMainData } from '@/lib/compute.server'
+import { getAttendanceDoc } from '@/lib/attendance.server'
 import { type HierarchySite } from '@/lib/site-hierarchy'
 import { todayJstIso } from '@/lib/date-utils'
-import { requireCap } from '@/lib/auth'
+import { requireCap, actorLabel } from '@/lib/auth'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { confirmTargetYm, summaryFingerprint, type AttConfirmDoc } from '@/lib/attendance-confirm'
 import { confirmMonthContext, isPhoneConfirmMonth, isValidConfirmation, staffConfirmRows } from '@/lib/attendance-confirm-server'
@@ -45,7 +45,7 @@ function staffTargetYm(main: { locks?: Record<string, boolean> }, worker: { hire
   if (!isPhoneConfirmMonth(ym, todayIso, isMonthLockedInLocks(main.locks, ym, org))) return null
   const r = monthRange(ym)
   if (worker.hireDate && worker.hireDate > r.end) return null
-  if (worker.retired && worker.retired < r.start) return null
+  if (isAlreadyRetired(worker.retired, r.start)) return null   // 期間の前に退職（古い 'true' も退職済み・2026-10-21）
   return ym
 }
 
@@ -136,7 +136,7 @@ async function resolveIssue(request: NextRequest, body: Record<string, unknown>)
   await setDoc(ref, { issueOpen: false, resolvedAt, resolvedBy: by, ...(reply ? { reply } : {}) }, { merge: true })
   try {
     const { logActivity } = await import('@/lib/activity')
-    await logActivity('admin', 'attendance.confirm.resolve', `${c.workerName} ${ym} 本人の連絡を対応済み（${by}）${reply ? `: ${reply}` : ''}`)
+    await logActivity(await actorLabel(request), 'attendance.confirm.resolve', `${c.workerName} ${ym} 本人の連絡を対応済み（${by}）${reply ? `: ${reply}` : ''}`)
   } catch { /* ログ失敗は本体に影響させない */ }
   return NextResponse.json({ success: true, resolvedAt, resolvedBy: by })
 }

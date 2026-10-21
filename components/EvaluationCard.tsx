@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { can } from '@/lib/permissions'
 import { useRouter } from 'next/navigation'
 import { fetchWithAuth } from '@/lib/api-client'
 import { AuthUser } from '@/types'
@@ -97,7 +98,7 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
   if (loading || sessions.length === 0) return null
 
   // admin/approver は最終承認権限を持つ
-  const canApprove = user.role === 'admin' || user.role === 'approver'
+  const canApprove = can(user, 'wage.decide')   // 権限表（lib/permissions.ts）で判定。旧: role の直書き（2026-10-21 総点検）
 
   return (
     <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl overflow-hidden">

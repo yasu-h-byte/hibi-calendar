@@ -4,6 +4,8 @@
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -43,6 +45,8 @@ interface HfuInvoiceForm {
   profile: CompanyProfile
   tobiRate: number
   dokoRate: number
+  /** 待機料の率（%・既定 60）。現場の都合で休ませた日 × 1人工の単価 × 率（2026-10-21・10月分〜） */
+  standbyRatePct: number
   payMonthOffset: 1 | 2
   payDay: 'end' | number
 }
@@ -55,7 +59,7 @@ interface HfuInvoiceForm {
  */
 const EMPTY_HFU_INVOICE: HfuInvoiceForm = {
   profile: { ...EMPTY_COMPANY_PROFILE, name: '', nameEn: '', invoicePrefix: 'HFU' },
-  tobiRate: 0, dokoRate: 0, payMonthOffset: 1, payDay: 'end',
+  tobiRate: 0, dokoRate: 0, standbyRatePct: 60, payMonthOffset: 1, payDay: 'end',
 }
 
 /** 請求書の発行者情報の入力欄（日比建設の自社情報・HFU の情報で共通） */
@@ -382,10 +386,10 @@ export default function SettingsPage() {
   const [usersLoading, setUsersLoading] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
       try {
-        const { password: pw } = JSON.parse(stored)
+        const { password: pw } = stored
         if (pw) setPassword(pw)
       } catch { /* ignore */ }
     }
@@ -400,9 +404,7 @@ export default function SettingsPage() {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch('/api/settings', {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth('/api/settings', { password })
       if (!res.ok) throw new Error('Unauthorized')
       const data = await res.json()
       setRates({ tobiRate: 0, dokoRate: 0, baseDays: 20, ...data.defaultRates })
@@ -416,7 +418,7 @@ export default function SettingsPage() {
   const fetchHfuInvoice = useCallback(async () => {
     if (!password) return
     try {
-      const res = await fetch('/api/settings?action=getHfuInvoice', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/settings?action=getHfuInvoice', { password })
       if (!res.ok) return
       const h = (await res.json()).hfuInvoice
       if (!h) return
@@ -424,6 +426,7 @@ export default function SettingsPage() {
         profile: { ...EMPTY_HFU_INVOICE.profile, ...(h.profile || {}), bank: { ...EMPTY_HFU_INVOICE.profile.bank, ...(h.profile?.bank || {}) } },
         tobiRate: h.tobiRate || 0,
         dokoRate: h.dokoRate || 0,
+        standbyRatePct: typeof h.standbyRatePct === 'number' ? h.standbyRatePct : 60,
         payMonthOffset: h.paymentTerms?.payMonthOffset === 2 ? 2 : 1,
         payDay: h.paymentTerms?.payDay ?? 'end',
       })
@@ -433,7 +436,7 @@ export default function SettingsPage() {
   const fetchCompanyProfile = useCallback(async () => {
     if (!password) return
     try {
-      const res = await fetch('/api/settings?action=getCompanyProfile', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/settings?action=getCompanyProfile', { password })
       if (!res.ok) return
       const data = await res.json()
       if (data.companyProfile) setCompanyProfile({ ...EMPTY_COMPANY_PROFILE, ...data.companyProfile, bank: { ...EMPTY_COMPANY_PROFILE.bank, ...(data.companyProfile.bank || {}) } })
@@ -444,8 +447,8 @@ export default function SettingsPage() {
     if (!password) return
     try {
       const [pwRes, wRes] = await Promise.all([
-        fetch('/api/settings?action=getUserPasswords', { headers: { 'x-admin-password': password } }),
-        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/settings?action=getUserPasswords', { password }),
+        fetchWithAuth('/api/workers', { password }),
       ])
       if (pwRes.ok) {
         const data = await pwRes.json()
@@ -476,9 +479,7 @@ export default function SettingsPage() {
       if (filterUser) params.set('userId', filterUser)
       if (filterAction) params.set('action', filterAction)
 
-      const res = await fetch(`/api/activity?${params.toString()}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/activity?${params.toString()}`, { password })
       if (res.ok) {
         const data = await res.json()
         setActivityEntries(data.entries || [])
@@ -494,7 +495,7 @@ export default function SettingsPage() {
     if (!password) return
     setUsersLoading(true)
     try {
-      const workersRes = await fetch('/api/workers', { headers: { 'x-admin-password': password } })
+      const workersRes = await fetchWithAuth('/api/workers', { password })
       if (workersRes.ok) {
         const data = await workersRes.json()
         const all: UserWorker[] = data.workers || []
@@ -526,9 +527,7 @@ export default function SettingsPage() {
     setAnnLoading(true)
     try {
       // 投稿の編集・削除用なので、投稿したものだけ（リリースノートはコード側・lib/release-notes.ts）
-      const res = await fetch('/api/announcements?scope=posted', {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth('/api/announcements?scope=posted', { password })
       if (res.ok) {
         const data = await res.json()
         setAnnouncements(data.announcements || [])
@@ -548,15 +547,15 @@ export default function SettingsPage() {
       showMessage('error', 'タイトルと本文を入力してください')
       return null
     }
-    const userStored = localStorage.getItem('hibi_auth')
-    const publishedBy = userStored ? (JSON.parse(userStored).user?.name || '管理者') : '管理者'
+    const userStored = readAuth()
+    const publishedBy = userStored ? (userStored.user?.name || '管理者') : '管理者'
     const body = annEditId
       ? { action: 'update', id: annEditId, ...annForm }
       : { action: 'add', ...annForm, publishedBy }
-    const res = await fetch('/api/announcements', {
+    const res = await fetchWithAuth('/api/announcements', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -574,10 +573,10 @@ export default function SettingsPage() {
       description: 'スタッフの画面からも消えます。',
       confirmLabel: '削除する',
     }))) return
-    const res = await fetch('/api/announcements', {
+    const res = await fetchWithAuth('/api/announcements', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'delete', id }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id })
     })
     if (res.ok) {
       showMessage('success', '削除しました')
@@ -604,39 +603,38 @@ export default function SettingsPage() {
   }
 
   const handleSaveRates = async () => {
-    const res = await fetch('/api/settings', {
+    const res = await fetchWithAuth('/api/settings', { password,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-admin-password': password,
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         action: 'saveDefaultRates',
         tobiRate: rates.tobiRate,
         dokoRate: rates.dokoRate,
-        baseDays: rates.baseDays,
-      }),
+        baseDays: rates.baseDays
+      })
     })
     if (!res.ok) return failReason(res)
     showMessage('success', 'デフォルト単価を保存しました')
   }
 
   const handleSaveCompanyProfile = async () => {
-    const res = await fetch('/api/settings', {
+    const res = await fetchWithAuth('/api/settings', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'saveCompanyProfile', companyProfile }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'saveCompanyProfile', companyProfile })
     })
     if (!res.ok) return failReason(res, '管理者パスワードでログインしているか確認してください')
     showMessage('success', '請求書の自社情報を保存しました')
   }
 
   const handleSaveHfuInvoice = async () => {
-    const { profile, tobiRate, dokoRate, payMonthOffset, payDay } = hfuInvoice
-    const res = await fetch('/api/settings', {
+    const { profile, tobiRate, dokoRate, standbyRatePct, payMonthOffset, payDay } = hfuInvoice
+    const res = await fetchWithAuth('/api/settings', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, paymentTerms: { closing: 'end', payMonthOffset, payDay } } }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, standbyRatePct, paymentTerms: { closing: 'end', payMonthOffset, payDay } } })
     })
     if (!res.ok) return failReason(res, '管理者パスワードでログインしているか確認してください')
     showMessage('success', 'HFU → 日比建設 の請求書の設定を保存しました')
@@ -645,13 +643,12 @@ export default function SettingsPage() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetchWithAuth('/api/settings', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: 'backup' }),
+        body: JSON.stringify({ action: 'backup' })
       })
       if (!res.ok) throw new Error('Export failed')
       const data = await res.json()
@@ -711,13 +708,12 @@ export default function SettingsPage() {
     if (!importPreview) return
     setRestoring(true)
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetchWithAuth('/api/settings', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: 'restore', data: importPreview.raw }),
+        body: JSON.stringify({ action: 'restore', data: importPreview.raw })
       })
       if (!res.ok) {
         const err = await res.json()
@@ -896,6 +892,7 @@ export default function SettingsPage() {
               HFU 所属の作業員が働いた人工（全現場）を、HFU から日比建設へ請求する請求書の設定です。
               金額は 人工 × 下の単価（税抜）。残業は「時間 × 残業単価（単価÷8×1.25）」の別の行になります（従来の請求書と同じ）。
               土工のいない月は土工の単価が空欄でも発行できます。宛先には上の「請求書の自社情報」（日比建設）の住所を印字します。
+              現場の都合で休ませた日（出面の 0.6補）は、2026年10月分から「待機料」の行（日数 × 1人工の単価 × 下の率）で請求します。率を 0 にすると出しません。
             </p>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
@@ -907,6 +904,12 @@ export default function SettingsPage() {
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">土工 1人工の単価（税抜・円）</label>
                 <input type="number" min={0} value={hfuInvoice.dokoRate || ''} onChange={e => setHfuInvoice(h => ({ ...h, dokoRate: Number(e.target.value) || 0 }))}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">待機料の率（1人工の単価に対する %・既定 60）</label>
+                <input type="number" min={0} max={100} value={hfuInvoice.standbyRatePct} onChange={e => setHfuInvoice(h => ({ ...h, standbyRatePct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums" />
+                <p className="text-2xs text-gray-400 mt-1">鳶 {hfuInvoice.tobiRate.toLocaleString()}円 なら 1日 {Math.round(hfuInvoice.tobiRate * hfuInvoice.standbyRatePct / 100).toLocaleString()}円</p>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">支払月（月末締め）</label>
@@ -992,10 +995,10 @@ export default function SettingsPage() {
                   // 空欄は「変更なし」。null は削除
                   const changes = Object.fromEntries(Object.entries(pwChanges).filter(([, v]) => v === null || (typeof v === 'string' && v !== '')))
                   if (Object.keys(changes).length === 0) { showMessage('error', '変更がありません'); return null }
-                  const res = await fetch('/api/settings', {
+                  const res = await fetchWithAuth('/api/settings', { password,
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                    body: JSON.stringify({ action: 'saveUserPasswords', changes }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'saveUserPasswords', changes })
                   })
                   if (!res.ok) return failReason(res)
                   showMessage('success', '個人パスワードを保存しました（本人に口頭で伝えてください）')

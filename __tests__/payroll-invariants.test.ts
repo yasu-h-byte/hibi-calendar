@@ -16,7 +16,8 @@
  *   3. 全ケースで lib/payroll-validator.ts の不変条件を検証
  */
 import { describe, test, expect } from 'vitest'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 import { validatePayroll } from '@/lib/payroll-validator'
 
 // ─────────────────────────────────────────────────────────────

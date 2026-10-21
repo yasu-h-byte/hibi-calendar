@@ -13,6 +13,7 @@
  * 判定は lib/approval-gap.ts（工種サイトは親にまとめ、子で承認した古い記録も数える・2分キャッシュ）。
  */
 import { approvalGap, FINAL_APPROVAL_REQUIRED_FROM_YM, type ApprovalGap, type FamilyDay } from './approval-gap'
+import { orgKeyOf } from './locks'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 import { parseDKey } from './compute'
 import { mapRawWorkers } from './workers'
@@ -35,7 +36,7 @@ export interface MonthApprovalStatus {
   complete: boolean
 }
 
-const isHfu = (o?: string) => o === 'hfu' || o === 'HFU'
+const isHfu = (o?: string) => orgKeyOf(o) === 'hfu'
 
 /** 旧（2026-08 分まで）: 出勤・残業のある「現場（親）×日」 */
 function workedFamilyDays(

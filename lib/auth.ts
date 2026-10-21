@@ -1,4 +1,5 @@
 import { AuthUser, UserRole, Site, Worker } from '@/types'
+import { currentYmJst } from '@/lib/date-utils'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
@@ -57,6 +58,16 @@ export type ApiAuthResult =
   | { authorized: true; actor: number | 'super-admin' }
   | { authorized: false }
 
+/**
+ * 操作ログ（lib/activity.ts logActivity）に残す操作者（2026-10-21 総点検）。
+ * 旧は約 60 か所が固定文字列 'admin' で、誰が所定日数を変えた・人員を消したか辿れなかった。
+ * 代表の通行証 → 'super-admin'、個人・職長の通行証 → workerId。確かめられなければ 'admin'（旧と同じ）
+ */
+export async function actorLabel(request: NextRequest): Promise<string> {
+  const auth = await getApiAuthUser(request)
+  return auth.authorized ? String(auth.actor) : 'admin'
+}
+
 export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResult> {
   const authHeader = request.headers.get('x-admin-password')
   if (!authHeader) return { authorized: false }
@@ -103,7 +114,7 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
  */
 async function isTokenHolderActive(workerId: number): Promise<boolean> {
   try {
-    const { getMainData } = await import('@/lib/compute')
+    const { getMainData } = await import('@/lib/compute.server')
     const main = (await getMainData()) as unknown as { workers?: { id: number; retired?: string }[] }
     const w = (main.workers || []).find(x => x.id === workerId)
     if (!w) return false
@@ -121,9 +132,7 @@ export const OWNER_WORKER_ID = 0
 
 /** 当月の YYYYMM を返す（JST 基準） */
 function currentYm(): string {
-  const now = new Date()
-  const jst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  return `${jst.getFullYear()}${String(jst.getMonth() + 1).padStart(2, '0')}`
+  return currentYmJst()
 }
 
 // 職長の判定（computeForemanSites / foremenOfSiteForMonth / approvingForemenOfSite / isProxyApprovalSite）は
@@ -295,7 +304,7 @@ export async function getCallerPermRole(request: NextRequest): Promise<PermRole 
   const auth = await getApiAuthUser(request)
   if (!auth.authorized) return null
   if (auth.actor === 'super-admin') return 'owner'
-  const { getMainData } = await import('@/lib/compute')
+  const { getMainData } = await import('@/lib/compute.server')
   const main = await getMainData()
   const workers = mapRawWorkers((main.workers || []) as unknown[])
   const w = workers.find(x => x.id === auth.actor)
@@ -315,7 +324,7 @@ export async function getApiRole(request: NextRequest, ym?: string): Promise<Api
   // 個人パスワード → 人員マスタから実ロールを解決
   // 2026-10-02: getMainData（30秒キャッシュ）経由に。requireCap / callerCan が1リクエストで何度も呼ぶため、
   //   毎回 main（約260KB）を読み直していた（CLAUDE.md「読み取り回数を増やさない」）
-  const { getMainData } = await import('@/lib/compute')
+  const { getMainData } = await import('@/lib/compute.server')
   const main = (await getMainData()) as unknown as Record<string, unknown>
   // ⚠️ Firestore の生データは職種が `job`（Worker 型は `jobType`）。必ず mapRawWorkers で写像してから
   //   buildAuthUser に渡す（2026-09-26: 生のまま渡すと jobType が空になり、事務・役員の役割を取り違えた）

@@ -5,6 +5,7 @@
  * - 出面ドキュメントは呼び出し側で1回だけ読んで渡す。カレンダーは現場ごとに1回、承認は lib/approval-gap.ts（2分キャッシュ）
  */
 import { db } from './firebase'
+import { isAlreadyRetired } from './workers'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 import { approvalGap, type FamilyDay } from './approval-gap'
@@ -196,7 +197,7 @@ export function staffConfirmTargets<W extends ConfirmWorker & { visaType?: strin
   }
   return workers.filter(w =>
     withEntries.has(w.id) && !!w.visaType && w.visaType !== 'none'
-    && !(w.retired && w.retired < start) && !(w.hireDate && w.hireDate > end)
+    && !isAlreadyRetired(w.retired, start) && !(w.hireDate && w.hireDate > end)
     && (org === 'all' || (w.company === 'HFU' ? 'hfu' : 'hibi') === org))
 }
 

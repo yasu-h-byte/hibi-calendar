@@ -7,10 +7,11 @@
  *   - 人工 × 社内単価。残業は「時間 × 単価÷8×1.25」の別行（従来の手作り請求書と同じ）
  *   - 有給・休業補償(0.6)・出向者は除外。出面明細の人工と本体の人工が一致する
  *   - 宛先は日比建設・支払期日は設定の支払条件
+ *   - 待機料（2026年10月分〜）: 現場の都合で休ませた日（0.6補）は 日数 × 単価 × 率（既定60%）の別行。人工には数えない
  */
 import { describe, test, expect } from 'vitest'
 import type { MainData } from '@/lib/compute'
-import { buildHfuInvoiceDraft, checkHfuRates, hfuOtRate, HFU_INVOICE_COMPANY_ID } from '@/lib/hfu-invoice'
+import { buildHfuInvoiceDraft, checkHfuRates, hfuOtRate, hfuStandbyRate, HFU_INVOICE_COMPANY_ID, HFU_STANDBY_FROM_YM } from '@/lib/hfu-invoice'
 import type { AttendanceEntry } from '@/types'
 
 const ym = '202609'
@@ -58,7 +59,7 @@ const attD: Record<string, AttendanceEntry> = {
   ...entries('own', 201, [5], { w: 1, p: 1 }),        // 有給 → 除外
   ...entries('sup', 201, [7, 8]),
   ...entries('sup', 202, [7, 8, 9]),
-  ...entries('sup', 202, [10], { w: 0.6 }),           // 休業補償 → 除外
+  ...entries('sup', 202, [10], { w: 0.6 }),           // 現場都合休 → 人工には入れず「待機料」の行（9月分〜）
   ...entries('own', 10, [1, 2, 3]),                   // 日比建設所属 → 入らない
 }
 
@@ -90,10 +91,11 @@ describe('buildHfuInvoiceDraft', () => {
     expect(bySite('sup')).toEqual([
       { siteId: 'sup', siteName: '応援現場', role: '鳶', days: 2, rate: 20000, amount: 40000 },
       { siteId: 'sup', siteName: '応援現場', role: '土工', days: 3, rate: 15000, amount: 45000 },
+      { siteId: 'sup', siteName: '応援現場', role: '土工', unit: 'standby', days: 1, rate: 9000, amount: 9000 },
     ])
-    expect(draft.subtotal).toBe(175938)
-    expect(draft.tax).toBe(17593)
-    expect(draft.total).toBe(193531)
+    expect(draft.subtotal).toBe(184938)
+    expect(draft.tax).toBe(18493)
+    expect(draft.total).toBe(203431)
   })
 
   test('従来の請求書（2025-12 分）と同じ計算: 鳶 94人工×30,000 ＋ 残業 4h×4,688 → 税込 3,122,627', () => {
@@ -133,6 +135,82 @@ describe('buildHfuInvoiceDraft', () => {
     const m2 = buildMain({ ...main, assign: { own: { workers: [201], subcons: [], dispatch: [201] } } })
     const d2 = buildHfuInvoiceDraft(m2, attD, ym)!
     expect(d2.detail.find(d => d.siteId === 'own')).toBeUndefined()
+  })
+})
+
+describe('待機料（現場の都合で休ませた日・2026年10月分〜）', () => {
+  const ym10 = '202610'
+  const att10 = Object.fromEntries(Object.entries(attD).map(([k, v]) => [k.replace(ym, ym10), v])) as Record<string, AttendanceEntry>
+
+  test('開始月は 2026年9月分（手作りの9月分が 0.6人工として含めていたのに合わせる）。8月分は 0.6補 を請求に入れない', () => {
+    expect(HFU_STANDBY_FROM_YM).toBe('202609')
+    expect(buildHfuInvoiceDraft(main, attD, ym)!.lines.some(l => l.unit === 'standby')).toBe(true)
+    const ym08 = '202608'
+    const att08 = Object.fromEntries(Object.entries(attD).map(([k, v]) => [k.replace(ym, ym08), v])) as Record<string, AttendanceEntry>
+    const aug = buildHfuInvoiceDraft(main, att08, ym08)!
+    expect(aug.lines.some(l => l.unit === 'standby')).toBe(false)
+    const sup = aug.detail.find(d => d.siteId === 'sup')!
+    expect(sup.rows.find(r => r.label === 'チャン')!.cells[10]).toBeUndefined()
+    expect(sup.standbyDays).toBeUndefined()
+    expect(aug.subtotal).toBe(175938)
+  })
+
+  test('単価 = 1人工の単価 × 率（円未満四捨五入）', () => {
+    expect(hfuStandbyRate(30000, 60)).toBe(18000)
+    expect(hfuStandbyRate(15000, 60)).toBe(9000)
+    expect(hfuStandbyRate(12345, 60)).toBe(7407)
+  })
+
+  test('10月分: 0.6補 の日が「待機料」の行（日数 × 単価×60%）になり、人工の行は変わらない', () => {
+    const d = buildHfuInvoiceDraft(main, att10, ym10)!
+    const sup = d.lines.filter(l => l.siteId === 'sup')
+    expect(sup).toEqual([
+      { siteId: 'sup', siteName: '応援現場', role: '鳶', days: 2, rate: 20000, amount: 40000 },
+      { siteId: 'sup', siteName: '応援現場', role: '土工', days: 3, rate: 15000, amount: 45000 },
+      { siteId: 'sup', siteName: '応援現場', role: '土工', unit: 'standby', days: 1, rate: 9000, amount: 9000 },
+    ])
+    expect(d.subtotal).toBe(175938 + 9000)
+    expect(JSON.parse(JSON.stringify(d))).toStrictEqual(d)
+  })
+
+  test('明細: 待機の日は「待」のセル（人工 0）で、人工の合計には入らず、待機の日数は別に数える', () => {
+    const d = buildHfuInvoiceDraft(main, att10, ym10)!
+    const sup = d.detail.find(s => s.siteId === 'sup')!
+    const chan = sup.rows.find(r => r.label === 'チャン')!
+    expect(chan.cells[10]).toEqual({ md: 0, standby: true })
+    expect(chan.total).toBe(3)
+    expect(chan.standbyDays).toBe(1)
+    expect(sup.siteTotal).toBe(5)
+    expect(sup.standbyDays).toBe(1)
+    expect(sup.dayTotals[10]).toBeUndefined()
+    // 人工の行の合計 = 明細の人工の合計（待機は入らない）
+    const lineDays = d.lines.filter(l => !l.unit).reduce((s, l) => s + l.days, 0)
+    const detailDays = d.detail.reduce((s, x) => s + x.siteTotal, 0)
+    expect(lineDays).toBe(detailDays)
+  })
+
+  test('待機だけの現場・待機だけの人も請求に出る', () => {
+    const only = entries('sup', 202, [1, 2], { w: 0.6 })
+    const d = buildHfuInvoiceDraft(main, Object.fromEntries(Object.entries(only).map(([k, v]) => [k.replace(ym, ym10), v])), ym10)!
+    expect(d.lines).toEqual([{ siteId: 'sup', siteName: '応援現場', role: '土工', unit: 'standby', days: 2, rate: 9000, amount: 18000 }])
+    expect(d.detail[0].siteTotal).toBe(0)
+    expect(d.detail[0].standbyDays).toBe(2)
+  })
+
+  test('率の設定: 未保存は 60%・変えればその率・0 なら待機料の行を出さない', () => {
+    const at = (pct: number | undefined) => buildHfuInvoiceDraft(buildMain({ ...main, hfuInvoice: { ...main.hfuInvoice!, standbyRatePct: pct } }), att10, ym10)!
+    expect(at(undefined).lines.find(l => l.unit === 'standby')!.rate).toBe(9000)
+    expect(at(50).lines.find(l => l.unit === 'standby')!.rate).toBe(7500)
+    const off = at(0)
+    expect(off.lines.some(l => l.unit === 'standby')).toBe(false)
+    expect(off.detail.find(s => s.siteId === 'sup')!.rows.find(r => r.label === 'チャン')!.cells[10]).toBeUndefined()
+    expect(off.subtotal).toBe(175938)
+  })
+
+  test('待機料の単価が無い（職種の単価 0）なら発行不可', () => {
+    const noDoko = buildMain({ ...main, hfuInvoice: { ...main.hfuInvoice!, dokoRate: 0 } })
+    const only = Object.fromEntries(Object.entries(entries('sup', 202, [1], { w: 0.6 })).map(([k, v]) => [k.replace(ym, ym10), v]))
+    expect(checkHfuRates(buildHfuInvoiceDraft(noDoko, only, ym10)!)).toEqual({ ok: false, error: expect.stringContaining('土工') })
   })
 })
 

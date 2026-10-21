@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDocs, collection, setDoc, deleteDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -90,13 +90,13 @@ export async function POST(request: NextRequest) {
       }
       // 1ドキュメント = 1人分の画像。子値に空マップを渡す書き込みではないので merge 不要。
       await setDoc(ref, payload)
-      await logActivity('admin', 'worker.photo.save', `${workerName || `ID:${id}`} の写真を登録`)
+      await logActivity(await actorLabel(request), 'worker.photo.save', `${workerName || `ID:${id}`} の写真を登録`)
       return NextResponse.json({ success: true, bytes: payload.bytes })
     }
 
     if (action === 'delete') {
       await deleteDoc(ref)
-      await logActivity('admin', 'worker.photo.delete', `${workerName || `ID:${id}`} の写真を削除`)
+      await logActivity(await actorLabel(request), 'worker.photo.delete', `${workerName || `ID:${id}`} の写真を削除`)
       return NextResponse.json({ success: true })
     }
 

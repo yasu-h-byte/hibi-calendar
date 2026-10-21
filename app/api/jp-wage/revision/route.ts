@@ -13,10 +13,12 @@
  *            その改定月以降の給与が締め済みなら取り消せない
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { lockedMonthsFrom } from '@/lib/locks.server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
-import { getWorkers, isAlreadyRetired } from '@/lib/workers'
+import { isAlreadyRetired } from '@/lib/workers'
+import { getWorkers } from '@/lib/workers.server'
 import { updateWorker } from '@/lib/worker-crud'
 import {
   computeRosterRevision, nextRevisionDate, lastRevisionDate, dailyForStep,
@@ -24,7 +26,7 @@ import {
   type RosterMember, type Hyogo, type JpGrade,
   ANNUAL_DAYS, normalizePaidLeaveDays,
 } from '@/lib/jp-wage'
-import { getMainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
 import { selectActiveGrantRecord } from '@/lib/leave-compute'
 import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
 import { todayJstIso } from '@/lib/date-utils'
@@ -357,14 +359,6 @@ export async function POST(request: NextRequest) {
  * 改定月以降で締め済みの月（会社別キー `YYYYMM_hibi` と、古い全体キー `YYYYMM` の両方を見る・2026-09-30 点検）。
  * 確定・取り消しの両方で使う（締めた給与と人員マスタの単価が食い違わないように）
  */
-async function lockedMonthsFrom(effective: string): Promise<string[]> {
-  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-  const locks = ((mainSnap.exists() ? mainSnap.data() : {}) as { locks?: Record<string, boolean> }).locks || {}
-  const fromYm = effective.slice(0, 4) + effective.slice(5, 7)
-  return Object.entries(locks)
-    .filter(([k, v]) => v === true && /^\d{6}(_|$)/.test(k) && k.slice(0, 6) >= fromYm)
-    .map(([k]) => k)
-}
 
 export async function DELETE(request: NextRequest) {
   { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ

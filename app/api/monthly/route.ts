@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, parseDKey } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, loadMonthlyAllowances } from '@/lib/compute.server'
 import { isMonthLockedInLocks, orgKeyOf } from '@/lib/locks'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
@@ -20,8 +22,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const main = await getMainData()
-    const att = await getAttData(ym)
+    // 独立した読みは並列に（2026-10-21 総点検。旧: main → att → カレンダー → 帰国 → 手当 の直列 5 往復）
+    const [main, att, cals, homeLeaves] = await Promise.all([
+      getMainData(),
+      getAttData(ym),
+      getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0]),
+      getAllActiveHomeLeaves(),
+    ])
     const prescribedDays = main.workDays[ym] || 0
     // カレンダーから現場別所定日数を取得（5月以降は手入力不要）
     const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
@@ -30,11 +37,9 @@ export async function GET(request: NextRequest) {
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
     // 外国人給与の週残業しきい値を「カレンダー予定日ベース」で判定するための日別カレンダー（監査④）。
     //   Excel出力(/api/export)と同一基準にし、画面とExcelの残業額を一致させる。
-    const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
     const calendarDaysMap: Record<string, Record<string, string>> = {}
     for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
     // 帰国中（一時帰国・復帰未定）期間を給与計算へ渡す（帰国中日を無給かつ非欠勤扱いにする）
-    const homeLeaves = await getAllActiveHomeLeaves()
     // 遠方現場日当・運転手当（2026-10 施行。施行前の月は undefined＝計算不変）
     const allowances = await loadMonthlyAllowances(main, ym, att.d, att.drv)
     const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
@@ -196,7 +201,7 @@ export async function POST(request: NextRequest) {
       {
         // 2026-10-02 総合点検: 旧ルールの固定月給の人は HFU にもいる。旧実装は日比建設の締めしか見ず、
         //   HFU を締めた後でも所定日数を変えられた（HFU の確定額が動く）。どちらかが締め済みなら拒否
-        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         const lockErr = await checkMonthLockedForWorkers(ym, [], 'either')
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
@@ -204,7 +209,7 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'demmen', 'main')
       await updateDoc(docRef, { [`workDays.${ym}`]: numValue })
       const { logActivity } = await import('@/lib/activity')
-      await logActivity('admin', 'monthly.setWorkDays', `${ym} の全社所定日数を ${numValue}日 に設定`)
+      await logActivity(await actorLabel(request), 'monthly.setWorkDays', `${ym} の全社所定日数を ${numValue}日 に設定`)
       return NextResponse.json({ success: true, workDays: numValue })
     }
 

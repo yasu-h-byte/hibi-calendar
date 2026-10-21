@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import { effectiveSalaryForYm } from '@/lib/workers'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
 /**

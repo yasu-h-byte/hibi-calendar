@@ -8,12 +8,12 @@
  */
 
 import { useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import {
   dailyForStep, capDaily, pitchOf, baseAnnual, MAX_STEP, ANNUAL_DAYS,
   GRADE_LABELS, GRADES_IN_ORDER, type JpGrade,
 } from '@/lib/jp-wage'
 
-const yen = (v: number) => '¥' + v.toLocaleString()
 
 interface Placed { name: string; grade: string; step: number }
 

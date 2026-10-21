@@ -2,7 +2,7 @@
  * ベース年収の履歴（jpWageHistory/{workerId}）。
  *
  * 給料表の推移グラフの元データ。初期分は給料表の実物から転記した
- * `lib/jp-wage-history.ts` を投入し、以後は年次改定の確定時に積み上がる。
+ * `lib/jp-wage-history.server.ts` を投入し、以後は年次改定の確定時に積み上がる。
  *
  * - GET  … 全員分を返す
  * - POST … 初期データを投入（既にある年度は触らない・何度実行しても同じ結果）
@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
-import { WAGE_HISTORY_SEED, type AnnualPoint } from '@/lib/jp-wage-history'
+import { WAGE_HISTORY_SEED, type AnnualPoint } from '@/lib/jp-wage-history.server'
 
 export const dynamic = 'force-dynamic'
 

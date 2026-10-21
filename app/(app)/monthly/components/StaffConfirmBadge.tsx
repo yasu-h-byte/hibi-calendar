@@ -10,6 +10,7 @@
  * - 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
 
@@ -87,10 +88,10 @@ export default function StaffConfirmBadge({
   const resolve = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/attendance/confirm', {
+      const res = await fetchWithAuth('/api/attendance/confirm', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'resolve', ym, workerId, reply }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resolve', ym, workerId, reply })
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) return { ok: false, error: j.error || 'サーバが受け付けませんでした' }

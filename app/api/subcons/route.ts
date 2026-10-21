@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, runTransaction, deleteField } from '@/lib/fsdb'
+import { doc, runTransaction, deleteField } from '@/lib/fsdb'
+import { getMainData } from '@/lib/compute.server'
 import { logActivity } from '@/lib/activity'
 import { COMPANY_ROLES } from '@/lib/companies'
 import { subconDeleteBlockReason } from '@/lib/master-refs'
@@ -17,9 +18,8 @@ export async function GET(request: NextRequest) {
   // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts masters.view）。旧: ログインしていれば職長でも読めた
   { const denied = await requireCap(request, 'masters.view'); if (denied) return denied }
   try {
-    const snap = await getDoc(doc(db, 'demmen', 'main'))
-    if (!snap.exists()) return NextResponse.json({ subcons: [], siteAssign: {}, sites: [] })
-    const data = snap.data()
+    // 人員・現場マスタは getMainData（30 秒キャッシュ・2026-10-21 総点検）
+    const data = (await getMainData()) as unknown as Record<string, any>
 
     // Build subcon -> sites assignment map and per-site rate override map
     const assign = (data.assign || {}) as Record<string, {

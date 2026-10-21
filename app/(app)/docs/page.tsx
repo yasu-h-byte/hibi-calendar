@@ -2,6 +2,7 @@
 // 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
 
 import { useEffect, useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { PageHeader, Chip } from '@/components/ui/PageParts'
 import { Icon } from '@/components/ui/Icon'
 
@@ -132,9 +133,9 @@ export default function DocsPage() {
 
   useEffect(() => {
     try {
-      const auth = localStorage.getItem('hibi_auth')
+      const auth = readAuth()
       if (auth) {
-        const parsed = JSON.parse(auth)
+        const parsed = auth
         const r = parsed?.user?.role
         if (r === 'admin' || r === 'approver' || r === 'foreman' || r === 'jimu') {
           setRole(r)

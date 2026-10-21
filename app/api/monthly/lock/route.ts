@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { orgKeyOf } from '@/lib/locks'
+import { currentYmJst } from '@/lib/date-utils'
 import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { getMainData, getAttData, loadMonthlyAllowances } from '@/lib/compute.server'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { validatePayrolls, type PayrollSnapshot, type PayrollValidationIssue } from '@/lib/payroll-validator'
 import { splitIssuesByAck } from '@/lib/pay-note-ack'
@@ -16,12 +19,6 @@ async function loadCalendarDaysForYm(ym: string): Promise<Record<string, Record<
   const m: Record<string, Record<string, string>> = {}
   for (const c of cals) if (c.days) m[c.siteId] = c.days
   return m
-}
-
-/** JST 基準の当月 YYYYMM */
-function currentYmJst(): string {
-  const jst = new Date(Date.now() + 9 * 3600 * 1000)
-  return `${jst.getUTCFullYear()}${String(jst.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 /**
@@ -51,7 +48,7 @@ async function checkReadyToLock(
 
   // ② 職長の日次承認チェック
   const main = await getMainData()
-  const isHfu = (o?: string) => o === 'hfu' || o === 'HFU'
+  const isHfu = (o?: string) => orgKeyOf(o) === 'hfu'
   const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
   const workerOrg = new Map(main.workers.map(w => [w.id, isHfu(w.org) ? 'hfu' : 'hibi']))
 
@@ -131,6 +128,23 @@ async function checkReadyToLock(
       return `対象月に重なる未処理の帰国申請が ${hlPendings.length}件 残っているため締められません:\n${hlPendings.slice(0, 5).join('、')}\n休暇管理画面で最終承認または却下を済ませてから締めてください`
     }
   }
+
+  // ⑥ 未処理の有給精算の申請（日数で給料に乗る）が残っていないこと（2026-10-21 代表決定）
+  //    締め後の承認は leave-settle 側で止まるので金額は狂わないが、申請が宙に浮いて本人に説明がつかない。④⑤と同じ形で先に処理してもらう
+  {
+    const lsSnap = await getDocs(query(collection(db, 'leaveSettleRequests'), where('ym', '==', ym)))
+    const lsPendings: string[] = []
+    lsSnap.forEach(s3 => {
+      const d = s3.data() as { status?: string; workerId?: number; workerName?: string; days?: number }
+      if (d.status !== 'pending') return
+      const wOrg = workerOrg.get(Number(d.workerId))
+      if (orgKey !== 'all' && wOrg !== orgKey) return
+      lsPendings.push(`${d.workerName || `ID${d.workerId}`}（${d.days ?? '?'}日）`)
+    })
+    if (lsPendings.length > 0) {
+      return `未処理の有給精算の申請が ${lsPendings.length}件 残っているため締められません:\n${lsPendings.slice(0, 10).join('、')}\n休暇管理画面の「有給精算」で承認または却下を済ませてから締めてください`
+    }
+  }
   return null
 }
 
@@ -180,7 +194,7 @@ async function savePayrollSnapshot(ym: string, orgKey: 'hibi' | 'hfu' | 'all', l
   // 締めスナップショットも画面(/api/monthly)と同じく手当込みで凍結する
   const allowances = await loadMonthlyAllowances(main, ym, att.d, att.drv)
   const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
-  const isHfu = (org?: string) => org === 'hfu' || org === 'HFU'
+  const isHfu = (org?: string) => orgKeyOf(org) === 'hfu'
   const workers = result.workers
     .filter(w => orgKey === 'all' ? true : (orgKey === 'hfu' ? isHfu(w.org) : !isHfu(w.org)))
     .map(w => ({
@@ -243,7 +257,7 @@ export async function POST(request: NextRequest) {
         }, { status: 409 })
       }
       if (unacked.length > 0) {
-        await logActivity('admin', 'monthly.lock.unackedNotes',
+        await logActivity(actorLabel, 'monthly.lock.unackedNotes',
           `${ym} 給与チェックの注意点を確認しないまま締め（操作者: ${actorLabel}）: ${unacked.map(i => `${i.workerName}=${i.field}`).join('、')}`)
       }
       // ⑥ 本人確認（ベトナム人スタッフのスマホ）。残っていれば一覧を返し、承知のうえ（allowUnconfirmed）でだけ締める
@@ -256,7 +270,7 @@ export async function POST(request: NextRequest) {
         }, { status: 409 })
       }
       if (pending.length > 0) {
-        await logActivity('admin', 'monthly.lock.unconfirmed',
+        await logActivity(actorLabel, 'monthly.lock.unconfirmed',
           `${ym} 本人確認が済んでいないまま締め（操作者: ${actorLabel}）: ${pending.map(p => `${p.name}=${p.state}`).join('、')}`)
       }
     }
@@ -268,11 +282,11 @@ export async function POST(request: NextRequest) {
       const lockKey = `${ym}_${org}`
       await updateDoc(docRef, { [`locks.${lockKey}`]: locked ? true : false })
       const orgLabel = org === 'hibi' ? '日比建設' : 'HFU'
-      await logActivity('admin', locked ? 'monthly.lock' : 'monthly.unlock', `${ym} ${orgLabel}を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
+      await logActivity(actorLabel, locked ? 'monthly.lock' : 'monthly.unlock', `${ym} ${orgLabel}を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
     } else {
       // 後方互換: org未指定の場合は全体ロック（旧方式）
       await updateDoc(docRef, { [`locks.${ym}`]: locked ? true : false })
-      await logActivity('admin', locked ? 'monthly.lock' : 'monthly.unlock', `${ym} を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
+      await logActivity(actorLabel, locked ? 'monthly.lock' : 'monthly.unlock', `${ym} を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
     }
 
     // 締め時のみ: 支給額スナップショットを凍結保存（解除時は最後の締め時点を保持）

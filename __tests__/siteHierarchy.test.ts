@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import { calendarSiteIdOf, siteDisplayName, withWorkTypeSiteCalendars, orderSitesWithWorkTypes, isSiteStartedByMonth } from '@/lib/site-hierarchy'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 import { buildPeerStatements } from '@/lib/peer-statement'
 import { compute } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'

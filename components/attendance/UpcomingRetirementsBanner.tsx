@@ -6,6 +6,7 @@
 'use client'
 
 import { visaBadge } from '@/lib/labels'
+import { orgKeyOf } from '@/lib/locks'
 
 export interface UpcomingRetirement {
   id: number
@@ -67,8 +68,8 @@ export default function UpcomingRetirementsBanner({ retirements }: Props) {
                 </span>
               )}
               {!visa && (
-                <span className={`text-3xs px-1.5 py-0.5 rounded-full ${r.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {r.org === 'hfu' ? 'HFU' : '日比'}
+                <span className={`text-3xs px-1.5 py-0.5 rounded-full ${orgKeyOf(r.org) === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {orgKeyOf(r.org) === 'hfu' ? 'HFU' : '日比'}
                 </span>
               )}
               <span className="tabular-nums">{r.retired} 退職</span>

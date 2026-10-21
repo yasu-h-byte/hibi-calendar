@@ -5,7 +5,7 @@ import {
   NIGHT_START_OPTIONS, NIGHT_END_OPTIONS, DAY_END_OPTIONS,
   AttendanceEntry,
 } from '@/types'
-import { calcNightShiftLegalRequiredPay } from '@/lib/compute'
+import { calcNightShiftLegalRequiredPay } from '@/lib/compute-vn-salary'
 import { computeAttendanceDeleteFields } from '@/lib/attendance'
 
 // 台風待機で発生した夜勤の扱い（2026-08 実装）。

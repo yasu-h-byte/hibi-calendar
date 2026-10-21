@@ -8,6 +8,8 @@
 // 2026-10-03: 確認と失敗の知らせを共通部品（confirmDialog / confirmDanger / notify）に置き換え。
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { permRoleOf, roleCan } from '@/lib/permissions'
@@ -37,7 +39,7 @@ import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 import { todayJstIso, todayJstDate } from '@/lib/date-utils'
 import { checkBreaksForDay, breakIssuesMessage, BREAK_ISSUE_LABEL, type BreakIssue } from '@/lib/break-check'
 import type { AttendanceEntry } from '@/types'
-import { postJson } from '@/lib/api-client'
+import { fetchWithAuth, postJson  } from '@/lib/api-client'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { CALENDAR_REMIND_FROM_DAY, CALENDAR_DEADLINE_DAY } from '@/lib/calendar'
 
@@ -134,10 +136,10 @@ export default function AttendanceGridPage() {
 
   // Read auth
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
       try {
-        const { password: pw, user } = JSON.parse(stored)
+        const { password: pw, user } = stored
         setPassword(pw)
         if (user) {
           setUserRole(user.role || '')
@@ -158,9 +160,8 @@ export default function AttendanceGridPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/attendance/grid?siteId=${siteId}&ym=${ym}`, {
-        headers: { 'x-admin-password': password },
-        signal: req.signal,
+      const res = await fetchWithAuth(`/api/attendance/grid?siteId=${siteId}&ym=${ym}`, { password,
+        signal: req.signal
       })
       if (!req.isCurrent()) return
       if (!res.ok) {
@@ -213,9 +214,7 @@ export default function AttendanceGridPage() {
     const loadSites = async () => {
       setLoading(true)
       try {
-        const res = await fetch('/api/sites', {
-          headers: { 'x-admin-password': password },
-        })
+        const res = await fetchWithAuth('/api/sites', { password })
         if (res.ok) {
           const json = await res.json()
           const sites = json.sites || []
@@ -256,9 +255,7 @@ export default function AttendanceGridPage() {
     // 翌月の ym "YYYY-MM"
     const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1)
     const nextYm = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}`
-    fetch(`/api/calendar/status?ym=${nextYm}`, {
-      headers: { 'x-admin-password': password },
-    })
+    fetchWithAuth(`/api/calendar/status?ym=${nextYm}`, { password })
       .then(r => r.ok ? r.json() : null)
       .then((json: { sites?: { siteId: string; siteName: string; status: string | null }[] } | null) => {
         if (!json || !json.sites) return
@@ -319,14 +316,13 @@ export default function AttendanceGridPage() {
           body.subconId = s.id
           body.subconEntry = s.subconEntry
         }
-        let res = await fetch('/api/attendance/grid', {
+        let res = await fetchWithAuth('/api/attendance/grid', { password,
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-admin-password': password,
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify(body),
-          keepalive: opts.keepalive === true,
+          keepalive: opts.keepalive === true
         })
 
         // 有給の残数超過（2026-08-04 追加 / グエン ミン トゥアン事案）
@@ -365,10 +361,10 @@ export default function AttendanceGridPage() {
             if (!okOverdraft) {
               return { ok: false, save: s, error: '有給残数の超過のため登録しませんでした', status: 409 }
             }
-            res = await fetch('/api/attendance/grid', {
+            res = await fetchWithAuth('/api/attendance/grid', { password,
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-              body: JSON.stringify({ ...body, allowOverdraft: true }),
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...body, allowOverdraft: true })
             })
           }
           // 非稼働日への有給（2026-09-02 追加）: 過払い防止のため既定は拒否、承知の場合だけ上書き
@@ -380,10 +376,10 @@ export default function AttendanceGridPage() {
             }))) {
               return { ok: false, save: s, error: '非稼働日のため有給を登録しませんでした', status: 409 }
             }
-            res = await fetch('/api/attendance/grid', {
+            res = await fetchWithAuth('/api/attendance/grid', { password,
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-              body: JSON.stringify({ ...body, allowNonWorkingDay: true }),
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...body, allowNonWorkingDay: true })
             })
           }
         }
@@ -774,10 +770,10 @@ export default function AttendanceGridPage() {
       : [...nightDays, day].sort((a, b) => a - b)
     setNightDays(next)   // 楽観更新
     try {
-      const res = await fetch('/api/attendance/grid', {
+      const res = await fetchWithAuth('/api/attendance/grid', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'saveNightDays', siteId, ym, days: next }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveNightDays', siteId, ym, days: next })
       })
       if (!res.ok) throw new Error(await res.text())
     } catch {
@@ -795,10 +791,10 @@ export default function AttendanceGridPage() {
     setDrivers(next)   // 楽観更新
     setDriverDay(null)
     try {
-      const res = await fetch('/api/attendance/grid', {
+      const res = await fetchWithAuth('/api/attendance/grid', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'saveDrivers', siteId, ym, day, am, pm }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveDrivers', siteId, ym, day, am, pm })
       })
       if (!res.ok) throw new Error(await res.text())
     } catch {
@@ -920,17 +916,16 @@ export default function AttendanceGridPage() {
       if (!password || !data) return
       setSaveStatus('saving')
       try {
-        const res = await fetch('/api/attendance/grid', {
+        const res = await fetchWithAuth('/api/attendance/grid', { password,
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-admin-password': password,
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             action: 'saveWorkDays',
             ym: data.ym,
-            value: parseFloat(value) || 0,
-          }),
+            value: parseFloat(value) || 0
+          })
         })
         // 権限が無いなどで保存できなかったときに「保存しました」と出さない（2026-09-30 点検）
         if (!res.ok) {
@@ -967,11 +962,11 @@ export default function AttendanceGridPage() {
   //   月締めで初めて「承認なし」と分かった。結果を見て、失敗した日は表示を戻して理由を出す
   const postApproval = useCallback(async (action: string, day: number): Promise<string | null> => {
     try {
-      const res = await fetch('/api/attendance/grid', {
+      const res = await fetchWithAuth('/api/attendance/grid', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        headers: { 'Content-Type': 'application/json' },
         // 休憩チェックの点検は送る前にこの画面で済ませている（confirmBreakIssues）ので、サーバーの点検は省く
-        body: JSON.stringify({ action, siteId, ym, day, approvedBy: userId, ackBreakCheck: true }),
+        body: JSON.stringify({ action, siteId, ym, day, approvedBy: userId, ackBreakCheck: true })
       })
       if (res.ok) return null
       const j = await res.json().catch(() => ({}))
@@ -1129,7 +1124,7 @@ export default function AttendanceGridPage() {
     }
     // filter() で既に新しい配列が返るため slice() は不要
     const hibi = data.workers.filter(w => w.org === 'hibi').sort(sortFn)
-    const hfu = data.workers.filter(w => w.org === 'hfu').sort(sortFn)
+    const hfu = data.workers.filter(w => orgKeyOf(w.org) === 'hfu').sort(sortFn)
     const groups: { org: string; label: string; workers: Worker[] }[] = []
     if (hibi.length > 0) groups.push({ org: 'hibi', label: '日比建設', workers: hibi })
     if (hfu.length > 0) groups.push({ org: 'hfu', label: 'HFU', workers: hfu })
@@ -1264,16 +1259,16 @@ export default function AttendanceGridPage() {
       return { ...prev, [key]: nextMap }
     })
     try {
-      const res = await fetch('/api/attendance/grid', {
+      const res = await fetchWithAuth('/api/attendance/grid', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'saveDefaultWorkType',
           siteId: data.site.id,
           ym,
           ...(kind === 'worker' ? { workerId } : { subconId: workerId }),
-          workTypeSiteId: workTypeSiteId || undefined,
-        }),
+          workTypeSiteId: workTypeSiteId || undefined
+        })
       })
       if (!res.ok) throw new Error(await res.text())
     } catch (e) {
@@ -1307,17 +1302,17 @@ export default function AttendanceGridPage() {
     })
     setSaveStatus('saving')
     try {
-      const res = await fetch('/api/attendance/grid', {
+      const res = await fetchWithAuth('/api/attendance/grid', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'moveWorkType',
           siteId: data.site.id,
           ym,
           day,
           ...(kind === 'worker' ? { workerId: entryId } : { subconId: entryId }),
-          toSiteId,
-        }),
+          toSiteId
+        })
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
@@ -1352,10 +1347,10 @@ export default function AttendanceGridPage() {
     if (!password || !data || days.length === 0) return
     setSaveStatus('saving')
     try {
-      const res = await fetch('/api/attendance/grid', {
+      const res = await fetchWithAuth('/api/attendance/grid', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'setDayWorkType', siteId: data.site.id, ym, days, toSiteId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setDayWorkType', siteId: data.site.id, ym, days, toSiteId })
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'サーバが受け付けませんでした')

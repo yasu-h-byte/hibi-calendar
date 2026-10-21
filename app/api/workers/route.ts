@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan, actorLabel } from '@/lib/auth'
 import {
-  WORKER_OFFICE_KEYS, WORKER_PUBLIC_KEYS, WORKER_OWNER_ONLY_KEYS, WORKER_WRITABLE_BASE_KEYS, WORKER_WRITABLE_PAY_KEYS,
-  WORKER_CLEARABLE_KEYS, getWorkers, isOfficeSideWorker,
+  WORKER_OFFICE_KEYS,
+  WORKER_PUBLIC_KEYS,
+  WORKER_OWNER_ONLY_KEYS,
+  WORKER_WRITABLE_BASE_KEYS,
+  WORKER_WRITABLE_PAY_KEYS,
+  WORKER_CLEARABLE_KEYS,
+  isOfficeSideWorker,
 } from '@/lib/workers'
+import {
+  getWorkers,
+} from '@/lib/workers.server'
 import {
   addWorker,
   updateWorker,
@@ -210,7 +218,7 @@ export async function POST(request: NextRequest) {
         (workerData as Record<string, unknown>).useOldRules = true
       }
       const worker = await addWorker(workerData)
-      await logActivity('admin', 'worker.add', `${name} を追加`)
+      await logActivity(await actorLabel(request), 'worker.add', `${name} を追加`)
       return NextResponse.json({ success: true, worker })
     }
 
@@ -277,6 +285,19 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 時給・日額・月給の「この日から」を締め済みの月の途中にしない（2026-10-21 代表決定）。
+      //   按分（lib/compute.ts rateEffectiveFrom）で締めた月の支給額が変わる。号俸の改定（jp-wage/revision）と同じ判定
+      for (const f of ['rateFrom', 'hourlyRateFrom', 'salaryFrom'] as const) {
+        const v = effective[f]
+        if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v === beforeW[f]) continue
+        const { lockedMonthsFrom } = await import('@/lib/locks.server')
+        const locked = await lockedMonthsFrom(v, String(beforeW.org || beforeW.company || ''))
+        if (locked.length > 0) {
+          const label = { rateFrom: '日額', hourlyRateFrom: '時給', salaryFrom: '月給' }[f]
+          return NextResponse.json({ error: `${label}の適用開始日 ${v} 以降に締め済みの月（${locked.map(k => k.slice(0, 4) + '年' + parseInt(k.slice(4, 6)) + '月').join('・')}）があるため変えられません。先に月次集計画面で締めを解除してください` }, { status: 409 })
+        }
+      }
+
       await updateWorker(Number(id), updates as Parameters<typeof updateWorker>[1], unsetFields)
 
       // 給与系フィールドの差分を auditTrail へ（削除されない永続コレクション）。消した項目も「→ —」で残す
@@ -306,9 +327,9 @@ export async function POST(request: NextRequest) {
           // （activityLog 側には必ず残す）
           console.error('[workers] auditTrail 書込失敗:', e)
         }
-        await logActivity('admin', 'worker.payChange', `${beforeW?.name || `ID:${id}`} 給与系変更: ${detail}（操作者: ${actor}）`)
+        await logActivity(await actorLabel(request), 'worker.payChange', `${beforeW?.name || `ID:${id}`} 給与系変更: ${detail}（操作者: ${actor}）`)
       } else {
-        await logActivity('admin', 'worker.update', `ID:${id} を更新`)
+        await logActivity(await actorLabel(request), 'worker.update', `ID:${id} を更新`)
       }
       return NextResponse.json({ success: true })
     }
@@ -340,7 +361,7 @@ export async function POST(request: NextRequest) {
       }
 
       await deleteWorker(id)
-      await logActivity('admin', 'worker.delete', `ID:${id} を削除`)
+      await logActivity(await actorLabel(request), 'worker.delete', `ID:${id} を削除`)
       return NextResponse.json({ success: true })
     }
 
@@ -357,11 +378,11 @@ export async function POST(request: NextRequest) {
       }
       if (action === 'revokeToken') {
         await revokeWorkerToken(id)
-        await logActivity('admin', 'worker.revokeToken', `${target.name} のスマホURLを失効`)
+        await logActivity(await actorLabel(request), 'worker.revokeToken', `${target.name} のスマホURLを失効`)
         return NextResponse.json({ success: true })
       }
       const token = await generateWorkerToken(id)
-      await logActivity('admin', 'worker.generateToken', `${target.name} のスマホURLを発行`)
+      await logActivity(await actorLabel(request), 'worker.generateToken', `${target.name} のスマホURLを発行`)
       return NextResponse.json({ success: true, token })
     }
 

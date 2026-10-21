@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, clearPasswordCache, getApiAuthUser, requireCap } from '@/lib/auth'
+import { checkApiAuth, clearPasswordCache, getApiAuthUser, requireCap, actorLabel } from '@/lib/auth'
 import { hashPassword, isHashed, verifyPassword } from '@/lib/password'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
@@ -24,12 +24,13 @@ async function getAdminTier(request: NextRequest): Promise<'super-admin' | 'admi
 const HFU_INVOICE_DEFAULTS = {
   profile: {
     name: 'エイチエフユナイテッド株式会社', nameEn: '', representative: '代表取締役 日比 靖仁',
-    postal: '204-0003', address: '東京都清瀬市中里2-1620-1', tel: '042-493-9978', fax: '', email: '',
+    // 2026-10-21 紙の請求書（9月分）の記載に合わせた（旧: 日比建設と同じ清瀬の住所・電話が入っていた）
+    postal: '359-0037', address: '埼玉県所沢市くすのき台1-10-7 肥沼ビル3F', tel: '04-2000-2756', fax: '04-2909-9286', email: '',
     invoiceRegNo: 'T5012701011352',
     bank: { bankName: '青梅信用金庫', branch: '秋津', accountType: '普通', accountNo: '0086328', holder: 'エイチエフユナイテッド株式会社 代表取締役 日比 靖仁' },
     invoicePrefix: 'HFU',
   },
-  tobiRate: 30000, dokoRate: 0,
+  tobiRate: 30000, dokoRate: 0, standbyRatePct: 60,
   paymentTerms: { closing: 'end', payMonthOffset: 1, payDay: 'end' },
 }
 
@@ -50,8 +51,10 @@ export async function GET(request: NextRequest) {
     const action = request.nextUrl.searchParams.get('action')
     // 2026-09-26: 既定単価（action なし・現場マスタが読む）以外はすべて代表だけ（lib/permissions.ts system.admin）。
     //   旧: 自社・HFU の振込先などをどの個人パスワードでも読めた
-    if (action) {
-      const denied = await requireCap(request, 'system.admin')
+    //   2026-10-21 総点検: 既定単価（とび・土工の単価）も現場マスタと同じ masters.view に絞る（旧: ログインしていれば職長でも読めた。
+    //   /api/sites は同じ単価を masters.view 以外に伏せているので、そろえた）
+    {
+      const denied = await requireCap(request, action ? 'system.admin' : 'masters.view')
       if (denied) return denied
     }
     const result = await getMainDoc()
@@ -139,7 +142,7 @@ export async function POST(request: NextRequest) {
       const { updateDoc } = await import('@/lib/fsdb')
       await updateDoc(docRef, { userPasswords: next })
       clearPasswordCache()  // キャッシュを即時無効化して新パスワードを即座に有効にする
-      await logActivity('admin', 'settings.userPasswords', `個人パスワードを更新 (${tier})`)
+      await logActivity(await actorLabel(request), 'settings.userPasswords', `個人パスワードを更新 (${tier})`)
       return NextResponse.json({ success: true })
     }
 
@@ -163,7 +166,7 @@ export async function POST(request: NextRequest) {
       //   read→write の間に他リクエスト（出面承認・有給更新等）が走ると、その変更を上書きで失う race
       //   condition があった。defaultRates のみピンポイント更新に変更（2026-05-07 修正）。
       await updateDoc(docRef, { defaultRates: { tobiRate, dokoRate, baseDays: newBaseDays } })
-      await logActivity('admin', 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}, ベース日数 ${oldRates.baseDays ?? 20}→${newBaseDays}`)
+      await logActivity(await actorLabel(request), 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}, ベース日数 ${oldRates.baseDays ?? 20}→${newBaseDays}`)
       return NextResponse.json({ success: true })
     }
 
@@ -180,7 +183,7 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'demmen', 'main')
       const { updateDoc } = await import('@/lib/fsdb')
       await updateDoc(docRef, { companyProfile })
-      await logActivity('admin', 'settings.companyProfile', `請求書の自社情報を更新 (${tier})`)
+      await logActivity(await actorLabel(request), 'settings.companyProfile', `請求書の自社情報を更新 (${tier})`)
       return NextResponse.json({ success: true })
     }
 
@@ -196,14 +199,18 @@ export async function POST(request: NextRequest) {
       }
       const tobiRate = Math.max(0, Math.round(Number(hfuInvoice.tobiRate) || 0))
       const dokoRate = Math.max(0, Math.round(Number(hfuInvoice.dokoRate) || 0))
+      // 待機料の率（%・0〜100）。未指定（古い画面）は既定の 60。0 は「待機料を出さない」なので 0 のまま残す
+      const standbyRatePct = hfuInvoice.standbyRatePct === undefined || hfuInvoice.standbyRatePct === null
+        ? 60
+        : Math.min(100, Math.max(0, Math.round(Number(hfuInvoice.standbyRatePct) || 0)))
       const pt = hfuInvoice.paymentTerms
       const paymentTerms = pt && (pt.payMonthOffset === 1 || pt.payMonthOffset === 2)
         ? { closing: 'end', payMonthOffset: pt.payMonthOffset, payDay: pt.payDay === 'end' ? 'end' : Math.min(28, Math.max(1, Number(pt.payDay) || 25)) }
         : { closing: 'end', payMonthOffset: 1, payDay: 'end' }
       const docRef = doc(db, 'demmen', 'main')
       const { updateDoc } = await import('@/lib/fsdb')
-      await updateDoc(docRef, { hfuInvoice: { profile: hfuInvoice.profile, tobiRate, dokoRate, paymentTerms } })
-      await logActivity('admin', 'settings.hfuInvoice', `HFU → 日比建設 の請求書設定を更新（鳶 ¥${tobiRate.toLocaleString()}・土工 ¥${dokoRate.toLocaleString()}）(${tier})`)
+      await updateDoc(docRef, { hfuInvoice: { profile: hfuInvoice.profile, tobiRate, dokoRate, standbyRatePct, paymentTerms } })
+      await logActivity(await actorLabel(request), 'settings.hfuInvoice', `HFU → 日比建設 の請求書設定を更新（鳶 ¥${tobiRate.toLocaleString()}・土工 ¥${dokoRate.toLocaleString()}・待機料 ${standbyRatePct}%）(${tier})`)
       return NextResponse.json({ success: true })
     }
 
@@ -278,7 +285,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      await logActivity('admin', 'settings.restore', 'JSONバックアップから全データを復元 (super-admin)')
+      await logActivity(await actorLabel(request), 'settings.restore', 'JSONバックアップから全データを復元 (super-admin)')
       return NextResponse.json({ success: true })
     }
 

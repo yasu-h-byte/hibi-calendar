@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { PLWorker, SiteOption } from '../types'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { Modal, CancelButton } from '@/components/ui/Modal'
@@ -54,10 +55,10 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
         kind,
         overwriteHomeLeave: designateOverwriteHomeLeave,
       }
-      const post = (extra: Record<string, unknown> = {}) => fetch('/api/leave', {
+      const post = (extra: Record<string, unknown> = {}) => fetchWithAuth('/api/leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, ...extra }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, ...extra })
       })
       let res = await post()
       // 残数超過（2026-08-04 追加）: 内容を明示したうえで、承知の場合のみ上書き実行。
