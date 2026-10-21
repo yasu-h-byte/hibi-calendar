@@ -13,6 +13,7 @@ import LeaveRequestModal from '@/components/attendance/LeaveRequestModal'
 import HomeLongLeaveModal from '@/components/attendance/HomeLongLeaveModal'
 import RestReportModal, { COMPANY_REST } from '@/components/attendance/RestReportModal'
 import MonthConfirmCard from '@/components/attendance/MonthConfirmCard'
+import StaffTimeBreakForm from '@/components/attendance/StaffTimeBreakForm'
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { todayJstIso } from '@/lib/date-utils'
 import { STAFF_STATUS_BI, STAFF_TEXT, biLine, staffBreakShortenTag } from '@/lib/labels'
@@ -1218,61 +1219,10 @@ export default function StaffAttendancePage() {
                 ))}
               </ul>
             </div>
-            {/* Start/End time pickers */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">始業 / Bắt đầu</p>
-                <select value={startTime} onChange={e => setStartTime(e.target.value)}
-                  className="text-2xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
-                  {/* 5:00〜13:00 30分刻み (現場ごとの始業時刻に対応) */}
-                  {Array.from({length: 17}, (_, i) => {
-                    const h = 5 + Math.floor(i / 2)
-                    const m = i % 2 === 0 ? '00' : '30'
-                    const val = `${String(h).padStart(2,'0')}:${m}`
-                    return <option key={val} value={val}>{val}</option>
-                  })}
-                </select>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">終業 / Kết thúc</p>
-                <select value={endTime} onChange={e => setEndTime(e.target.value)}
-                  className="text-2xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
-                  {Array.from({length: 17}, (_, i) => {
-                    const h = 15 + Math.floor(i / 2)
-                    const m = i % 2 === 0 ? '00' : '30'
-                    const val = `${String(h).padStart(2,'0')}:${m}`
-                    return <option key={val} value={val}>{val}</option>
-                  })}
-                </select>
-              </div>
-            </div>
-
-            {/* Break checkboxes (午前・午後のみ表示。昼休憩は内部的に処理) */}
-            {(workSchedule.morningBreak.enabled || workSchedule.afternoonBreak.enabled) && (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p className="text-xs text-gray-500 mb-2">休憩 / Nghỉ giải lao</p>
-                <div className="space-y-2">
-                  {[
-                    { id: 'b1', cfg: workSchedule.morningBreak,   label: '午前休憩', labelVi: 'Nghỉ sáng',  checked: break1, set: setBreak1 },
-                    { id: 'b3', cfg: workSchedule.afternoonBreak, label: '午後休憩', labelVi: 'Nghỉ chiều', checked: break3, set: setBreak3 },
-                  ].filter(b => b.cfg.enabled).map(b => (
-                    /* 行ごと押せる 44px 以上（2026-10-02 総合点検。旧: 20px のチェックと1行の文字だけで押しにくかった） */
-                    <label key={b.id} className="flex items-center gap-3 cursor-pointer min-h-[44px] -mx-2 px-2 rounded-lg active:bg-gray-100">
-                      <input
-                        type="checkbox"
-                        checked={b.checked}
-                        onChange={e => b.set(e.target.checked)}
-                        className="w-6 h-6 rounded text-hibi-navy shrink-0"
-                      />
-                      <span className={`text-base ${b.checked ? 'text-gray-700' : 'text-red-600 font-bold'}`}>
-                        {b.label}（{b.cfg.minutes}分）/ {b.labelVi} ({b.cfg.minutes} phút)
-                        {!b.checked && ` ← ${biLine(STAFF_TEXT.breakNotTaken)}`}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* 始業・終業・休憩（過去日の編集と共通・components/attendance/StaffTimeBreakForm.tsx） */}
+            <StaffTimeBreakForm variant="today" workSchedule={workSchedule}
+              startTime={startTime} endTime={endTime} onStartTime={setStartTime} onEndTime={setEndTime}
+              break1={break1} break3={break3} onBreak1={setBreak1} onBreak3={setBreak3} />
 
             {/* Actual hours display */}
             <div className="bg-[#FFF6E3] border border-[#F2D9A0] rounded-xl p-4 text-center">
@@ -1642,59 +1592,10 @@ export default function StaffAttendancePage() {
           >
               {pastTimeBased ? (
                 <div className="space-y-4">
-                  {/* Start/End time pickers */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gray-50 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">{biLine(STAFF_TEXT.start)}</p>
-                      <select value={pastStartTime} onChange={e => setPastStartTime(e.target.value)}
-                        className="text-xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
-                        {Array.from({length: 17}, (_, i) => {
-                          const h = 5 + Math.floor(i / 2)
-                          const m = i % 2 === 0 ? '00' : '30'
-                          const val = `${String(h).padStart(2,'0')}:${m}`
-                          return <option key={val} value={val}>{val}</option>
-                        })}
-                      </select>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">{biLine(STAFF_TEXT.end)}</p>
-                      <select value={pastEndTime} onChange={e => setPastEndTime(e.target.value)}
-                        className="text-xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
-                        {Array.from({length: 17}, (_, i) => {
-                          const h = 15 + Math.floor(i / 2)
-                          const m = i % 2 === 0 ? '00' : '30'
-                          const val = `${String(h).padStart(2,'0')}:${m}`
-                          return <option key={val} value={val}>{val}</option>
-                        })}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Break checkboxes (午前・午後のみ表示。昼休憩は内部的に処理) */}
-                  {(workSchedule.morningBreak.enabled || workSchedule.afternoonBreak.enabled) && (
-                    <div className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-xs text-gray-500 mb-2">{biLine(STAFF_TEXT.breakTime)}</p>
-                      <div className="space-y-1">
-                        {[
-                          { id: 'pb1', cfg: workSchedule.morningBreak,   label: STAFF_TEXT.breakAm, checked: pastBreak1, set: setPastBreak1 },
-                          { id: 'pb3', cfg: workSchedule.afternoonBreak, label: STAFF_TEXT.breakPm, checked: pastBreak3, set: setPastBreak3 },
-                        ].filter(b => b.cfg.enabled).map(b => (
-                          <label key={b.id} className="flex items-center gap-3 cursor-pointer min-h-[44px] -mx-1 px-1 rounded-lg active:bg-gray-100">
-                            <input
-                              type="checkbox"
-                              checked={b.checked}
-                              onChange={e => b.set(e.target.checked)}
-                              className="w-6 h-6 rounded text-hibi-navy shrink-0"
-                            />
-                            <span className={`text-base ${b.checked ? 'text-gray-700' : 'text-red-600 font-bold'}`}>
-                              {b.label.ja}（{b.cfg.minutes}分）/ {b.label.vi} ({b.cfg.minutes} phút)
-                              {!b.checked && ` ← ${biLine(STAFF_TEXT.breakNotTaken)}`}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* 始業・終業・休憩（今日の入力と共通） */}
+                  <StaffTimeBreakForm variant="past" workSchedule={workSchedule}
+                    startTime={pastStartTime} endTime={pastEndTime} onStartTime={setPastStartTime} onEndTime={setPastEndTime}
+                    break1={pastBreak1} break3={pastBreak3} onBreak1={setPastBreak1} onBreak3={setPastBreak3} />
 
                   {/* 保存の失敗はこの中に出す（旧: 黒幕の裏の赤帯で見えなかった） */}
                   <ActionMsgBox where="past" />
