@@ -126,6 +126,8 @@ export async function writeAttendanceEntry(args: {
   try { (await import('./compute.server')).invalidateAttDataCache(ym) } catch { /* ignore */ }
   // 有給を消したら次期の繰越を計算し直す（保存側は setAttendanceEntry が行う）
   if (prevEntry === undefined || prevEntry?.p) {
+    // 有給の索引をそろえる（消したあとの出面を読み直して、同じ日に他の現場の p が無ければ外す・2026-10-21）
+    await (await import('./leave-index.server')).syncLeaveIndexDayFromAtt(workerId, ym, day)
     try {
       const { recomputeNextCarryOver } = await import('./leave-carry')
       await recomputeNextCarryOver(workerId, isoOfYmDay(ym, day))

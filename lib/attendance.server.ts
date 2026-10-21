@@ -90,6 +90,8 @@ export async function removePaidLeaveForDay(workerId: number, dateIso: string): 
   }
   if (removed.length > 0) {
     await updateDoc(ref, updates)
+    // 有給の索引からもその日を外す（全現場から p を外したので、無条件に「なし」）
+    await (await import('./leave-index.server')).syncLeaveIndexDay(workerId, dateIso, false)
     try {
       const { recomputeNextCarryOver } = await import('./leave-carry')
       await recomputeNextCarryOver(workerId, dateIso)
@@ -176,6 +178,13 @@ export async function setAttendanceEntry(
     ? paidLeaveChanged(options.prevEntry, entry)
     : ((entry.p ?? 0) > 0 || !!options.deleteFields?.includes('p'))
   if (mayTouchPaidLeave) {
+    // 有給の索引（lib/leave-index.server.ts・2026-10-21）: p を書いたら足す。消したかもしれないときは出面を読み直してそろえる
+    {
+      const { syncLeaveIndexDay, syncLeaveIndexDayFromAtt } = await import('./leave-index.server')
+      const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+      if ((entry.p ?? 0) > 0) await syncLeaveIndexDay(workerId, iso, true)
+      else await syncLeaveIndexDayFromAtt(workerId, ym, day)
+    }
     try {
       const { recomputeNextCarryOver } = await import('./leave-carry')
       await recomputeNextCarryOver(workerId, `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)
