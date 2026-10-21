@@ -55,8 +55,6 @@ describe('出面を書くファイルは共通の入口を通す', () => {
   const ALLOWED: Record<string, string> = {
     'lib/home-leave-sync.ts': '帰国 hk の月まとめ reconcile（1か月を1回の updateDoc で・実績の日は触らない）',
     'app/api/home-leave/reconcile/route.ts': '帰国 hk の残骸の掃除（点検ツール・hk だけを消す）',
-    'app/api/leave-request/route.ts': '有給の承認・日付変更（p の書き込み。2026-10-02 時点で未移行）',
-    'app/api/leave/route.ts': '時季指定・管理者の手動 P（2026-10-02 時点で未移行）',
     'app/api/debug/repair-att-site/route.ts': '代表だけの保守ツール',
   }
   test('setAttendanceEntry の直接呼び出し・d.<key> への直接書き込みは、認めたファイルだけ', () => {

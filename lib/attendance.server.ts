@@ -369,3 +369,16 @@ export async function getForeignWorkersForSite(
       visa: w.visa as string,
     }))
 }
+
+/**
+ * 別現場のキーに残った帰国フラグだけの空エントリを消す（有給の承認・日付変更が p を書いたあとに呼ぶ）。
+ * home-leave-sync の clear-entry と同じ dot-notation。2026-10-21 総点検で app/api/leave-request/route.ts から移した
+ * （出面の直接書き込みはこのファイルと lib/attendance-save.ts に限る・__tests__/attendanceWriteEntry.test.ts）
+ */
+export async function clearHomeLeaveStubs(ym: string, keys: string[]): Promise<void> {
+  if (keys.length === 0) return
+  const updates: Record<string, unknown> = {}
+  for (const k of keys) updates[`d.${k}`] = deleteField()
+  await updateDoc(doc(db, 'demmen', `att_${ym}`), updates)
+  try { (await import('./compute.server')).invalidateAttDataCache(ym) } catch { /* ignore */ }
+}

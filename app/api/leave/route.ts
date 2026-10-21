@@ -4,8 +4,9 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { parseDKey, isDispatchedAt } from '@/lib/compute'
 import { getMainData, getMultiMonthAttData } from '@/lib/compute.server'
-import { ymKey, computeAttendanceDeleteFields } from '@/lib/attendance'
-import { setAttendanceEntry } from '@/lib/attendance.server'
+import { ymKey, attKey } from '@/lib/attendance'
+import type { AttendanceEntry } from '@/types'
+import { writeAttendanceEntry, dayApprovalOf, finalApprovedEditError } from '@/lib/attendance-save'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap, jpDeemedDate, selectCurrentPeriodRecord, selectEndedPeriodRecord, computeRecordBalance } from '@/lib/leave-compute'
@@ -288,8 +289,10 @@ export async function POST(request: NextRequest) {
       //   帰国期間の上書きが必要な場合は hk も削除対象（computeAttendanceDeleteFields は
       //   entry に無い既知フィールドを全て挙げるので hk も自動的に含まれる）
       const desigEntry = { w: 0, p: 1 }
-      const desigDelete = computeAttendanceDeleteFields(desigEntry)
-      const setOptions = { deleteFields: overwriteHomeLeave ? desigDelete : desigDelete.filter(f => f !== 'hk') }
+      /** 月ごとの出面（多現場重複の判定と、保存前の中身の記録に使う） */
+      const attCache: Record<string, Record<string, AttendanceEntry>> = {}
+      /** 帰国を上書きしないときは hk を残す（共通の入口 writeAttendanceEntry の keepFields） */
+      const keepFields = overwriteHomeLeave ? [] : ['hk']
 
       // 2026-06-12 (監査 Sprint2-B): 時季指定・管理者手動入力にも request と同じガードを適用
       //   ① ロック済み月は拒否（給与確定後のデータ変更防止）
@@ -314,12 +317,15 @@ export async function POST(request: NextRequest) {
           const { detectMultiSiteConflict } = await import('@/lib/attendance')
           const { getAttendanceDoc } = await import('@/lib/attendance.server')
           const sitesAllD = (data.sites || []) as { id: string; name?: string }[]
-          const attCache: Record<string, Awaited<ReturnType<typeof getAttendanceDoc>>> = {}
+          // ④ 最終承認済みの日は、さかのぼり・最終承認の権限がある人だけ（出面グリッド・有給の承認と同じ・2026-10-21 総点検）
+          const canEditFinal = !(await requireCap(request, 'attendance.backfill')) || !(await requireCap(request, 'attendance.finalApprove'))
           for (const dateStr of dates) {
             const d0 = new Date(dateStr)
             if (isNaN(d0.getTime())) continue
             const ymD = ymKey(d0.getFullYear(), d0.getMonth() + 1)
             if (!(ymD in attCache)) attCache[ymD] = await getAttendanceDoc(ymD)
+            const finalErr = finalApprovedEditError(await dayApprovalOf(sitesAllD, siteId, ymD, d0.getDate()), canEditFinal)
+            if (finalErr) return NextResponse.json({ error: `${dateStr}: ${finalErr}` }, { status: 409 })
             const conflictD = detectMultiSiteConflict(attCache[ymD], siteId, Number(workerId), ymD, d0.getDate(), sitesAllD, { w: 0, p: 1 })
             if (conflictD) {
               const cName = sitesAllD.find(s2 => s2.id === conflictD.conflictSiteId)?.name || conflictD.conflictSiteId
@@ -336,8 +342,12 @@ export async function POST(request: NextRequest) {
         if (isNaN(d.getTime())) continue
         const ym = ymKey(d.getFullYear(), d.getMonth() + 1)
         const day = d.getDate()
-        // 出面書き込み: { w: 0, p: 1 } (overwriteHomeLeave時はhkを削除)
-        await setAttendanceEntry(siteId, workerId, ym, day, desigEntry, setOptions)
+        // 出面書き込み: { w: 0, p: 1 }（overwriteHomeLeave でなければ hk は残す）。共通の入口＝変更履歴に残る（2026-10-21 総点検）
+        await writeAttendanceEntry({
+          siteId, workerId: Number(workerId), ym, day, entry: desigEntry, keepFields,
+          prevEntry: attCache[ym] ? (attCache[ym][attKey(siteId, Number(workerId), ym, day)] ?? null) : undefined,
+          actor: `leave-designate:${String(actor)}`,
+        })
         history.push({
           date: dateStr,
           designatedAt: nowIso,
