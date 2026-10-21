@@ -71,9 +71,9 @@ function resultChip(cmp: (SubconComparison & { count?: number }) | undefined, ex
   if (cmp.result === 'match') return <Chip tone="green">出面と一致{suffix}</Chip>
   // 差は「請求書 − 出面」。マイナス = 請求書の方が少ない。金額だけだと税込・税抜で読み違えるので、人工で言い換えを添える（2026-10-21）
   const why = explainSubconDiff(cmp.diff, expected)
-  const tail = why ? `（${why}）` : ''
-  if (cmp.result === 'close') return <Chip tone="green">ほぼ一致 {signedYen(cmp.diff)}{tail}{suffix}</Chip>
-  return <Chip tone="red">{cmp.diff < 0 ? '請求書が少ない' : '請求書が多い'} {signedYen(cmp.diff)}{tail}{suffix}</Chip>
+  const note = why ? <span className="block mt-0.5 text-xs text-hibi-sub dark:text-gray-400">{why}</span> : null
+  if (cmp.result === 'close') return <span className="min-w-0"><Chip tone="green">ほぼ一致 {signedYen(cmp.diff)}{suffix}</Chip>{note}</span>
+  return <span className="min-w-0"><Chip tone="red">{cmp.diff < 0 ? '請求書が少ない' : '請求書が多い'} {signedYen(cmp.diff)}{suffix}</Chip>{note}</span>
 }
 
 /**
@@ -199,7 +199,7 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
               <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">{ymLabelOf(ym)}の請求書</h2>
               <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">行を押すと、出面との見比べが右に開きます</span>
             </div>
-            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_140px_140px_200px_150px] gap-3.5 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
+            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_150px_130px_minmax(0,1.3fr)_110px] gap-3.5 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
               <span>外注先</span><span className="text-right">請求書（税抜）</span><span className="text-right">出面 × 単価（税抜）</span><span>見比べ（請求書 − 出面）</span><span>入れた人</span>
             </div>
             {records.length === 0 && missing.length === 0 ? (
@@ -210,7 +210,7 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
                   <div key={r.id} role="button" tabIndex={0}
                     onClick={() => setOpenId(r.id)}
                     onKeyDown={e => { if (e.key === 'Enter') setOpenId(r.id) }}
-                    className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_140px_140px_200px_150px] gap-2 lg:gap-3.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
+                    className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_150px_130px_minmax(0,1.3fr)_110px] gap-2 lg:gap-3.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
                     <span className="min-w-0">
                       <span className="block text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{r.companyName}</span>
                       {docTypeOf(r) === 'remittance' && <span className="block text-xs text-hibi-sub dark:text-gray-400">支払内訳書</span>}
@@ -223,7 +223,7 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
                         : <>
                             {/* 出面 × 単価（税抜）と同じ土俵で読めるよう税抜を主にし、税込は小さく（2026-10-21 代表「税抜と税込だからわかりづらい」） */}
                             <span className="block text-[1.0625rem] font-bold">{cmpOf(r) ? yen(cmpOf(r)!.invoiceExTax) : yen(r.total)}</span>
-                            <span className="block text-xs font-normal text-hibi-sub dark:text-gray-400">税込 {yen(r.total)}{cmpOf(r)?.exTaxEstimated ? '（÷1.1）' : ''}</span>
+                            <span className="block text-xs font-normal text-hibi-sub dark:text-gray-400 whitespace-nowrap" title={cmpOf(r)?.exTaxEstimated ? '税抜小計が未入力なので、税込 ÷ 1.1 を税抜にしています' : undefined}>税込 {yen(r.total)}</span>
                           </>}
                     </span>
                     <span className="lg:text-right text-[0.9375rem] tabular-nums text-gray-700 dark:text-gray-300">
@@ -234,7 +234,7 @@ export default function ReceiveView({ ym, onYmChange }: { ym: string; onYmChange
                   </div>
                 ))}
                 {missing.map(m => (
-                  <div key={m.companyId} className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_140px_140px_200px_150px] gap-2 lg:gap-3.5 items-center bg-amber-50/40 dark:bg-amber-900/10">
+                  <div key={m.companyId} className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_150px_130px_minmax(0,1.3fr)_110px] gap-2 lg:gap-3.5 items-center bg-amber-50/40 dark:bg-amber-900/10">
                     <span className="block text-[0.9375rem] font-bold text-gray-700 dark:text-gray-300 truncate">{m.companyName}</span>
                     <span className="lg:text-right text-sm text-hibi-sub dark:text-gray-400">—</span>
                     <span className="lg:text-right text-[0.9375rem] tabular-nums text-gray-700 dark:text-gray-300">
