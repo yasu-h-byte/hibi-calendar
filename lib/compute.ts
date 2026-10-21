@@ -491,12 +491,6 @@ export function createDispatchChecker(main: MainData): (workerId: number, siteId
   }
 }
 
-// ワーカーが指定YM時点で常時出向中かを判定
-export function isWorkerDispatched(main: MainData, workerId: number, ym: string): boolean {
-  const w = main.workers.find(x => x.id === workerId)
-  return isDispatchedAt(w, ym)
-}
-
 // ────────────────────────────────────────
 //  外注の現場別単価取得（旧アプリのgetSubconRateと同等）
 // ────────────────────────────────────────
@@ -995,36 +989,6 @@ export function buildYMList(mode: string, y: number, m: number): { y: number; m:
     }
   }
   return list
-}
-
-export function buildPeriodLabel(mode: string, y: number, m: number): string {
-  const list = buildYMList(mode, y, m)
-  if (list.length === 1) return `${list[0].y}年${list[0].m}月`
-  if (mode === 'fy') {
-    const fy = getFiscalYear(y, m)
-    const f = list[0], l = list[list.length - 1]
-    return `第${fy}期（${f.m}月〜${l.m}月）${list.length < 12 ? '進行中' : ''}`
-  }
-  const f = list[0], l = list[list.length - 1]
-  return `${f.y}年${f.m}月 〜 ${l.y}年${l.m}月`
-}
-
-export function stepPeriod(mode: string, y: number, m: number, dir: number): { y: number; m: number } {
-  if (mode === 'month') {
-    m += dir
-    if (m > 12) { m = 1; y++ }
-    if (m < 1) { m = 12; y-- }
-  } else if (mode === 'fy') {
-    y += dir
-  } else {
-    const n = mode === '3m' ? 3 : mode === '6m' ? 6 : 12
-    for (let i = 0; i < n; i++) {
-      m += dir
-      if (m > 12) { m = 1; y++ }
-      if (m < 1) { m = 12; y-- }
-    }
-  }
-  return { y, m }
 }
 
 // ────────────────────────────────────────
@@ -3373,15 +3337,6 @@ export function calculateVietnameseSalary(
 
 export function isLocked(locks: Record<string, boolean>, ym: string): boolean {
   return !!locks[ym]
-}
-
-/** 組織別ロック判定（後方互換: 旧 locks[ym] もチェック） */
-export function isLockedForOrg(locks: Record<string, boolean>, ym: string, org: 'hibi' | 'hfu'): boolean {
-  // 新形式: locks["202603_hibi"] or locks["202603_hfu"]
-  if (locks[`${ym}_${org}`]) return true
-  // 旧形式: locks["202603"] = true（全組織ロック扱い）
-  if (locks[ym]) return true
-  return false
 }
 
 export function getYmOptions(count: number = 6): { ym: string; label: string }[] {

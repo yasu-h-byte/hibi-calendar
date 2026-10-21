@@ -56,17 +56,3 @@ export function getAuthPasswordSync(): string {
     return ''
   }
 }
-
-/**
- * 同様に同期で user を取得
- */
-export function getAuthUserSync(): AuthUser | null {
-  try {
-    const stored = localStorage.getItem('hibi_auth')
-    if (!stored) return null
-    const parsed = JSON.parse(stored) as { user?: AuthUser }
-    return parsed.user || null
-  } catch {
-    return null
-  }
-}

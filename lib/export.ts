@@ -510,15 +510,6 @@ export function generateOrgAttendance(data: HfuAttendanceExportData, org: Attend
   return wb
 }
 
-/** @deprecated generateOrgAttendance(data, 'hibi') を使う */
-export function generateHibiAttendance(data: HfuAttendanceExportData): XLSX.WorkBook {
-  return generateOrgAttendance(data, 'hibi')
-}
-/** @deprecated generateOrgAttendance(data, 'hfu') を使う */
-export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkBook {
-  return generateOrgAttendance(data, 'hfu')
-}
-
 // ────────────────────────────────────────
 //  3. 外注先向け出面確認書
 // ────────────────────────────────────────

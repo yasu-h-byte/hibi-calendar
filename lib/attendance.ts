@@ -312,48 +312,6 @@ export function getEntryStatus(entry: AttendanceEntry | null | undefined): Atten
   return 'none'
 }
 
-export function getStatusLabel(status: AttendanceStatus): string {
-  switch (status) {
-    case 'work': return 'しゅっきん'
-    case 'overtime': return 'しゅっきん'
-    case 'rest': return 'やすみ'
-    case 'leave': return 'ゆうきゅう'
-    case 'site_off': return 'げんばやすみ'
-    case 'home_leave': return 'きこくちゅう'
-    case 'exam': return 'しけん'
-    case 'comp': return 'げんばやすみ（ほしょう）'
-    case 'none': return 'みにゅうりょく'
-  }
-}
-
-export function getStatusEmoji(status: AttendanceStatus): string {
-  switch (status) {
-    case 'work': return '🔨'
-    case 'overtime': return '🔨'
-    case 'rest': return '🏠'
-    case 'leave': return '🌴'
-    case 'site_off': return '🚧'
-    case 'home_leave': return '✈️'
-    case 'exam': return '📝'
-    case 'comp': return '🚧'
-    case 'none': return '—'
-  }
-}
-
-export function getStatusColor(status: AttendanceStatus): string {
-  switch (status) {
-    case 'work': return 'bg-blue-100 text-blue-700'
-    case 'overtime': return 'bg-orange-100 text-orange-700'
-    case 'rest': return 'bg-gray-100 text-gray-500'
-    case 'leave': return 'bg-green-100 text-green-700'
-    case 'site_off': return 'bg-yellow-100 text-yellow-700'
-    case 'home_leave': return 'bg-cyan-100 text-cyan-700'
-    case 'exam': return 'bg-purple-100 text-purple-700'
-    case 'comp': return 'bg-yellow-100 text-yellow-700'
-    case 'none': return 'bg-red-50 text-red-400'
-  }
-}
-
 
 /**
  * 出面エントリから「削除すべき残骸フィールド」を自動算出する。
@@ -399,5 +357,3 @@ export function paidLeaveChanged(
 ): boolean {
   return !!prev?.p !== !!next?.p
 }
-
-

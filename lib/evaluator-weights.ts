@@ -60,11 +60,6 @@ export const APPROVER_WEIGHTS: Record<number, number> = {
   1: 0.7,  // 政仁さん（事業責任者）
 }
 
-/** 後方互換: 旧 APPROVER_WORKER_IDS の代替（呼び出し側で in 演算子を使う） */
-export const APPROVER_WORKER_IDS = new Set<number>(
-  Object.keys(APPROVER_WEIGHTS).map(k => Number(k)),
-)
-
 export interface EvaluatorWeight {
   evaluatorId: number
   recentDays: number    // 直近90日の共働日数（参考表示用、ウェイトには影響しない）

@@ -49,11 +49,6 @@ async function getMainDoc() {
   return { docRef, data: docSnap.data() }
 }
 
-export async function getAllWorkers(): Promise<WorkerData[]> {
-  const { data } = await getMainDoc()
-  return (data.workers || []) as WorkerData[]
-}
-
 /**
  * 社員IDの採番ルール（2026-05-27 〜）
  *
@@ -272,4 +267,3 @@ export async function applyDueScheduledWorkerChanges(todayIso: string) {
   if (applied.length > 0) invalidateMainCache()
   return applied
 }
-

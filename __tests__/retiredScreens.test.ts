@@ -21,7 +21,6 @@ const FILES = [
   'app/(app)/wage/page.tsx',
   'app/(app)/wage/components/PromotionPanel.tsx',
   'app/api/jp-wage/revision/route.ts',
-  'app/api/jp-wage/seed/route.ts',
 ]
 // `w.retired ? 退職予定 : null` のような「退職日が入っているか」の表示は、retiredNow を先に見ていれば正しいので対象にしない
 const BAD = [/![\w.]+\.retired\b/, /\bif\s*\(\s*[\w.]+\.retired\s*\)/]

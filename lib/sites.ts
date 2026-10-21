@@ -35,33 +35,6 @@ export async function getSites(): Promise<Site[]> {
     .filter(s => !s.archived)
 }
 
-export async function getSiteById(siteId: string): Promise<Site | null> {
-  const sites = await getSites()
-  return sites.find(s => s.id === siteId) || null
-}
-
-export async function getWorkersForSite(siteId: string): Promise<Worker[]> {
-  const data = await getMainDoc()
-  if (!data.assign || !data.workers) return []
-
-  const siteAssign = data.assign[siteId]
-  if (!siteAssign) return []
-
-  const workerIds = new Set((siteAssign.workers as number[]) || [])
-  return (data.workers as Record<string, unknown>[])
-    .filter(w => workerIds.has(w.id as number))
-    .map(w => ({
-      id: w.id as number,
-      name: w.name as string,
-      nameVi: (w.nameVi as string) || '',
-      company: (w.org as string) === 'hfu' ? 'HFU' : '日比',
-      visaType: (w.visa as string) || '',
-      token: (w.token as string) || '',
-      retired: (w.retired as string) || undefined,
-      hireDate: (w.hireDate as string) || undefined,
-    }))
-}
-
 /**
  * 全現場の workers/assign を返す共通実装
  * （public エクスポートは getAllSitesWithWorkersForMonth と

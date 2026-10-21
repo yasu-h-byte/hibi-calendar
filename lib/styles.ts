@@ -26,31 +26,6 @@ export function cardBorderedCls(extra = ''): string {
 }
 
 // ────────────────────────────────────────
-//  Modal
-// ────────────────────────────────────────
-
-// モーダルの枠は components/ui/Modal.tsx の <Modal> に統一（2026-10-03 土台③）。旧 modalOverlayCls / modalContentCls は削除
-
-// ────────────────────────────────────────
-//  Buttons
-// ────────────────────────────────────────
-
-/** プライマリーボタン（hibi-navy） */
-export const btnPrimaryCls =
-  'px-4 py-2 rounded-lg text-sm font-bold bg-hibi-navy text-white hover:bg-hibi-light transition disabled:opacity-50'
-
-/** セカンダリボタン（グレー） */
-export const btnSecondaryCls =
-  'px-4 py-2 rounded-lg text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition'
-
-/** 危険ボタン（赤） */
-export const btnDangerCls =
-  'px-4 py-2 rounded-lg text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition disabled:opacity-50'
-
-/** テキストリンク風ボタン */
-export const btnLinkCls = 'text-xs text-hibi-navy dark:text-blue-400 underline hover:no-underline'
-
-// ────────────────────────────────────────
 //  Input / Form
 // ────────────────────────────────────────
 
@@ -61,9 +36,6 @@ export const inputCls =
 /** セレクトボックス */
 export const selectCls =
   'w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none bg-white'
-
-/** ラベル */
-export const labelCls = 'block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1'
 
 // ────────────────────────────────────────
 //  Badge
@@ -90,13 +62,6 @@ export const badgeCls = {
 
 export type BadgeColor = keyof typeof badgeCls
 
-// ────────────────────────────────────────
-//  Tabs
-// ────────────────────────────────────────
-
-/** タブコンテナ */
-export const tabsContainerCls = 'flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 rounded-lg p-1'
-
 /** タブボタン（共通部分） */
 export function tabButtonCls(active: boolean, extra = ''): string {
   const base = 'flex-1 py-2 px-4 rounded-md text-sm font-medium transition'
@@ -105,21 +70,3 @@ export function tabButtonCls(active: boolean, extra = ''): string {
     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
   return `${base} ${state} ${extra}`.trim()
 }
-
-// ────────────────────────────────────────
-//  Table
-// ────────────────────────────────────────
-
-/** テーブルのヘッダーセル */
-export const thCls =
-  'px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-700'
-
-/** テーブルのボディセル */
-export const tdCls = 'px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300'
-
-// ────────────────────────────────────────
-//  Empty / Loading state
-// ────────────────────────────────────────
-
-export const emptyStateCls = 'text-center py-8 text-sm text-gray-400 dark:text-gray-500'
-export const loadingStateCls = 'text-center py-8 text-sm text-gray-400 dark:text-gray-500'

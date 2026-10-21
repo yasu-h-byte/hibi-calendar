@@ -136,23 +136,6 @@ export interface RaiseTableRow {
 }
 
 /**
- * 旧昇給テーブル（〜2026-09-14）。記録として残す（計算には使わない）。
- * 1,300円スタートの独自表で、賃金カーブ（160円−8円×年数）と最大24円ずれていた。
- * `year` は「評価日時点の完了年数」だったため、記念日の前に評価すると1年前の行を引いていた。
- */
-export const LEGACY_RAISE_TABLE_2026_05: RaiseTableRow[] = [
-  { year: 1, S: 220, A: 170, B: 120, C: 80 },
-  { year: 2, S: 200, A: 160, B: 110, C: 65 },
-  { year: 3, S: 180, A: 140, B: 100, C: 55 },
-  { year: 4, S: 170, A: 130, B: 90, C: 50 },
-  { year: 5, S: 160, A: 120, B: 80, C: 50 },
-  { year: 6, S: 140, A: 110, B: 75, C: 45 },
-  { year: 7, S: 120, A: 90, B: 65, C: 35 },
-  { year: 8, S: 110, A: 80, B: 60, C: 30 },
-  { year: 9, S: 100, A: 80, B: 60, C: 30 },
-]
-
-/**
  * 評価ランクごとの倍率（A評価＝賃金カーブの昇給額 に対する比）。2026-09-14 代表決定で導入。
  * 旧テーブルの平均的な比（S≒1.28 / B≒0.72 / C≒0.40）を丸めた値。
  * 固定比にすることで、どの年も S > A > B > C かつ年数とともに単調に下がる。
@@ -315,4 +298,3 @@ export function raiseYearAt(hireDate: string, evaluationDate: string): number {
   n = best
   return Math.max(1, n)
 }
-
