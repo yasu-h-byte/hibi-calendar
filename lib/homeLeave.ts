@@ -93,63 +93,8 @@ export function isFullMonthHomeLeave(
 }
 
 /**
- * 指定日が承認済みの帰国期間に含まれるか（2026-08-27 追加・休暇届総点検）。
- * 帰国中の日は無給の帰国扱いであり、有給(p)と両立しない。
- * 有給の申請・承認・スマホ直接入力のガードに使う。
- */
-export async function isDateInApprovedHomeLeave(workerId: number, dateIso: string): Promise<boolean> {
-  const leaves = await getAllActiveHomeLeaves()
-  return leaves.some(hl => hl.workerId === workerId && dateIso >= hl.startDate && dateIso <= hl.endDate)
-}
-
-/**
  * 2つのYM形式に対応（YYYYMM or YYYY-MM）
  */
 export function normalizeYm(ym: string): string {
   return ym.replace('-', '')
-}
-
-/**
- * approved な帰国記録だけを取得（手動登録 + スマホ承認済み）
- * UI 表示用。pending は除外、foreman_approved も除外（最終承認後のみ表示）。
- */
-export async function getApprovedHomeLeaves(): Promise<Array<{
-  id: string
-  workerId: number
-  workerName: string
-  startDate: string
-  endDate: string
-  reason: string
-  note?: string
-  source: 'mobile' | 'manual'
-}>> {
-  const result: Array<{
-    id: string
-    workerId: number
-    workerName: string
-    startDate: string
-    endDate: string
-    reason: string
-    note?: string
-    source: 'mobile' | 'manual'
-  }> = []
-  try {
-    const q = query(collection(db, 'homeLongLeave'), where('status', '==', 'approved'))
-    const snap = await getDocs(q)
-    snap.forEach(d => {
-      const v = d.data()
-      result.push({
-        id: d.id,
-        workerId: v.workerId,
-        workerName: v.workerName || '',
-        startDate: v.startDate,
-        endDate: v.endDate,
-        reason: v.reason || '一時帰国',
-        note: v.note,
-        // requestedAt が無いものは管理者手動登録、ある場合はスマホ申請由来
-        source: v.requestedAt ? 'mobile' : 'manual',
-      })
-    })
-  } catch { /* ignore */ }
-  return result
 }

@@ -9,6 +9,7 @@
  * 発行の流れは応援の請求書と同じ（事務が申請 → 事業責任者・管理者が承認して発行）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { fmtYenOrDash as yen } from '@/lib/format'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { confirmDialog, confirmDanger, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
@@ -44,7 +45,6 @@ interface DetailData {
   storageReady: boolean
 }
 
-const yen = (v: number | null | undefined) => (typeof v === 'number' ? '¥' + Math.round(v).toLocaleString() : '—')
 const signedNum = (v: number, unit: string) => (v === 0 ? '±0' : (v > 0 ? '+' : '−') + Math.abs(Math.round(v * 100) / 100).toLocaleString()) + unit
 const ymLabelOf = (ym: string) => `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月分`
 const jpDate = (iso: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[1]}/${parseInt(m[2])}/${parseInt(m[3])}` : '—' }

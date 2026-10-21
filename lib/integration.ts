@@ -16,7 +16,8 @@
  */
 import { timingSafeEqual } from 'crypto'
 import type { NextRequest } from 'next/server'
-import { compute, getMainData, getAttData, getAttDataCached, isClosedMonthYm, getBillTotal, getSubconRate } from '@/lib/compute'
+import { compute, isClosedMonthYm, getBillTotal, getSubconRate } from '@/lib/compute'
+import { getMainData, getAttData, getAttDataCached } from '@/lib/compute.server'
 import { applyPayrollCosts } from '@/lib/payroll-cost'
 import { resolveSiteParties, type CompanyLike } from '@/lib/companies'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'

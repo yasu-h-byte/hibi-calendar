@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCap, getApiAuthUser } from '@/lib/auth'
+import { requireCap, getApiAuthUser, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, deleteDoc } from '@/lib/fsdb'
-import { getMainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
 import { logActivity } from '@/lib/activity'
 import { payNoteAckId, type PayNoteAck } from '@/lib/pay-note-ack'
 import { loadPayNoteAcks, invalidatePayNoteAcks } from '@/lib/pay-note-ack-server'
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       // 1件まるごと置き換える（前の確認のメモを残さない）
       await setDoc(ref, ack)
       invalidatePayNoteAcks(ym)
-      try { await logActivity('admin', 'monthly.noteAck', `${ym} ${workerName} の注意点（${code}）を確認済みに（${byName}）${note ? `: ${note}` : ''}`) } catch { /* ログ失敗は本体に影響させない */ }
+      try { await logActivity(await actorLabel(request), 'monthly.noteAck', `${ym} ${workerName} の注意点（${code}）を確認済みに（${byName}）${note ? `: ${note}` : ''}`) } catch { /* ログ失敗は本体に影響させない */ }
       return NextResponse.json({ success: true, ack })
     }
     if (action === 'unack') {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       if (!snap.exists()) return NextResponse.json({ success: true })
       await deleteDoc(ref)
       invalidatePayNoteAcks(ym)
-      try { await logActivity('admin', 'monthly.noteAck.cancel', `${ym} ${workerName} の注意点（${code}）の確認を取り消し（${byName}）`) } catch { /* 同上 */ }
+      try { await logActivity(await actorLabel(request), 'monthly.noteAck.cancel', `${ym} ${workerName} の注意点（${code}）の確認を取り消し（${byName}）`) } catch { /* 同上 */ }
       return NextResponse.json({ success: true })
     }
     return NextResponse.json({ error: 'action が正しくありません' }, { status: 400 })

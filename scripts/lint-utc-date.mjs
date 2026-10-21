@@ -34,6 +34,8 @@ const SERVER_DIRS = ['app/api/', 'lib/']
 
 const ANYWHERE = [
   { re: /new Date\(\)\.toISOString\(\)\.(slice|split|substring)\(/, msg: 'UTC の日付。todayJstIso() / currentYmJst() を使う' },
+  // 2026-10-21 総点検: 日本時間への変換の自前実装（12 か所あった）。lib/date-utils.ts に集約
+  { re: /toLocaleString\('en-(US|CA)', \{ timeZone: 'Asia\/Tokyo'|\+ 9 \* (60 \* 60|3600) \* 1000/, msg: '日本時間の変換の自前実装。todayJstIso() / jstIsoOf() / jstYmOf() / jstWallClock()（lib/date-utils.ts）を使う' },
 ]
 const SERVER_ONLY = [
   { re: /new Date\(\)\.(getFullYear|getMonth|getDate|getDay)\(\)/, msg: 'サーバでは UTC。currentYmJst() / currentYearJst() / todayJstDate() を使う' },

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole } from '@/lib/auth'
-import { currentYmJst } from '@/lib/date-utils'
+import { currentYmJst, todayJstIso, addDaysIso } from '@/lib/date-utils'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
-import { getWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken } from '@/lib/workers.server'
 import { ymKey } from '@/lib/attendance'
 import { getForemenOfWorkerSites, managerByToken } from '@/lib/foreman-todo'
 
@@ -74,11 +74,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate dates are at least 90 days (3 months) in the future (JST)
-      const now = new Date()
-      const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      const minDate = new Date(jstNow)
-      minDate.setDate(minDate.getDate() + 90)
-      const minDateStr = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`
+      const minDateStr = addDaysIso(todayJstIso(), 90)
 
       if (startDate < minDateStr) {
         return NextResponse.json({ error: 'Start date must be at least 90 days ahead' }, { status: 400 })
@@ -223,16 +219,14 @@ export async function POST(request: NextRequest) {
       //   12ヶ月で打ち切る（旧: 1日ずつ約290万回転で checkMonthLocked を叩き
       //   タイムアウト＋クォータ浪費の恐れがあった）。ロック判定は本人の org で行う
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const { getWorkers } = await import('@/lib/workers')
-        const company = (await getWorkers()).find(w => w.id === data.workerId)?.company
-        const org = company === 'HFU' ? 'hfu' : company ? 'hibi' : undefined
+        // 2026-10-21 総点検: 人員マスタを 1 回読み、人の会社で判定（lib/locks.ts。旧: 月ごとに読み直し・会社を自前で判定）
+        const { loadLockContext, lockedMessage } = await import('@/lib/locks.server')
+        const lockCtx = await loadLockContext()
         let ymCur = data.startDate.slice(0, 7).replace('-', '')
         const endYmRaw = data.endDate.slice(0, 7).replace('-', '')
         let guard = 0
         while (ymCur <= endYmRaw && guard++ < 13) {
-          const lockErr = await checkMonthLocked(ymCur, org)
-          if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+          if (lockCtx.isLocked(ymCur, data.workerId)) return NextResponse.json({ error: lockedMessage(ymCur) }, { status: 409 })
           const y = Number(ymCur.slice(0, 4)); const m = Number(ymCur.slice(4, 6))
           ymCur = m === 12 ? `${y + 1}01` : `${y}${String(m + 1).padStart(2, '0')}`
         }

@@ -10,6 +10,7 @@
  * 取り消した番号は欠番のまま残る（再利用しない）。
  */
 import { randomUUID } from 'crypto'
+import { todayJstIso } from '@/lib/date-utils'
 import { db } from './firebase'
 import { doc, getDoc, updateDoc, collection, getDocs, query, where, runTransaction } from '@/lib/fsdb'
 import { logActivity } from './activity'
@@ -77,8 +78,7 @@ export interface PeerInvoiceRecord {
 }
 
 function todayIso(): string {
-  const jst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  return `${jst.getFullYear()}-${String(jst.getMonth() + 1).padStart(2, '0')}-${String(jst.getDate()).padStart(2, '0')}`
+  return todayJstIso()
 }
 
 /** 自社情報が請求書発行に足りているか（登録番号・振込先が無い請求書は出せない） */

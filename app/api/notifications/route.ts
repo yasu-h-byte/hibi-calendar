@@ -7,7 +7,8 @@ import { permRoleOf } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs, doc, getDoc } from '@/lib/fsdb'
 import { backupHealth, type LastBackupInfo } from '@/lib/backup-plan'
-import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
+import { parseDKey, getAssign } from '@/lib/compute'
+import { getMainData, getAttData } from '@/lib/compute.server'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 import { todayJstIso, addMonthsSafe, todayJstDate, localMidnight, addDaysIso } from '@/lib/date-utils'
@@ -147,12 +148,30 @@ export async function GET(request: NextRequest) {
     //   確定済み月は5分キャッシュ（getAttDataCached）を使う。
     const allAttForPL: Record<string, Record<string, unknown>> = {}
     {
-      const { getAttDataCached, isClosedMonthYm } = await import('@/lib/compute')
-      const yms: string[] = []
-      for (let i = -24; i <= 12; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
-        yms.push(ymKey(d.getFullYear(), d.getMonth() + 1))
+      const { isClosedMonthYm } = await import('@/lib/compute')
+      const { getAttDataCached } = await import('@/lib/compute.server')
+      // 2026-10-21 総点検: 読む月を「使う月」だけに絞る（旧: −24〜+12 の 37 か月を毎回）。使う所は
+      //   ブロック2 残数（今日有効な付与期間 = 付与日〜1年）、ブロック6 付与予定の繰越（前期の付与日〜1年）、
+      //   7b 配置の見直し（前月・今月）。いずれも付与日の月から 12 か月で足りる。念のため −24〜+12 の窓の外は読まない
+      const { selectActiveGrantRecord } = await import('@/lib/leave-compute')
+      const addYm = (ym: string, n: number) => addMonthsSafe(`${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`, n).slice(0, 7).replace('-', '')
+      const minYm = addYm(currentYm, -24), maxYm = addYm(currentYm, 12)
+      const need = new Set<string>([addYm(currentYm, -1), currentYm])
+      const addPeriod = (grantIso: string | undefined) => {
+        if (!grantIso || !/^\d{4}-\d{2}/.test(grantIso)) return
+        let cur = grantIso.slice(0, 7).replace('-', '')
+        for (let i = 0; i <= 12; i++) { if (cur >= minYm && cur <= maxYm) need.add(cur); cur = addYm(cur, 1) }
       }
+      for (const w of activeWorkers) {
+        const records = (main.plData[String(w.id)] || []) as { grantDate?: string; grantDays?: number; grant?: number; _archived?: boolean }[]
+        if (records.length === 0) continue
+        addPeriod(selectActiveGrantRecord(records, nowJstIso)?.grantDate)
+        // 付与予定（±30日）の繰越は前期（いちばん新しい付与）の期間から数える
+        const dated = records.filter(r => !r._archived && ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)) && r.grantDate)
+        const latest = dated.sort((a, b) => (b.grantDate || '').localeCompare(a.grantDate || ''))[0]
+        addPeriod(latest?.grantDate)
+      }
+      const yms = [...need].sort()
       const atts = await Promise.all(yms.map(m =>
         (isClosedMonthYm(m) ? getAttDataCached(m) : getAttData(m)).catch(() => ({ d: {} as Record<string, unknown> }))))
       for (const a of atts) Object.assign(allAttForPL, a.d)

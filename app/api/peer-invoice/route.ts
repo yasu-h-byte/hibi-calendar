@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
-import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
+import { compute } from '@/lib/compute'
+import { getMainData, getMultiMonthAttData } from '@/lib/compute.server'
 import {
   resolveInvoiceDraft, invoiceApprovalGap, requestPeerInvoice, approvePeerInvoice, rejectPeerInvoice, listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
   paperSummaryForCompanyYm,

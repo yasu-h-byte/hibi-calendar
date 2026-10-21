@@ -10,6 +10,9 @@
  */
 
 import { useEffect, useState, useMemo } from 'react'
+import { can } from '@/lib/permissions'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import { Worker, Evaluation, EvaluationRank, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
@@ -61,7 +64,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
   const [sortKey, setSortKey] = useState<SortKey>('evalCount')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
+  const isAdmin = can(authUser, 'wage.view')   // 権限表（lib/permissions.ts）で判定。旧: role の直書き（2026-10-21 総点検）
 
   // URL ?worker=N で詳細を自動オープン
   useEffect(() => {
@@ -83,14 +86,14 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
       try {
         const password = (() => {
           try {
-            const stored = localStorage.getItem('hibi_auth')
-            if (stored) return (JSON.parse(stored).password as string) || ''
+            const stored = readAuth()
+            if (stored) return (stored.password as string) || ''
           } catch { /* ignore */ }
           return ''
         })()
         const [wRes, eRes] = await Promise.all([
-          fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-          fetch('/api/evaluation', { headers: { 'x-admin-password': password } }),
+          fetchWithAuth('/api/workers', { password }),
+          fetchWithAuth('/api/evaluation', { password }),
         ])
         if (cancelled) return
         if (wRes.ok) {

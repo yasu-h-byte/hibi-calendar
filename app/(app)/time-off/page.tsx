@@ -8,6 +8,7 @@
  * - 職長は最初「自分の現場」だけ。切り替えで全現場・現場ごと
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { notify } from '@/lib/notify'
 import { PageHeader, Segment, Chip, SearchBox } from '@/components/ui/PageParts'
@@ -45,7 +46,7 @@ export default function TimeOffPage() {
   const load = useCallback(async () => {
     if (!password) return
     try {
-      const r = await fetch('/api/time-off', { headers: { 'x-admin-password': password } })
+      const r = await fetchWithAuth('/api/time-off', { password })
       const j = await r.json().catch(() => null)
       if (!r.ok) { notify.failed('読み込み', j?.error || 'サーバが受け付けませんでした'); return }
       setItems(j.items || [])

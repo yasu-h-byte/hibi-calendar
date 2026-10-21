@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calcLegalHolidayAllowance } from '@/lib/compute'
+import { calcLegalHolidayAllowance } from '@/lib/compute-vn-salary'
 
 // 日本人の法定休日（日曜）割増（2026-08-13 実装）。
 // 従来は「日額×1日 ＋ 残業h×1.25」で処理しており、労基法37条の35%増が未計上だった。

@@ -90,7 +90,7 @@ export async function recomputeNextCarryOver(
   //   抜けて、最新 main の読み直しと最大13か月分の出面読み（getLeaveBalance）を省く。
   //   キャッシュが古くて「次期が無い」と誤判定しても、次期を作る半自動付与は作成時に繰越を計算する。
   {
-    const { getMainData } = await import('./compute')
+    const { getMainData } = await import('./compute.server')
     const cached = await getMainData()
     const pre = resolveCarryTarget(cached.workers, cached.plData as unknown as Record<string, Rec[]>, workerId, dateIso)
     if ('reason' in pre) return { updated: false, reason: pre.reason }

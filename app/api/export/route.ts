@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCap } from '@/lib/auth'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, getSubconRate } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { getSubconRate } from '@/lib/compute'
+import { getMainData, getAttData, loadMonthlyAllowances } from '@/lib/compute.server'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 import {
+  workbookToBuffer,
+  markUnconfirmedWorkbook,
+} from '@/lib/export'
+import { ATTENDANCE_ORG_LABEL } from '@/lib/orgs'
+import {
   generateOrgAttendance,
-  ATTENDANCE_ORG_LABEL,
+  sitesForMonthSheets,
+} from '@/lib/export-attendance'
+import {
   generateSubconConfirmation,
   generateBukakeReport,
+} from '@/lib/export-subcon'
+import {
   generateMonthlyExcel,
   generatePerSiteAttendance,
+} from '@/lib/export-monthly'
+import {
   generatePlannedShiftExcel,
   generateActualHoursExcel,
   generateConsentLedger,
-  workbookToBuffer,
-  markUnconfirmedWorkbook,
-  sitesForMonthSheets,
-} from '@/lib/export'
+} from '@/lib/export-labor'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { db } from '@/lib/firebase'
@@ -157,7 +167,7 @@ export async function GET(request: NextRequest) {
         } else {
           // Generate for all subcons in one workbook
           // We'll create individual workbooks merged: one sheet per subcon
-          const XLSX = await import('xlsx')
+          const XLSX = await import('xlsx-js-style')
           const wb = XLSX.utils.book_new()
 
           const { canBorrowFrom } = await import('@/lib/companies')

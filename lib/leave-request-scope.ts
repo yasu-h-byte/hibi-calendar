@@ -10,8 +10,8 @@
  */
 import type { NextRequest } from 'next/server'
 import { getApiAuthUser, callerCan, approvingForemenOfSite } from './auth'
-import { getMainData } from './compute'
-import { getStaffSites } from './attendance'
+import { getMainData } from './compute.server'
+import { getStaffSites } from './attendance.server'
 
 export type RequestListScope =
   | { kind: 'all' }

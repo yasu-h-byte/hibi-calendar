@@ -1,4 +1,4 @@
-import { getMainData, getAttData } from './compute'
+import { getMainData, getAttData } from './compute.server'
 import {
   selectActiveGrantRecord, selectEndedPeriodRecord, normalizePLRecord, computeLeaveBalanceFromAtt,
   computeRecordBalance, grantPeriodEndExclusive, monthsCoveringPeriod, type LeaveBalance, type RecordBalance,

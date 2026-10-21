@@ -180,10 +180,13 @@ describe('API の権限（app/api/peer-invoice）', () => {
       requireCap: async (_req: unknown, cap: string) =>
         cap === 'invoice.request' ? null : new Response(JSON.stringify({ error: 'x' }), { status: 403 }),
     }))
-    vi.doMock('@/lib/compute', async orig => ({
-      ...(await orig<typeof import('@/lib/compute')>()),
+    vi.doMock('@/lib/compute.server', async orig => ({
+      ...(await orig<typeof import('@/lib/compute.server')>()),
       getMainData: async () => main,
       getMultiMonthAttData: async () => ({ d: attD, sd: {} }),
+    }))
+    vi.doMock('@/lib/compute', async orig => ({
+      ...(await orig<typeof import('@/lib/compute')>()),
       compute: () => ({}),
     }))
     vi.resetModules()

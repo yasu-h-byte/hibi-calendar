@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
-import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
-import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
+import { parseDKey, isDispatchedAt } from '@/lib/compute'
+import { getMainData, getMultiMonthAttData } from '@/lib/compute.server'
+import { ymKey, attKey } from '@/lib/attendance'
+import type { AttendanceEntry } from '@/types'
+import { writeAttendanceEntry, dayApprovalOf, finalApprovedEditError } from '@/lib/attendance-save'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap, jpDeemedDate, selectCurrentPeriodRecord, selectEndedPeriodRecord, computeRecordBalance } from '@/lib/leave-compute'
@@ -123,11 +126,7 @@ export async function POST(request: NextRequest) {
     const nowIso = new Date().toISOString()
 
     // 本日のJST日付を YYYY-MM-DD で返す（Vercelサーバーは UTC のため補正）
-    const todayJST = () => {
-      const now = new Date()
-      const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
-      return jst.toISOString().slice(0, 10)
-    }
+    const todayJST = () => todayJstIso()
 
     if (action === 'recordBuyout') {
       // Phase 6: 買取記録（日本人期末買取 or 退職時清算）
@@ -198,7 +197,7 @@ export async function POST(request: NextRequest) {
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
       await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
-      await logActivity('admin', 'leave.buyout', `workerId=${workerId} FY${fy} 買取 ${days}日${amount ? ` ¥${amount}` : ''}（操作者: ${actor}）`)
+      await logActivity(await actorLabel(request), 'leave.buyout', `workerId=${workerId} FY${fy} 買取 ${days}日${amount ? ` ¥${amount}` : ''}（操作者: ${actor}）`)
       return NextResponse.json({ success: true, totalBuyout })
     }
 
@@ -270,7 +269,7 @@ export async function POST(request: NextRequest) {
         if (bal.remaining < dates.length && body.allowOverdraft === true) {
           const wName = (data.workers as { id: number; name?: string }[] | undefined)
             ?.find(w => w.id === Number(workerId))?.name || `ID:${workerId}`
-          await logActivity('admin', 'leave.overdraft',
+          await logActivity(await actorLabel(request), 'leave.overdraft',
             `${wName} 有給${dates.length}日を残数超過で登録（残 ${bal.remaining}日 / 枠 ${bal.total}日、操作者: ${actor}）`)
         }
       }
@@ -286,22 +285,24 @@ export async function POST(request: NextRequest) {
       //   帰国期間の上書きが必要な場合は hk も削除対象（computeAttendanceDeleteFields は
       //   entry に無い既知フィールドを全て挙げるので hk も自動的に含まれる）
       const desigEntry = { w: 0, p: 1 }
-      const desigDelete = computeAttendanceDeleteFields(desigEntry)
-      const setOptions = { deleteFields: overwriteHomeLeave ? desigDelete : desigDelete.filter(f => f !== 'hk') }
+      /** 月ごとの出面（多現場重複の判定と、保存前の中身の記録に使う） */
+      const attCache: Record<string, Record<string, AttendanceEntry>> = {}
+      /** 帰国を上書きしないときは hk を残す（共通の入口 writeAttendanceEntry の keepFields） */
+      const keepFields = overwriteHomeLeave ? [] : ['hk']
 
       // 2026-06-12 (監査 Sprint2-B): 時季指定・管理者手動入力にも request と同じガードを適用
       //   ① ロック済み月は拒否（給与確定後のデータ変更防止）
       //   ② カレンダー非稼働日への P は拒否（有給日給の過払い防止）
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const { isScheduledWorkDay } = await import('@/lib/attendance')
-        const wOrgRec = (data.workers as { id: number; org?: string }[] | undefined)?.find(w => w.id === Number(workerId))
+        const { loadLockContext, lockedMessage } = await import('@/lib/locks.server')
+        const { isScheduledWorkDay } = await import('@/lib/attendance.server')
+        // 2026-10-21 総点検: 人員マスタに無い人は会社なし（両社締めでないと通る）になっていた → 人の会社で判定（lib/locks.ts）
+        const lockCtx = await loadLockContext()
         for (const dateStr of dates) {
           const d0 = new Date(dateStr)
           if (isNaN(d0.getTime())) continue
           const ymCheck = ymKey(d0.getFullYear(), d0.getMonth() + 1)
-          const lockErr = await checkMonthLocked(ymCheck, wOrgRec?.org)
-          if (lockErr) return NextResponse.json({ error: `${dateStr}: ${lockErr}` }, { status: 409 })
+          if (lockCtx.isLocked(ymCheck, Number(workerId))) return NextResponse.json({ error: `${dateStr}: ${lockedMessage(ymCheck)}` }, { status: 409 })
           if (!await isScheduledWorkDay(siteId, dateStr)) {
             return NextResponse.json({ error: `${dateStr} は出勤予定日ではないため有給にできません（休日・所定休は対象外）` }, { status: 400 })
           }
@@ -309,14 +310,18 @@ export async function POST(request: NextRequest) {
         // ③ 多現場重複ガード（2026-08-31 横展開）: 別現場に同日の出面がある日へ P を
         //    入れると出勤と有給の二重払いになる（grid/staff/foreman/承認と同じガード）
         {
-          const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+          const { detectMultiSiteConflict } = await import('@/lib/attendance')
+          const { getAttendanceDoc } = await import('@/lib/attendance.server')
           const sitesAllD = (data.sites || []) as { id: string; name?: string }[]
-          const attCache: Record<string, Awaited<ReturnType<typeof getAttendanceDoc>>> = {}
+          // ④ 最終承認済みの日は、さかのぼり・最終承認の権限がある人だけ（出面グリッド・有給の承認と同じ・2026-10-21 総点検）
+          const canEditFinal = !(await requireCap(request, 'attendance.backfill')) || !(await requireCap(request, 'attendance.finalApprove'))
           for (const dateStr of dates) {
             const d0 = new Date(dateStr)
             if (isNaN(d0.getTime())) continue
             const ymD = ymKey(d0.getFullYear(), d0.getMonth() + 1)
             if (!(ymD in attCache)) attCache[ymD] = await getAttendanceDoc(ymD)
+            const finalErr = finalApprovedEditError(await dayApprovalOf(sitesAllD, siteId, ymD, d0.getDate()), canEditFinal)
+            if (finalErr) return NextResponse.json({ error: `${dateStr}: ${finalErr}` }, { status: 409 })
             const conflictD = detectMultiSiteConflict(attCache[ymD], siteId, Number(workerId), ymD, d0.getDate(), sitesAllD, { w: 0, p: 1 })
             if (conflictD) {
               const cName = sitesAllD.find(s2 => s2.id === conflictD.conflictSiteId)?.name || conflictD.conflictSiteId
@@ -333,8 +338,12 @@ export async function POST(request: NextRequest) {
         if (isNaN(d.getTime())) continue
         const ym = ymKey(d.getFullYear(), d.getMonth() + 1)
         const day = d.getDate()
-        // 出面書き込み: { w: 0, p: 1 } (overwriteHomeLeave時はhkを削除)
-        await setAttendanceEntry(siteId, workerId, ym, day, desigEntry, setOptions)
+        // 出面書き込み: { w: 0, p: 1 }（overwriteHomeLeave でなければ hk は残す）。共通の入口＝変更履歴に残る（2026-10-21 総点検）
+        await writeAttendanceEntry({
+          siteId, workerId: Number(workerId), ym, day, entry: desigEntry, keepFields,
+          prevEntry: attCache[ym] ? (attCache[ym][attKey(siteId, Number(workerId), ym, day)] ?? null) : undefined,
+          actor: `leave-designate:${String(actor)}`,
+        })
         history.push({
           date: dateStr,
           designatedAt: nowIso,
@@ -353,7 +362,7 @@ export async function POST(request: NextRequest) {
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
       await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
-      await logActivity('admin', 'leave.designate', `workerId=${workerId} に有給P入力 ${written.length}日 (${written.join(', ')})（操作者: ${actor}）`)
+      await logActivity(await actorLabel(request), 'leave.designate', `workerId=${workerId} に有給P入力 ${written.length}日 (${written.join(', ')})（操作者: ${actor}）`)
       return NextResponse.json({ success: true, written })
     }
 
@@ -965,7 +974,7 @@ export async function POST(request: NextRequest) {
         await updateDoc(docRef, { [`plData.${key}`]: records })
       }
 
-      await logActivity('admin', 'leave.grant', `workerId=${workerId} に有給付与/編集（操作者: ${actor}）`)
+      await logActivity(await actorLabel(request), 'leave.grant', `workerId=${workerId} に有給付与/編集（操作者: ${actor}）`)
       return NextResponse.json({ success: true })
     }
 
@@ -1211,7 +1220,8 @@ export async function GET(request: NextRequest) {
     }
 
     const allAtt: Record<string, Record<string, unknown>> = {}
-    Object.assign(allAtt, (await getMultiMonthAttData(allMonths)).d)  // 並列読み（性能改善 2026-07-09・GET経路の主因）
+    // 並列読み（性能改善 2026-07-09・GET経路の主因）。一覧の表示用なので確定月は 30 分キャッシュ（2026-10-21）
+    Object.assign(allAtt, (await getMultiMonthAttData(allMonths, { cachedForClosed: true })).d)
 
     // Worker name map for calendar tooltips
     const workerNames: Record<number, string> = {}

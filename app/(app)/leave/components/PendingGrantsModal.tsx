@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { PendingGrant, PendingGrantForm } from '../types'
 import { FieldError } from '@/components/ui/PageParts'
 import { Modal, CancelButton } from '@/components/ui/Modal'
@@ -60,10 +61,10 @@ export default function PendingGrantsModal({ open, pendingGrants, pendingForm, s
         }
       })
       if (grants.length === 0) return null
-      const res = await fetch('/api/leave', {
+      const res = await fetchWithAuth('/api/leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'executePendingGrants', grants }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'executePendingGrants', grants })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)

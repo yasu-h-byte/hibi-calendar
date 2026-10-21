@@ -16,7 +16,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
-import { getWorkers, isAlreadyRetired } from '@/lib/workers'
+import { isAlreadyRetired } from '@/lib/workers'
+import { getWorkers } from '@/lib/workers.server'
 import { updateWorker } from '@/lib/worker-crud'
 import {
   computeRosterRevision, nextRevisionDate, lastRevisionDate, dailyForStep,
@@ -24,7 +25,7 @@ import {
   type RosterMember, type Hyogo, type JpGrade,
   ANNUAL_DAYS, normalizePaidLeaveDays,
 } from '@/lib/jp-wage'
-import { getMainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
 import { selectActiveGrantRecord } from '@/lib/leave-compute'
 import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
 import { todayJstIso } from '@/lib/date-utils'

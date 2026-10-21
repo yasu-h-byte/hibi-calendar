@@ -14,6 +14,9 @@
  */
 
 import { staffLinkOrigin } from '@/lib/public-origin'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
+import { fmtYenOrDash as yen } from '@/lib/format'
 import { confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -22,7 +25,6 @@ import LaborCostPanel from './LaborCostPanel'
 
 const ALLOWED_VIEWERS = [0, 1]   // 代表・事業責任者
 
-const yen = (v: number | null | undefined) => v == null ? '—' : '¥' + Math.round(v).toLocaleString()
 const signedPitch = (v: number) => (v > 0 ? '+' : '') + v
 
 /** 選んだ事由の合計（±3でクランプ）。サーバの specialAdjustment と同じ規則 */
@@ -95,7 +97,7 @@ export default function RevisionPanel() {
 
   const load = useCallback(async (password: string) => {
     try {
-      const res = await fetch('/api/jp-wage/revision', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/jp-wage/revision', { password })
       if (!res.ok) throw new Error(`取得に失敗しました（${res.status}）`)
       const j: Payload = await res.json()
       setData(j)
@@ -108,8 +110,8 @@ export default function RevisionPanel() {
   useEffect(() => {
     let password = ''
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const parsed = raw ? JSON.parse(raw) : null
+      const raw = readAuth()
+      const parsed = raw
       password = parsed?.password || ''
       const wid = parsed?.user?.workerId
       // workerId 0（代表）は falsy なので、必ず includes で判定する
@@ -135,10 +137,10 @@ export default function RevisionPanel() {
     const run = async () => {
       setBusy(true); setMsg('')
       try {
-        const res = await fetch('/api/jp-wage/revision', {
+        const res = await fetchWithAuth('/api/jp-wage/revision', { password: pw,
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-          body: JSON.stringify({ effective, ...body }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ effective, ...body })
         })
         if (!res.ok) throw new Error((await res.json()).error || `保存に失敗しました（${res.status}）`)
         await load(pw)
@@ -170,10 +172,10 @@ export default function RevisionPanel() {
     if (typed !== '確定') { setErr('「確定」と入力されなかったので、確定しませんでした'); return }
     setBusy(true); setMsg('')
     try {
-      const res = await fetch('/api/jp-wage/revision', {
+      const res = await fetchWithAuth('/api/jp-wage/revision', { password: pw,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({ effective: data.effective }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ effective: data.effective })
       })
       const j = await res.json()
       if (!res.ok) {
@@ -204,9 +206,8 @@ export default function RevisionPanel() {
     if (typed !== '取り消し') { setErr('「取り消し」と入力されなかったので、取り消しませんでした'); return }
     setBusy(true); setMsg(''); setErr('')
     try {
-      const res = await fetch(`/api/jp-wage/revision?effective=${data.effective}`, {
-        method: 'DELETE', headers: { 'x-admin-password': pw },
-      })
+      const res = await fetchWithAuth(`/api/jp-wage/revision?effective=${data.effective}`, { password: pw,
+        method: 'DELETE'})
       const j = await res.json()
       if (!res.ok) throw new Error([j.error, ...(j.conflicts || [])].join('\n'))
       await load(pw)

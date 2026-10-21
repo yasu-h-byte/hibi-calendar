@@ -7,7 +7,8 @@
  */
 import 'server-only'
 import { NextResponse } from 'next/server'
-import { getMainData, getAttData, parseDKey } from './compute'
+import { parseDKey } from './compute'
+import { getMainData, getAttData } from './compute.server'
 import { checkBreaksForDay, BREAK_CHECK_CODE, type BreakIssue, type BreakCheckWorker } from './break-check'
 import type { AttendanceEntry, SiteWorkSchedule } from '@/types'
 

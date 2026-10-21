@@ -25,6 +25,8 @@
  */
 
 import RestMismatchBanner from '../components/RestMismatchBanner'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { isBreakCheckResponse, confirmBreakCheck } from '@/lib/break-check-confirm'
 import { notify } from '@/lib/notify'
@@ -163,9 +165,9 @@ export default function ForemanMobilePage() {
   // ── 認証読み込み ──
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('hibi_auth')
+      const stored = readAuth()
       if (stored) {
-        const { password: pw, user } = JSON.parse(stored)
+        const { password: pw, user } = stored
         setPassword(pw)
         if (user) {
           setUserRole(user.role || '')
@@ -190,7 +192,7 @@ export default function ForemanMobilePage() {
   // 管理者で担当現場が無い場合: カレンダーAPIから現場一覧を取って先頭を選ぶ
   useEffect(() => {
     if (!password || siteId || foremanSites.length > 0) return
-    fetch(`/api/calendar/status?ym=${y}-${pad2(m)}`, { headers: { 'x-admin-password': password } })
+    fetchWithAuth(`/api/calendar/status?ym=${y}-${pad2(m)}`, { password })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         const first = d?.sites?.[0]?.siteId
@@ -205,9 +207,7 @@ export default function ForemanMobilePage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/attendance/grid?siteId=${siteId}&ym=${ym}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/attendance/grid?siteId=${siteId}&ym=${ym}`, { password })
       if (!res.ok) { setError(await res.text().catch(() => '') || 'データ取得に失敗しました'); return }
       setData(await res.json())
     } catch {
@@ -223,20 +223,20 @@ export default function ForemanMobilePage() {
   const postGrid = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setSaving(s => s + 1)
     try {
-      let res = await fetch('/api/attendance/grid', {
+      let res = await fetchWithAuth('/api/attendance/grid', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ siteId, ym, ...body }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, ym, ...body })
       })
       if (res.status === 409) {
         const errData = await res.clone().json().catch(() => null)
         // 休憩チェックの打刻ミスの疑い（承認のとき・2026-10-15）。確認したら ackBreakCheck を付けて送り直す
         if (isBreakCheckResponse(errData)) {
           if (!(await confirmBreakCheck(errData.issues, Number(ym.slice(4, 6))))) { fetchGrid(); return false }
-          res = await fetch('/api/attendance/grid', {
+          res = await fetchWithAuth('/api/attendance/grid', { password,
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-            body: JSON.stringify({ siteId, ym, ...body, ackBreakCheck: true }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteId, ym, ...body, ackBreakCheck: true })
           })
         } else if (errData?.code === 'LEAVE_OVERDRAFT') {
           const b = errData.balance
@@ -263,10 +263,10 @@ export default function ForemanMobilePage() {
                 confirmLabel: '登録する',
               })
           if (!okOverdraft) { fetchGrid(); return false }
-          res = await fetch('/api/attendance/grid', {
+          res = await fetchWithAuth('/api/attendance/grid', { password,
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-            body: JSON.stringify({ siteId, ym, ...body, allowOverdraft: true }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteId, ym, ...body, allowOverdraft: true })
           })
         }
       }
@@ -535,8 +535,8 @@ export default function ForemanMobilePage() {
       // 2026-09-02 修正: 表示月＋翌月だけでなく全件を取り、承認待ちで絞る
       //   （2ヶ月より先の申請が職長画面に出ず放置されていた）
       const [lr, hr] = await Promise.all([
-        fetch('/api/leave-request', { headers: { 'x-admin-password': password } }).then(r => r.ok ? r.json() : null),
-        fetch('/api/home-long-leave', { headers: { 'x-admin-password': password } }).then(r => r.ok ? r.json() : null),
+        fetchWithAuth('/api/leave-request', { password }).then(r => r.ok ? r.json() : null),
+        fetchWithAuth('/api/home-long-leave', { password }).then(r => r.ok ? r.json() : null),
       ])
       const all: LeaveReq[] = lr?.requests || []
       setLeaveReqs(all
@@ -561,10 +561,10 @@ export default function ForemanMobilePage() {
   ) => {
     setSaving(s => s + 1)
     try {
-      const res = await fetch(api, {
+      const res = await fetchWithAuth(api, { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action, requestId, ...extra }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, requestId, ...extra })
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)
@@ -591,7 +591,7 @@ export default function ForemanMobilePage() {
     if (!password || !siteId) return
     setCalLoading(true)
     try {
-      const res = await fetch(`/api/calendar/status?ym=${calYm7}`, { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth(`/api/calendar/status?ym=${calYm7}`, { password })
       const d = res.ok ? await res.json() : null
       const mine = d?.sites?.find((s: { siteId: string }) => s.siteId === siteId)
       const info: CalInfo = mine
@@ -627,10 +627,10 @@ export default function ForemanMobilePage() {
   const saveCal = useCallback(async (): Promise<boolean> => {
     setSaving(s => s + 1)
     try {
-      const res = await fetch('/api/calendar/save-days', {
+      const res = await fetchWithAuth('/api/calendar/save-days', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ siteId, ym: calYm7, days: calDaysLocal, updatedBy: userId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, ym: calYm7, days: calDaysLocal, updatedBy: userId })
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)
@@ -653,10 +653,10 @@ export default function ForemanMobilePage() {
     if (!(await saveCal())) return
     setSaving(s => s + 1)
     try {
-      const res = await fetch('/api/calendar/submit', {
+      const res = await fetchWithAuth('/api/calendar/submit', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ siteId, ym: calYm7, submittedBy: userId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, ym: calYm7, submittedBy: userId })
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)

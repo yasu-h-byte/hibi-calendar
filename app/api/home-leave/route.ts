@@ -3,7 +3,8 @@ import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, updateDoc, deleteDoc, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
-import { getWorkers, resolveWorkerName } from '@/lib/workers'
+import { resolveWorkerName } from '@/lib/workers'
+import { getWorkers } from '@/lib/workers.server'
 import { HOME_LEAVE_SENTINEL_END } from '@/lib/homeLeave'
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -43,10 +44,9 @@ async function findLockedMonthInRanges(
   workerId: number,
   ranges: { startDate?: string; endDate?: string }[],
 ): Promise<string | null> {
-  const { checkMonthLocked } = await import('@/lib/locks')
-  const { getWorkers } = await import('@/lib/workers')
-  const company = (await getWorkers()).find(w => w.id === Number(workerId))?.company
-  const org = company === 'HFU' ? 'hfu' : company ? 'hibi' : undefined
+  // 2026-10-21 総点検: 人員マスタを 1 回読み、人の会社で判定（旧: 月ごとに main を読み直し・会社を自前で判定）
+  const { loadLockContext } = await import('@/lib/locks.server')
+  const lockCtx = await loadLockContext()
   const seen = new Set<string>()
   for (const r of ranges) {
     if (!r?.startDate || !r?.endDate || !ISO_DATE_RE.test(r.startDate)) continue
@@ -61,8 +61,7 @@ async function findLockedMonthInRanges(
     while (ym <= endYm && guard++ < 30) {
       if (!seen.has(ym)) {
         seen.add(ym)
-        const lockErr = await checkMonthLocked(ym, org)
-        if (lockErr) return ym
+        if (lockCtx.isLocked(ym, Number(workerId))) return ym
       }
       const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
       ym = m === 12 ? `${y + 1}01` : `${y}${String(m + 1).padStart(2, '0')}`
@@ -262,7 +261,7 @@ export async function POST(request: NextRequest) {
       const sync = await syncHomeLeaveAttendance(Number(workerId), null, { startDate, endDate }, { excludeDocId: id })
 
       const endLabel = returnUndecided ? '復帰未定' : endDate
-      await logActivity('admin', 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
+      await logActivity(actorLabel, 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
 
       return NextResponse.json({ success: true, id, attendanceSync: sync })
     }
@@ -384,7 +383,7 @@ export async function POST(request: NextRequest) {
       }
 
       const endLabel = newEnd >= HOME_LEAVE_SENTINEL_END ? '復帰未定' : newEnd
-      await logActivity('admin', 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${endLabel}`)
+      await logActivity(actorLabel, 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${endLabel}`)
 
       return NextResponse.json({ success: true, attendanceSync: sync })
     }
@@ -426,7 +425,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      await logActivity('admin', 'homeLeave.delete', `${data.workerName} 一時帰国削除 ${data.startDate}〜${data.endDate}`)
+      await logActivity(actorLabel, 'homeLeave.delete', `${data.workerName} 一時帰国削除 ${data.startDate}〜${data.endDate}`)
 
       return NextResponse.json({ success: true, attendanceSync: sync })
     }

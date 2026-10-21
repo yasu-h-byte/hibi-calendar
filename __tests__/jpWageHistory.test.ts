@@ -6,7 +6,7 @@
  * あるので、そこを突き合わせれば読み違いは落ちる。
  */
 import { describe, it, expect } from 'vitest'
-import { WAGE_HISTORY_SEED, SHEET_2025_10 } from '@/lib/jp-wage-history'
+import { WAGE_HISTORY_SEED, SHEET_2025_10 } from '@/lib/jp-wage-history.server'
 import { baseAnnualWithLeave } from '@/lib/jp-wage'
 
 describe('ベース年収履歴の転記', () => {

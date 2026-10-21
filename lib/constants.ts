@@ -70,18 +70,6 @@ export const JP_ANNUAL_WORK_DAYS = 250
 
 /** 月平均所定労働日数（= 年間所定 ÷ 12）。欠勤控除の分母。 */
 export const JP_AVG_MONTHLY_WORK_DAYS = JP_ANNUAL_WORK_DAYS / 12
-
-/**
- * 36協定 限度時間（労基法36条）
- *
- * - 通常: 月45h / 年360h
- * - 特別条項: 月100h未満 / 年720h / 発動6回/年まで
- * - ⚠️ 会社の実際の協定値は docs/labor-agreements.md を参照（システム値はデフォルト）
- */
-export const OVERTIME_LIMIT_MONTHLY = 45
-export const OVERTIME_LIMIT_YEARLY = 360
-export const SPECIAL_OVERTIME_LIMIT_MONTHLY = 99  // 100h未満
-export const SPECIAL_OVERTIME_LIMIT_YEARLY = 720
 export const SPECIAL_OVERTIME_MAX_TIMES = 6
 
 /**

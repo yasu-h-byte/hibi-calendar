@@ -11,7 +11,7 @@
  * 読み取りは2分キャッシュ（同じ現場・同じ日を何度も読まない）。
  */
 import { db } from './firebase'
-import { doc, getDoc } from '@/lib/fsdb'
+import { doc, getDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 
 /**
  * 最終承認（事業責任者）まで必須にする月の始まり（2026-09-30 代表決定）。
@@ -38,6 +38,33 @@ async function approvalOfKey(key: string, fresh = false): Promise<Approval> {
     .catch(() => null)
   apCache.set(key, { p, ts: Date.now() })
   return p
+}
+
+/**
+ * 現場（1 つの siteId）×月の承認をまとめて読み、日ごとのキャッシュに入れる（2026-10-21 総点検）。
+ * 旧: 月次集計・月締め・本人確認・請求書が「現場×日」ごとに getDoc（未締めの月で 200〜400 読み・REST の往復も同数）。
+ * ID の前方一致の範囲クエリ 1 回で、その現場のその月の承認（あるぶんだけ）を読む（lib/foreman-todo.ts loadApprovalsForSiteMonth と同じ）。
+ * 読めなかったときは何もしない（従来どおり日ごとの getDoc に落ちる）。
+ */
+async function primeSiteMonth(siteId: string, ym: string, days: number[]): Promise<void> {
+  const prefix = `${siteId}_${ym}_`
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'attendanceApprovals'),
+      where('__name__', '>=', prefix),
+      where('__name__', '<', prefix + '\uf8ff'),
+    ))
+    const found = new Map<number, Approval>()
+    snap.forEach(d => {
+      const rest = d.id.slice(prefix.length)
+      if (!/^[1-9]\d?$/.test(rest)) return   // 他の現場 ID の前方一致などを拾わない
+      found.set(Number(rest), d.data() as Approval)
+    })
+    const ts = Date.now()
+    for (const day of days) apCache.set(`${prefix}${day}`, { p: Promise.resolve(found.get(day) ?? null), ts })
+  } catch (e) {
+    console.warn('[approval-gap] 承認の範囲読みに失敗。日ごとの読みに戻します:', e)
+  }
 }
 
 /**
@@ -71,12 +98,36 @@ export async function approvalGap(
   /** fresh: キャッシュを使わず読み直す（月締め・本人確認の記録など、判定を確定させるところで使う・2026-10-02） */
   opts?: { fresh?: boolean },
 ): Promise<ApprovalGap> {
+  const freshSince = Date.now()
   const uniq = new Map<string, FamilyDay>()
   for (const fd of famDays) uniq.set(`${fd.familyId}|${fd.day}`, fd)
   const children = (fam: string) => sites.filter(s => s.parentId === fam).map(s => s.id)
+  // 現場 ID ごとに要る日を集め、3 日以上ある現場は月まとめで読む（キャッシュが温まっていれば読まない。fresh は読み直す）
+  {
+    const daysBySite = new Map<string, Set<number>>()
+    for (const fd of uniq.values()) {
+      for (const id of [fd.familyId, ...children(fd.familyId)]) {
+        if (!daysBySite.has(id)) daysBySite.set(id, new Set())
+        daysBySite.get(id)!.add(fd.day)
+      }
+    }
+    const now = Date.now()
+    const jobs: Promise<void>[] = []
+    for (const [id, dayset] of daysBySite) {
+      const days = [...dayset]
+      const missing = opts?.fresh ? days : days.filter(d => { const h = apCache.get(`${id}_${ym}_${d}`); return !h || now - h.ts >= AP_TTL_MS })
+      if (missing.length >= 3) jobs.push(primeSiteMonth(id, ym, missing))
+    }
+    await Promise.all(jobs)
+  }
   const results = await Promise.all([...uniq.values()].map(async fd => {
     const ids = [fd.familyId, ...children(fd.familyId)]
-    const aps = await Promise.all(ids.map(id => approvalOfKey(`${id}_${ym}_${fd.day}`, !!opts?.fresh)))
+    // fresh でも、この呼び出しで読み直したばかり（primeSiteMonth）の値はそのまま使う
+    const aps = await Promise.all(ids.map(id => {
+      const key = `${id}_${ym}_${fd.day}`
+      const hit = apCache.get(key)
+      return opts?.fresh && hit && hit.ts >= freshSince ? hit.p : approvalOfKey(key, !!opts?.fresh)
+    }))
     // 親・子のどちらにも承認があるときは、早い方（＝その日がそろった時刻）を採る
     const first = (list: string[]) => list.filter(Boolean).sort()[0] || ''
     const foremanAt = first(aps.map(a => atOf(a?.foreman)))

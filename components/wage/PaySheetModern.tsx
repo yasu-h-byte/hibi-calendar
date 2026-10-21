@@ -11,6 +11,7 @@
  * 数値は lib/jp-wage.ts の paySheetFigures（旧様式と同じ）。
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import type { PaySheetFigures } from '@/lib/jp-wage'
 import { ANNUAL_DAYS, MAX_STEP } from '@/lib/jp-wage'
 
@@ -20,7 +21,6 @@ const INK = '#1f2937'
 const MUTED = '#6b7280'
 const LINE = '#e5e7eb'
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 const num = (v: number) => Math.round(v).toLocaleString()
 const signed = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v)
 

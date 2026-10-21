@@ -3,6 +3,7 @@
 import { Icon } from '@/components/ui/Icon'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { siteLeaderLabel } from '@/lib/companies'
+import { isEmployedOn } from '@/lib/workers'
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   dayColBg, dayHeaderBg, dayTextColor,
@@ -563,9 +564,8 @@ export default function AttendanceGrid({
                                 isLocked={isLocked}
                                 onStatusChange={onTimeStatusChange}
                                 canBackfill={!!canBackfill && isPastDayG(d.day) && !worker.offRoster
-                                  // 入社前・退職後の日は出さない（サーバも在籍外の日は弾く）
-                                  && !(worker.hireDate && `${data.year}-${String(data.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` < worker.hireDate)
-                                  && !(worker.retired && `${data.year}-${String(data.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` > worker.retired)}
+                                  // 入社前・退職後の日は出さない（サーバも在籍外の日は弾く。判定は lib/workers.ts isEmployedOn・2026-10-21）
+                                  && isEmployedOn(worker, `${data.year}-${String(data.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`)}
                                 showCompButton={
                                   // カレンダー休日(off/holiday)だけ対象外（2026-08-26 代表確認）。
                                   //   カレンダー休日に補償が要るのは旧制度の3名だけで、

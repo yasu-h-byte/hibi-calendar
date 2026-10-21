@@ -11,6 +11,7 @@
  * 2026-10-05: 一次（山岡建設工業など）へ出した請求書もここに入れる。現場を選び、同じ現場・同じ月の全部の合計を現場の請求額と比べる
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { fmtYenOrDash as yen } from '@/lib/format'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { uploadToStorage } from '@/lib/upload-client'
 import { confirmDanger } from '@/lib/confirm-dialog'
@@ -45,7 +46,6 @@ interface MonthData {
   storageReady: boolean
 }
 
-const yen = (v: number | null | undefined) => (typeof v === 'number' ? '¥' + Math.round(v).toLocaleString() : '—')
 const signedYen = (v: number) => (v === 0 ? '±0' : (v > 0 ? '+' : '−') + '¥' + Math.abs(Math.round(v)).toLocaleString())
 const num = (v: number | null | undefined) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : '—')
 const ymLabelOf = (ym: string) => `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月分`

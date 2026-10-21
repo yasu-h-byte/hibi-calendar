@@ -57,6 +57,8 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
   必ず完全なクラス名を文字列リテラルで書く
 - 文字の大きさは **px で指定しない**（`text-[10px]` 禁止）。rem 系（`text-3xs`/`text-2xs`/`text-xs`/`text-sm`…）を使う。
   10px 相当より小さい字は使わない。`npm run lint:px` が検出する。表は [docs/ui-design.md](docs/ui-design.md) の「文字の大きさ」節
+- 画面から API を呼ぶときは `lib/api-client.ts`（fetchWithAuth / postJson / getJson）を使う。通行証のヘッダ `'x-admin-password'` を
+  画面で手書きしない（2026-10-21 に 150 か所を置き換えた。`npm run lint:auth` が検出する）
 - ブラウザ標準の `confirm()` / `alert()` / `prompt()` は使わない。確認は `lib/confirm-dialog.ts`（confirmDialog / confirmDanger / confirmWithReason）、
   お知らせは `lib/notify.ts`（notify.success / failed / error）、入力の不備は `<FieldError>`。`npm run lint:dialog` が検出する。
   独自モーダルの枠（`fixed inset-0`）も書かず `components/ui/Modal.tsx` の `<Modal>` を使う（同じ lint が検出）。決まりは [docs/ui-design.md](docs/ui-design.md) の「確認・お知らせ・保存の部品」節
@@ -96,6 +98,11 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 - 個人のデータはサーバー専用モジュール（`import 'server-only'`。例 `lib/wage-plan.server.ts`）か
   Firestore に置き、権限（`lib/permissions.ts`）をチェックする API から渡す
 - 画面側の lib には純粋な計算と制度の定数（最賃・カーブ）だけを置く
+- **Firestore を読む・書く関数も `lib/*.server.ts` に置く**（2026-10-21 総点検）。`lib/compute.ts`・`workers.ts`・`attendance.ts`・
+  `locks.ts` が計算と Firestore 読みを同居させていたため、画面がこれらを import するだけで Firebase Web SDK（約100KB）が
+  14 画面のクライアント JS に載っていた。読み書きは `lib/compute.server.ts`（getMainData・getAttData）・`workers.server.ts`・
+  `attendance.server.ts`・`locks.server.ts` へ。`__tests__/clientBundleIsolation.test.ts` が画面の import 連鎖をたどり、
+  firebase / xlsx / pdfjs / server-only に届いたら落とす
 - `npm run build` の後に `scripts/check-client-bundle-secrets.mjs`（postbuild）が
   チャンクに予定額・注記が無いかを調べ、見つかればビルドを失敗させる
 
@@ -110,8 +117,9 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 | 出面グリッドの担当現場チェック | `lib/attendance-authz.ts` isForemanScopedGridAction（外すものだけ列挙） | `__tests__/attendanceAuthz.test.ts` |
 | 給与の項目を返す API | 許可リスト（`lib/workers.ts` WORKER_*_KEYS） | `__tests__/payLock.test.ts` |
 | 日次バックアップの対象 | `lib/backup-plan.ts`（退避する／意図して外す） | `__tests__/backupCoverage.test.ts` |
-| 月の締めの判定 | `lib/locks.ts` checkMonthLockedForWorkers（人の会社で見る。会社なしの checkMonthLocked(ym) は禁止） | `__tests__/locksForWorkers.test.ts` |
-| 承認できる日 | `lib/attendance-authz.ts` approvalDateError（先の日・実在しない日は承認しない） | 同上 |
+| 月の締めの判定 | `lib/locks.server.ts` checkMonthLockedForWorkers / loadLockContext（人の会社で見る・読み直す。会社なしの checkMonthLocked は 2026-10-21 に削除） | `__tests__/locksForWorkers.test.ts` |
+| 承認できる日 | `lib/attendance-authz.ts` approvalDateError（先の日・実在しない日は承認しない。PC・職長スマホ・まとめ承認・マイページの 4 経路とも） | 同上 |
+| 画面から届く import | `lib/*.server.ts`（Firestore 読み書き・個人データ）は画面から import しない | `__tests__/clientBundleIsolation.test.ts` |
 
 画面で止めている操作は、**必ずサーバでも同じ判定で止める**（画面だけの守りは API 直叩きで抜けられる）。
 保存の通信は結果（`res.ok`）を必ず見て、失敗したら表示を戻して理由を出す（楽観更新のまま放置しない）。
@@ -287,7 +295,7 @@ await updateDoc(ref, { [`plData.${workerId}`]: records })
   （クォータ超過で全画面500になった障害歴あり。恒久対策は Blaze 化）
 - **出面ドキュメント（att_YYYYMM・1件200〜300KB）は同一リクエスト内で二度読まない**。
   集計系（ダッシュボード・通知ベル）は「前月より前の確定済み月」だけ
-  `getAttDataCached`(5分キャッシュ) を使う（`isClosedMonthYm` で判定）。
+  `getAttDataCached`(30分キャッシュ・2026-10-21 に 5分→30分) を使う（`isClosedMonthYm` で判定）。
   当月・前月・出面グリッドの読みには**絶対に使わない**（入力直後の再取得が古い値になる）。
   2026-09-02 にダッシュボードが同じ月を2〜3回ずつ計37回読んでいた件の対処
 - **Admin SDK は rules をバイパスする** → 誤消去ガードは rules でなくコード層

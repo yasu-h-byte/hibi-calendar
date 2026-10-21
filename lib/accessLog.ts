@@ -6,7 +6,7 @@
 
 import { db } from './firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, orderBy, deleteDoc } from '@/lib/fsdb'
-import { todayJstIso, addDaysIso } from '@/lib/date-utils'
+import { todayJstIso, addDaysIso, jstIsoOf } from '@/lib/date-utils'
 
 export type AccessRole = 'admin' | 'approver' | 'foreman' | 'jimu' | 'staff'
 
@@ -39,8 +39,7 @@ function hashString(s: string): string {
  * JST の YYYY-MM-DD を取得
  */
 function getJstDate(d: Date = new Date()): string {
-  const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  return `${jst.getFullYear()}-${String(jst.getMonth() + 1).padStart(2, '0')}-${String(jst.getDate()).padStart(2, '0')}`
+  return jstIsoOf(d)
 }
 
 /**

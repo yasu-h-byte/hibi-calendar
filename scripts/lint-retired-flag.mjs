@@ -58,6 +58,11 @@ const VIOLATIONS = [
     re: /\bif\s*\(\s*[\w.]+\.retired\s*\)/,
     msg: '`if (*.retired)` パターン。isAlreadyRetired(retired, today) を使ってください',
   },
+  {
+    // 2026-10-21 総点検: `w.retired < start`・`iso > w.retired` のような自前の日付比較は、古い retired: 'true' を在籍扱いにする
+    re: /[\w.]+\.retired\s*(<=|>=|<|>)(?![=>])|(?<![=<>])(<=|>=|<|>)\s*[\w.]+\.retired\b/,
+    msg: '退職日の自前比較。isEmployedOn(w, iso) / isAlreadyRetired(retired, iso) を使ってください（古い retired: \'true\' を在籍扱いにしない）',
+  },
 ]
 
 async function walk(dir) {

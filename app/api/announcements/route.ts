@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -8,7 +8,7 @@ import { mergeAnnouncements, type Announcement } from '@/lib/release-notes'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { permRoleOf } from '@/lib/permissions'
 import { currentYmJst } from '@/lib/date-utils'
-import { getMainData } from '@/lib/compute'
+import { getMainData } from '@/lib/compute.server'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       }
       announcements.push(newAnn)
       await updateDoc(docRef, { announcements })
-      await logActivity('admin', 'announcement.add', `${title}`)
+      await logActivity(await actorLabel(request), 'announcement.add', `${title}`)
       return NextResponse.json({ success: true, announcement: newAnn })
     }
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       }
       announcements[idx] = updated
       await updateDoc(docRef, { announcements })
-      await logActivity('admin', 'announcement.update', `${updated.title}`)
+      await logActivity(await actorLabel(request), 'announcement.update', `${updated.title}`)
       return NextResponse.json({ success: true })
     }
 
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
       }
       await updateDoc(docRef, { announcements: filtered })
-      await logActivity('admin', 'announcement.delete', target?.title || id)
+      await logActivity(await actorLabel(request), 'announcement.delete', target?.title || id)
       return NextResponse.json({ success: true })
     }
 

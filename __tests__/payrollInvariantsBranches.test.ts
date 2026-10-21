@@ -12,7 +12,8 @@
  * 架空の時給・日給・月給のみ使う。
  */
 import { describe, it, expect } from 'vitest'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
 const H = 1500

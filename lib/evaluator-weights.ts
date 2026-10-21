@@ -46,7 +46,8 @@
  */
 
 import { isWorkingDay } from './attendance'
-import { getAttData, getMainData, parseDKey, type MainData } from './compute'
+import { parseDKey, type MainData } from './compute'
+import { getAttData, getMainData } from './compute.server'
 import { enumerateYmsBack } from './attendance-rate'
 import type { AttendanceEntry } from '@/types'
 
@@ -58,11 +59,6 @@ export const APPROVER_WEIGHTS: Record<number, number> = {
   0: 0.5,  // 靖仁さん（super admin）
   1: 0.7,  // 政仁さん（事業責任者）
 }
-
-/** 後方互換: 旧 APPROVER_WORKER_IDS の代替（呼び出し側で in 演算子を使う） */
-export const APPROVER_WORKER_IDS = new Set<number>(
-  Object.keys(APPROVER_WEIGHTS).map(k => Number(k)),
-)
 
 export interface EvaluatorWeight {
   evaluatorId: number

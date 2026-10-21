@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan, actorLabel } from '@/lib/auth'
 import {
-  WORKER_OFFICE_KEYS, WORKER_PUBLIC_KEYS, WORKER_OWNER_ONLY_KEYS, WORKER_WRITABLE_BASE_KEYS, WORKER_WRITABLE_PAY_KEYS,
-  WORKER_CLEARABLE_KEYS, getWorkers, isOfficeSideWorker,
+  WORKER_OFFICE_KEYS,
+  WORKER_PUBLIC_KEYS,
+  WORKER_OWNER_ONLY_KEYS,
+  WORKER_WRITABLE_BASE_KEYS,
+  WORKER_WRITABLE_PAY_KEYS,
+  WORKER_CLEARABLE_KEYS,
+  isOfficeSideWorker,
 } from '@/lib/workers'
+import {
+  getWorkers,
+} from '@/lib/workers.server'
 import {
   addWorker,
   updateWorker,
@@ -210,7 +218,7 @@ export async function POST(request: NextRequest) {
         (workerData as Record<string, unknown>).useOldRules = true
       }
       const worker = await addWorker(workerData)
-      await logActivity('admin', 'worker.add', `${name} を追加`)
+      await logActivity(await actorLabel(request), 'worker.add', `${name} を追加`)
       return NextResponse.json({ success: true, worker })
     }
 
@@ -306,9 +314,9 @@ export async function POST(request: NextRequest) {
           // （activityLog 側には必ず残す）
           console.error('[workers] auditTrail 書込失敗:', e)
         }
-        await logActivity('admin', 'worker.payChange', `${beforeW?.name || `ID:${id}`} 給与系変更: ${detail}（操作者: ${actor}）`)
+        await logActivity(await actorLabel(request), 'worker.payChange', `${beforeW?.name || `ID:${id}`} 給与系変更: ${detail}（操作者: ${actor}）`)
       } else {
-        await logActivity('admin', 'worker.update', `ID:${id} を更新`)
+        await logActivity(await actorLabel(request), 'worker.update', `ID:${id} を更新`)
       }
       return NextResponse.json({ success: true })
     }
@@ -340,7 +348,7 @@ export async function POST(request: NextRequest) {
       }
 
       await deleteWorker(id)
-      await logActivity('admin', 'worker.delete', `ID:${id} を削除`)
+      await logActivity(await actorLabel(request), 'worker.delete', `ID:${id} を削除`)
       return NextResponse.json({ success: true })
     }
 
@@ -357,11 +365,11 @@ export async function POST(request: NextRequest) {
       }
       if (action === 'revokeToken') {
         await revokeWorkerToken(id)
-        await logActivity('admin', 'worker.revokeToken', `${target.name} のスマホURLを失効`)
+        await logActivity(await actorLabel(request), 'worker.revokeToken', `${target.name} のスマホURLを失効`)
         return NextResponse.json({ success: true })
       }
       const token = await generateWorkerToken(id)
-      await logActivity('admin', 'worker.generateToken', `${target.name} のスマホURLを発行`)
+      await logActivity(await actorLabel(request), 'worker.generateToken', `${target.name} のスマホURLを発行`)
       return NextResponse.json({ success: true, token })
     }
 

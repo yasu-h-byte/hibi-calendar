@@ -7,6 +7,7 @@
  * 仕様の正は docs/wage-system.md。
  */
 import type { ReactNode, CSSProperties } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import {
   GRADE_LABELS, HYOGO_PITCH, SPECIAL_REASONS, SPECIAL_CAP, MAX_STEP, ANNUAL_DAYS, PAID_LEAVE_DAYS, TOTAL_PAID_DAYS,
   dailyForStep, capDaily, pitchOf, ageTableForDisplay, ageAdjustment, type JpGrade, type Hyogo,
@@ -17,7 +18,6 @@ const AMBER = '#F5A623'
 const INK = '#1f2937'
 const MUTED = '#6b7280'
 const LINE = '#e5e7eb'
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 const LADDER: Exclude<JpGrade, 'doko'>[] = ['6G', '5G', '4G', '3G', '2G', '1G']
 

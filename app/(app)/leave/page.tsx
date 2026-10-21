@@ -7,6 +7,9 @@
 // 保守操作（繰越再計算・正規化・時効処理・手動付与の入口）は components/leave/MaintenanceButton に集約済み。
 
 import { useEffect, useState, useCallback } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth } from '@/lib/api-client'
 import LedgerExportButton from './components/LedgerExportButton'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import MaintenanceButton from '@/components/leave/MaintenanceButton'
@@ -69,9 +72,9 @@ export default function LeavePage() {
   const patchHomeLeaveUi = useCallback((patch: Partial<HomeLeaveUiState>) => setHomeLeaveUi(prev => ({ ...prev, ...patch })), [])
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
-      const parsed = JSON.parse(stored)
+      const parsed = stored
       setPassword(parsed.password)
       setUserRole(parsed.user?.role || '')
       setUserForemanSites(parsed.user?.foremanSites || [])
@@ -94,15 +97,15 @@ export default function LeavePage() {
     setError('')
     try {
       const [res, reqRes, siteRes, pendRes, hlRes] = await Promise.all([
-        fetch(`/api/leave?calendar=true${asOfDate ? `&asOf=${asOfDate}` : ''}`, { headers: { 'x-admin-password': password } }),
-        fetch('/api/leave-request', { headers: { 'x-admin-password': password } }),
-        fetch('/api/sites', { headers: { 'x-admin-password': password } }),
-        fetch('/api/leave', {
+        fetchWithAuth(`/api/leave?calendar=true${asOfDate ? `&asOf=${asOfDate}` : ''}`, { password }),
+        fetchWithAuth('/api/leave-request', { password }),
+        fetchWithAuth('/api/sites', { password }),
+        fetchWithAuth('/api/leave', { password,
           method: 'POST',
-          headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'getPendingGrants' }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'getPendingGrants' })
         }),
-        fetch('/api/home-leave', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/home-leave', { password }),
       ])
       if (hlRes.ok) {
         const d = await hlRes.json()
@@ -151,7 +154,7 @@ export default function LeavePage() {
 
   const filteredWorkers = orgFilter === 'all'
     ? workers
-    : workers.filter(w => orgFilter === 'hfu' ? w.org === 'hfu' : w.org !== 'hfu')
+    : workers.filter(w => orgFilter === 'hfu' ? orgKeyOf(w.org) === 'hfu' : orgKeyOf(w.org) !== 'hfu')
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="text-gray-400">読み込み中...</div></div>
   if (error) return <div className="max-w-5xl mx-auto py-10"><div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-700">{error}</div></div>

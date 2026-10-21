@@ -18,7 +18,6 @@ const ALLOWED = new Set([
   'app/api/calendar/approve/route.ts',
   'app/api/calendar/bulk-confirm/route.ts',
   'app/api/calendar/reject/route.ts',
-  'app/api/calendar/reset/route.ts',
   'app/api/calendar/revert/route.ts',
   'app/api/calendar/save-days/route.ts',
   'app/api/calendar/submit/route.ts',
@@ -27,7 +26,6 @@ const ALLOWED = new Set([
   'app/api/jp-wage/history/route.ts',
   'app/api/jp-wage/promotion/route.ts',
   'app/api/jp-wage/revision/route.ts',
-  'app/api/jp-wage/seed/route.ts',
   'app/api/leave-request/route.ts',
   'lib/auth.ts',          // 定義そのもの
   'lib/foreman-todo.ts',  // managerByToken（マイページからの最終承認）

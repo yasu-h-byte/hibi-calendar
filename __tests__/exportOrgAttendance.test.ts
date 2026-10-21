@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { generateOrgAttendance, generateMonthlyExcel } from '@/lib/export'
-import type { WorkerMonthly } from '@/lib/compute'
-import * as XLSX from 'xlsx'
+import { generateOrgAttendance } from '@/lib/export-attendance'
+import { generateMonthlyExcel } from '@/lib/export-monthly'
+import type { WorkerMonthly } from '@/lib/compute-monthly'
+import * as XLSX from 'xlsx-js-style'
 
 /**
  * 2026-09-17: 9月分から日比建設・HFU とも給与計算をキャシュモに委託。

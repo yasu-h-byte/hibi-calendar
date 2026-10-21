@@ -1,6 +1,7 @@
 'use client'
 
 import { GridData } from '../types'
+import { orgKeyOf } from '@/lib/locks'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader, ToolButton, Chip } from '@/components/ui/PageParts'
 
@@ -134,7 +135,7 @@ export default function HeaderBar({
           <div className="flex items-center gap-1.5 sm:ml-auto">
             {/* 配置の人数（配置外の入力の人は数えない・2026-10-02） */}
             <Chip tone="blue">日比建設 {data.workers.filter(w => w.org === 'hibi' && !w.offRoster).length}名</Chip>
-            <Chip tone="gray">HFU {data.workers.filter(w => w.org === 'hfu' && !w.offRoster).length}名</Chip>
+            <Chip tone="gray">HFU {data.workers.filter(w => orgKeyOf(w.org) === 'hfu' && !w.offRoster).length}名</Chip>
             <Chip tone="gray">外注 {data.subcons.length}社</Chip>
           </div>
         )}

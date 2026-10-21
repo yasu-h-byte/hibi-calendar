@@ -6,9 +6,11 @@
  * 架空の人・金額のみ。
  */
 import { describe, it, expect } from 'vitest'
-import * as XLSX from 'xlsx'
-import { computeMonthly, type MainData, type RawWorker } from '@/lib/compute'
-import { generateMonthlyExcel, generateOrgAttendance, sitesForMonthSheets } from '@/lib/export'
+import * as XLSX from 'xlsx-js-style'
+import { computeMonthly } from '@/lib/compute-monthly'
+import { type MainData, type RawWorker } from '@/lib/compute'
+import { generateMonthlyExcel } from '@/lib/export-monthly'
+import { generateOrgAttendance, sitesForMonthSheets } from '@/lib/export-attendance'
 import { buildAuditChecks, type PayrollAuditWorker } from '@/lib/payroll-validator'
 import type { AttendanceEntry } from '@/types'
 

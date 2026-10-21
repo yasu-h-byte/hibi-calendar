@@ -19,7 +19,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym: ymRaw, action, revertedBy } = await request.json()
+    const { siteId, ym: ymRaw, action } = await request.json()
+    // 誰がやったかは通行証（getApiRole）から決める。旧: 画面が送る body の値をそのまま記録していた（2026-10-21 総点検）
+    const revertedBy = role.workerId ?? 0
 
     if (!siteId || !ymRaw || !action) {
       return NextResponse.json({ error: 'siteId, ym, action required' }, { status: 400 })

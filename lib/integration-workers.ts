@@ -20,6 +20,7 @@
  * 仕様: docs/integration.md
  */
 import type { Worker } from '@/types'
+import { isAlreadyRetired } from './workers'
 import { ANNUAL_DAYS, PAID_LEAVE_DAYS, HYOGO_PITCH, MAX_STEP, ageAdjustment, ageOn, dailyForStep, stepForDaily, type JpGrade } from '@/lib/jp-wage'
 import { curveRaiseAt, MONTHLY_HOURS } from '@/lib/wage-curve'
 import { DEFAULT_WELFARE_RATES, employerWelfare } from '@/lib/labor-cost'
@@ -238,7 +239,7 @@ export function buildWorkersResult(input: {
   const firstDay = `${input.fromYm}-01`
   const workers = input.workers
     // 見込みの最初の月より前に辞めた人は返さない（日付でない古い退職の印も）
-    .filter((w) => !w.retired || (isDateIso(w.retired) && w.retired >= firstDay))
+    .filter((w) => !isAlreadyRetired(w.retired, firstDay))   // 月初より前に退職した人は出さない（古い 'true' も退職済み）
     .filter((w) => (w.jobType || '') !== 'yakuin')
     .map((w): IntegrationWorker => {
       const nat = nationalityOf(w)
@@ -285,7 +286,7 @@ export function buildWorkersResult(input: {
 /** 台帳・帰国・締めの記録を読んで組み立てる（サーバーだけ）。months は既定 72（今月から6年） */
 export async function loadIntegrationWorkers(opts: { months?: number } = {}): Promise<IntegrationWorkersResult> {
   const [{ getMainData }, { mapRawWorkers }, { getAllActiveHomeLeaves }, { db }, { doc, getDoc }, { todayJstIso, currentYmJst }] = await Promise.all([
-    import('@/lib/compute'),
+    import('@/lib/compute.server'),
     import('@/lib/workers'),
     import('@/lib/homeLeave'),
     import('@/lib/firebase'),

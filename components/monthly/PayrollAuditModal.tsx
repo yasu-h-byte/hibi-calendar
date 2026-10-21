@@ -10,6 +10,7 @@
 'use client'
 
 import { jobShortLabel } from '@/lib/jobs'
+import { orgKeyOf } from '@/lib/locks'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import PayrollAuditContent, { type PayrollAuditWorker } from './PayrollAuditContent'
 
@@ -22,7 +23,7 @@ interface Props {
 }
 
 export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseDays, onClose }: Props) {
-  const orgName = w.org === 'hfu' ? 'HFU' : '日比建設'
+  const orgName = orgKeyOf(w.org) === 'hfu' ? 'HFU' : '日比建設'
   const yearStr = `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月`
 
   return (

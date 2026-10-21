@@ -1,5 +1,4 @@
-import { db } from './firebase'
-import { doc, getDoc } from '@/lib/fsdb'
+import { getMainData } from './compute.server'
 import { Site, SiteAssign, Worker } from '@/types'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'
 
@@ -10,10 +9,9 @@ interface MainDoc {
 }
 
 async function getMainDoc(): Promise<MainDoc> {
-  const docRef = doc(db, 'demmen', 'main')
-  const docSnap = await getDoc(docRef)
-  if (!docSnap.exists()) return {}
-  return docSnap.data() as MainDoc
+  // 人員マスタは getMainData（30 秒キャッシュ・2026-10-21 総点検。旧: 毎回 demmen/main を読み直し、
+  //   カレンダーの読み込み（lib/calendar-matrix.ts）では同じリクエスト内で main を 2 回読んでいた）
+  return (await getMainData()) as unknown as MainDoc
 }
 
 export async function getSites(): Promise<Site[]> {
@@ -35,33 +33,6 @@ export async function getSites(): Promise<Site[]> {
       workType: (s.workType as string) || undefined,
     }))
     .filter(s => !s.archived)
-}
-
-export async function getSiteById(siteId: string): Promise<Site | null> {
-  const sites = await getSites()
-  return sites.find(s => s.id === siteId) || null
-}
-
-export async function getWorkersForSite(siteId: string): Promise<Worker[]> {
-  const data = await getMainDoc()
-  if (!data.assign || !data.workers) return []
-
-  const siteAssign = data.assign[siteId]
-  if (!siteAssign) return []
-
-  const workerIds = new Set((siteAssign.workers as number[]) || [])
-  return (data.workers as Record<string, unknown>[])
-    .filter(w => workerIds.has(w.id as number))
-    .map(w => ({
-      id: w.id as number,
-      name: w.name as string,
-      nameVi: (w.nameVi as string) || '',
-      company: (w.org as string) === 'hfu' ? 'HFU' : '日比',
-      visaType: (w.visa as string) || '',
-      token: (w.token as string) || '',
-      retired: (w.retired as string) || undefined,
-      hireDate: (w.hireDate as string) || undefined,
-    }))
 }
 
 /**

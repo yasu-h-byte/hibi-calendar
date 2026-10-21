@@ -9,6 +9,7 @@
  * 給与の計算は lib/compute.ts が正。ここの数字は本人に見せるための目安。
  */
 import type { AttendanceEntry } from '@/types'
+import { jstIsoOf } from './date-utils'
 // 「仕事の日か」は共通（lib/attendance-missing.ts・2026-10-02 総合点検。数え方そのものは変えていない）
 import { isWorkDayOf } from './attendance-missing'
 
@@ -260,7 +261,7 @@ export function isConfirmStale(c: AttConfirmDoc, rangeSummary: StaffMonthSummary
 
 /** ISO 時刻 → 日本時間の日付 */
 export function jstDateOf(isoTime: string): string {
-  return new Date(new Date(isoTime).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+  return jstIsoOf(new Date(isoTime))
 }
 
 /** その月に休憩短縮（分/日）が適用されるか。人員マスタの breakShortenMin・breakShortenFrom（'YYYYMM'）から */

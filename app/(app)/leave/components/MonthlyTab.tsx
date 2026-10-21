@@ -1,6 +1,7 @@
 'use client'
 
 import { OrgFilter, PLWorker } from '../types'
+import { orgKeyOf } from '@/lib/locks'
 
 // 月別タブ: 会社別の月別有給取得日数マトリクス
 
@@ -25,8 +26,8 @@ export default function MonthlyTab({ visible, filteredWorkers, orgFilter }: Prop
   // 会社ごとにグルーピング（消化記録がない人も含めて全員表示）
   // 行が空にならないよう「対象期に有給が付与されている人 = grantDays > 0」を表示対象にする
   const allEligibleWorkers = filteredWorkers.filter(w => w.grantDays > 0 || (w.carryOver ?? 0) > 0)
-  const hibiWorkers = allEligibleWorkers.filter(w => w.org !== 'hfu')
-  const hfuWorkers = allEligibleWorkers.filter(w => w.org === 'hfu')
+  const hibiWorkers = allEligibleWorkers.filter(w => orgKeyOf(w.org) !== 'hfu')
+  const hfuWorkers = allEligibleWorkers.filter(w => orgKeyOf(w.org) === 'hfu')
 
   // 全表で誰一人もいない場合のみ全体非表示
   if (allEligibleWorkers.length === 0) return null

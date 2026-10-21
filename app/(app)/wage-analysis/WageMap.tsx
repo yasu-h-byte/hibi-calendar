@@ -5,10 +5,10 @@
  * 静的プレビューで描画確認できるよう、ページ本体（代表ログイン必須）から切り出している。
  */
 import { useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import { STAGES, TOKYO_MIN_WAGE, KENSETSU_TOKUTEI, type WageAnalysis, type WageRow } from '@/lib/wage-analysis'
 import { curveWage } from '@/lib/wage-curve'
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 const signed = (v: number) => (v >= 0 ? '+' : '−') + '¥' + Math.abs(Math.round(v)).toLocaleString()
 
 /** 散布図のツールチップ。SVG内に描くので最後にレンダリングして最前面にする。 */

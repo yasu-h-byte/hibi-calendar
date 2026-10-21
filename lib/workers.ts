@@ -1,27 +1,6 @@
-import { db } from './firebase'
-import { doc, getDoc } from '@/lib/fsdb'
 import { Worker } from '@/types'
 import { todayJstIso, addMonthsSafe } from './date-utils'
 
-/**
- * 人員マスタの読み出し。
- *
- * ⚠️ **この map は許可リストになっている。** Firestore に保存されていても、ここに
- *    書き忘れたフィールドは呼び出し側に届かない。「保存したのに画面では未入力のまま」
- *    という形で表面化し、書き込み側を疑って時間を溶かす（2026-08-26 に birthDate で発生）。
- *    Worker 型にフィールドを足したら、必ずここにも足すこと。
- *    漏れは `__tests__/workersMapping.test.ts` が検出する。
- */
-export async function getWorkers(): Promise<Worker[]> {
-  const docRef = doc(db, 'demmen', 'main')
-  const docSnap = await getDoc(docRef)
-
-  if (!docSnap.exists()) {
-    return []
-  }
-
-  return mapRawWorkers(docSnap.data().workers || [])
-}
 
 /**
  * 人員の項目を「給与」と「それ以外」に仕分ける（2026-10-02 代表「給与は靖仁・政仁・森田だけ」）。
@@ -185,10 +164,6 @@ export function findWorkerByToken<W extends { token?: string | null; retired?: s
   return null
 }
 
-export async function getWorkerByToken(token: string, opts: { allowGrace?: boolean } = {}): Promise<Worker | null> {
-  if (!token) return null
-  return findWorkerByToken(await getWorkers(), token, opts)
-}
 
 /**
  * 表示時に最新の workerName を解決するヘルパー（2026-05-13 追加）

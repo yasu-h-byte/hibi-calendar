@@ -130,6 +130,25 @@ export function todayJstIso(): string {
   return new Date(jstMs).toISOString().slice(0, 10)
 }
 
+/** 任意の時刻（Date）を日本時間の 'YYYY-MM-DD' にする（記録の日時 → 日本の日付。2026-10-21 総点検で各所の自前実装を集約） */
+export function jstIsoOf(d: Date): string {
+  return new Date(d.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)   // utc-ok: +9 時間して UTC の日付を読む
+}
+
+/** 任意の時刻（Date）を日本時間の 'YYYYMM' にする */
+export function jstYmOf(d: Date): string {
+  return jstIsoOf(d).slice(0, 7).replace('-', '')
+}
+
+/**
+ * 日本時間の壁時計を表す Date（getHours()/getDate() 等がサーバ（UTC）でも日本の時刻になる）。
+ * 時刻まで要るとき（バックアップの ID・「前日の稼働」の切り替え時刻など）だけ使う。日付だけなら todayJstDate()。
+ * ⚠️ toISOString() はしないこと（9 時間ずれる）
+ */
+export function jstWallClock(d: Date = new Date()): Date {
+  return new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))   // utc-ok: ここが唯一の実装
+}
+
 /** 日本時間の当月 "YYYYMM"（サーバ＝UTC でも 1日 0〜9時に前月にならない） */
 export function currentYmJst(): string {
   return todayJstIso().slice(0, 7).replace('-', '')

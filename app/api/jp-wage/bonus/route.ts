@@ -13,10 +13,11 @@
  * - DELETE … 確定の取り消し（2026-10-07。押し間違えたときに、記録と有給の買取記録をまとめて戻す）
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
+import { getApiAuthUser, requireExecutiveAuth, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '@/lib/fsdb'
-import { getWorkers, isAlreadyRetired, effectiveRateForYm } from '@/lib/workers'
+import { isAlreadyRetired, effectiveRateForYm } from '@/lib/workers'
+import { getWorkers } from '@/lib/workers.server'
 import { fiveDayReserve } from '@/lib/leave-settle'
 import { allocateBonus, nextRevisionDate, lastRevisionDate, FIXED_BONUS_STEP_DOWN, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
 import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
@@ -338,7 +339,7 @@ export async function POST(request: NextRequest) {
       rec.lastEditedBy = actorStr
       // race-fix: dot-notation で 1 worker 単位に局所化（/api/leave の buyout と同じパターン）
       await updateDoc(docRef, { [`plData.${String(line.workerId)}`]: wRecords })
-      await logActivity('admin', 'leave.buyout',
+      await logActivity(await actorLabel(request), 'leave.buyout',
         `workerId=${line.workerId} 賞与「${label}」の精勤賞与から期末買取 ${days}日 ¥${line.attendanceAmount || 0}（操作者: ${actorStr}）`)
       buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'recorded' })
     } catch (e) {
@@ -395,7 +396,7 @@ export async function DELETE(request: NextRequest) {
     if (!changed) continue
     // 1人分だけ書き換える（POST の記録と同じ dot-notation）
     await updateDoc(mainRef, { [`plData.${String(line.workerId)}`]: wRecords })
-    await logActivity('admin', 'leave.buyout',
+    await logActivity(await actorLabel(request), 'leave.buyout',
       `workerId=${line.workerId} 賞与「${record.label}」の取り消しで期末買取 ${days}日 を外した（操作者: ${actorStr}）`)
     removed.push({ workerId: line.workerId, name: line.name, days })
   }

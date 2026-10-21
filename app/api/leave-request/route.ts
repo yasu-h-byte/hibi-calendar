@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite } from '@/lib/auth'
+import { todayJstIso } from '@/lib/date-utils'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
-import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey, setAttendanceEntry, isScheduledWorkDay, computeAttendanceDeleteFields, createsWork, attKey, getApprovalForDay } from '@/lib/attendance'
-import { getMainData } from '@/lib/compute'
-import { isMonthLockedInLocks } from '@/lib/locks'
+import { getWorkerByToken } from '@/lib/workers.server'
+import { ymKey, createsWork, attKey } from '@/lib/attendance'
+import { getStaffSites, isScheduledWorkDay, getApprovalForDay, clearHomeLeaveStubs } from '@/lib/attendance.server'
+import { writeAttendanceEntry, finalApprovedEditError } from '@/lib/attendance-save'
+import { getMainData } from '@/lib/compute.server'
 import { logActivity } from '@/lib/activity'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import type { AttendanceEntry } from '@/types'
@@ -37,7 +39,7 @@ async function inspectDayBeforePaidLeave(
   /** 多現場重複の判定に渡す出面（空エントリを除いたもの） */
   attForConflict: Record<string, AttendanceEntry>
 }> {
-  const { getAttendanceDoc } = await import('@/lib/attendance')
+  const { getAttendanceDoc } = await import('@/lib/attendance.server')
   const attDoc = await getAttendanceDoc(ym)
   const key = attKey(siteId, workerId, ym, day)
   const existing = attDoc[key]
@@ -53,14 +55,6 @@ async function inspectDayBeforePaidLeave(
     if (isPureHomeLeaveStub(e)) { homeLeaveStubKeys.push(k); delete attForConflict[k] }
   }
   return { attDoc, existingWork, dayApproval: dayApproval?.foreman || dayApproval?.final ? dayApproval : null, homeLeaveStubKeys, attForConflict }
-}
-
-/** 別現場のキーに残った帰国フラグだけの空エントリを消す（home-leave-sync の clear-entry と同じ・dot-notation） */
-async function clearHomeLeaveStubs(ym: string, keys: string[]): Promise<void> {
-  if (keys.length === 0) return
-  const updates: Record<string, unknown> = {}
-  for (const k of keys) updates[`d.${k}`] = deleteField()
-  await updateDoc(doc(db, 'demmen', `att_${ym}`), updates)
 }
 
 /**
@@ -126,10 +120,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate date is at least next day (JST)
-      const now = new Date()
-      // Convert to JST for date comparison
-      const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      const todayStr = `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, '0')}-${String(jstNow.getDate()).padStart(2, '0')}`
+      const todayStr = todayJstIso()
 
       // 2026-09-30（代表決定）: 有給は前日までに申請。当日・過ぎた日は不可（旧: 当日OK）
       {
@@ -147,8 +138,8 @@ export async function POST(request: NextRequest) {
 
       // 締め済みの月への申請は入口で拒否（2026-09-02 追加。旧は承認時に初めて 409 だった）
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const lockErr = await checkMonthLocked(ym, worker.company === 'HFU' ? 'hfu' : 'hibi')
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
+        const lockErr = await checkMonthLockedForWorkers(ym, [worker.id])
         if (lockErr) {
           return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể xin nghỉ phép` }, { status: 409 })
         }
@@ -408,10 +399,10 @@ export async function POST(request: NextRequest) {
 
       // 2026-06-12 (監査 Sprint2-B): 月次ロック済み月への有給承認を拒否。
       //   締め（給与確定）後に p:1 が書き込まれると支払額とシステムが食い違う
+      //   2026-10-21 総点検: 30秒キャッシュの人員マスタで判定していた（締めた直後は古い状態で通る）→ 読み直して人の会社で判定
       {
-        const mainForLock = await getMainData()
-        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
-        if (isMonthLockedInLocks(mainForLock.locks, data.ym, wOrg)) {
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
+        if (await checkMonthLockedForWorkers(data.ym, [data.workerId])) {
           return NextResponse.json({ error: `${data.ym.slice(0, 4)}年${parseInt(data.ym.slice(4, 6))}月は月次締め済みのため承認できません。先に月次集計画面でロックを解除してください`, status: 409 }, { status: 409 })
         }
       }
@@ -444,7 +435,7 @@ export async function POST(request: NextRequest) {
         }
         if (bal.remaining < 1 && body.allowOverdraft === true) {
           const { logActivity } = await import('@/lib/activity')
-          await logActivity('admin', 'leave.overdraft',
+          await logActivity(await actorLabel(request), 'leave.overdraft',
             `${data.workerName} ${data.date} 有給承認を残数超過で実行（枠 ${bal.total}日 / 消化 ${bal.used}日）`)
         }
       }
@@ -463,10 +454,21 @@ export async function POST(request: NextRequest) {
       //   P と出勤が併存し、日給月給の日本人は「日給＋有給手当」の二重払いになる。
       //   出面の直接入力（grid/staff/foreman）と同じガードを承認にも置く。
       let stubKeysA: string[] = []
+      /** 承認前のその日の中身（変更履歴に残す。共通の入口 writeAttendanceEntry・2026-10-21 総点検） */
+      let prevEntryA: AttendanceEntry | null = null
       {
         const { detectMultiSiteConflict } = await import('@/lib/attendance')
         const dayA = await inspectDayBeforePaidLeave(data.siteId, data.workerId, data.ym, data.day)
         stubKeysA = dayA.homeLeaveStubKeys
+        prevEntryA = dayA.attDoc[attKey(data.siteId, data.workerId, data.ym, data.day)] ?? null
+        // 最終承認済みの日は、さかのぼり・最終承認の権限がある人（事業責任者・代表）だけが変えられる
+        //   （出面グリッド・職長スマホと同じ決まり。2026-10-21 総点検で横展開。確認つきの上書き（allowOverwrite）でも越えられない）
+        {
+          const canEditFinal = !!body.token   // マイページの通行証で来る人は管理者・事業責任者（managerByToken で確かめ済み）
+            || !(await requireCap(request, 'attendance.backfill')) || !(await requireCap(request, 'attendance.finalApprove'))
+          const finalErr = finalApprovedEditError({ foreman: !!dayA.dayApproval?.foreman, final: !!dayA.dayApproval?.final }, canEditFinal)
+          if (finalErr) return NextResponse.json({ error: `${data.date}: ${finalErr}` }, { status: 409 })
+        }
         const sitesAllA = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
         const conflictA = detectMultiSiteConflict(dayA.attForConflict, data.siteId, data.workerId, data.ym, data.day, sitesAllA, { w: 0, p: 1 })
         if (conflictA) {
@@ -488,13 +490,15 @@ export async function POST(request: NextRequest) {
           }, { status: 409 })
         }
         if ((dayA.existingWork || dayA.dayApproval) && body.allowOverwrite === true) {
-          await logActivity('admin', 'leave.overwriteWork',
+          await logActivity(await actorLabel(request), 'leave.overwriteWork',
             `${data.workerName} ${data.date} の${dayA.existingWork ? `出勤入力（${describeWork(dayA.existingWork)}）` : ''}${dayA.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（承認）`)
         }
       }
-      const approveEntry = { w: 0, p: 1 }
-      await setAttendanceEntry(data.siteId, data.workerId, data.ym, data.day, approveEntry,
-        { deleteFields: computeAttendanceDeleteFields(approveEntry) })
+      // 共通の入口（変更履歴＋残骸の掃除＋繰越の再計算・lib/attendance-save.ts）。旧は setAttendanceEntry を直接呼び、履歴に残らなかった
+      await writeAttendanceEntry({
+        siteId: data.siteId, workerId: data.workerId, ym: data.ym, day: data.day,
+        entry: { w: 0, p: 1 }, prevEntry: prevEntryA, actor: `leave-approve:${String(authForApprove.actor)}`,
+      })
       await clearHomeLeaveStubs(data.ym, stubKeysA)
 
       await setDoc(docRef, {
@@ -660,9 +664,8 @@ export async function POST(request: NextRequest) {
       // 2026-06-12 (監査 Sprint2-B): ロック済み月の有給取消は拒否（支払額確定後のデータ変更防止）
       const attYm = data.date.replace(/-/g, '').slice(0, 6)
       {
-        const mainForLock = await getMainData()
-        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
-        if (isMonthLockedInLocks(mainForLock.locks, attYm, wOrg)) {
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
+        if (await checkMonthLockedForWorkers(attYm, [data.workerId])) {
           return NextResponse.json({ error: `${attYm.slice(0, 4)}年${parseInt(attYm.slice(4, 6))}月は月次締め済みのため取消できません。先にロックを解除してください` }, { status: 409 })
         }
       }
@@ -674,7 +677,7 @@ export async function POST(request: NextRequest) {
       //   失敗したら revoked 化せずに中断する（旧: catch で握りつぶして revoked に更新 →
       //   「取消済みなのに p が残り残数が戻らない」状態を作っていた）
       try {
-        const { removePaidLeaveForDay } = await import('@/lib/attendance')
+        const { removePaidLeaveForDay } = await import('@/lib/attendance.server')
         const removed = await removePaidLeaveForDay(data.workerId, data.date)
         if (removed.length === 0) console.warn(`[revoke] 対象日に p が見つかりません: wid=${data.workerId} ${data.date}`)
       } catch (delErr) {
@@ -760,10 +763,10 @@ export async function POST(request: NextRequest) {
       }
       // ② 旧日付・新日付の月がロック済みなら拒否（締め後の支払額変更防止）
       {
-        const mainForLock = await getMainData()
-        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
+        const { loadLockContext } = await import('@/lib/locks.server')
+        const lockCtx = await loadLockContext()
         for (const checkYm of [data.ym, newYm]) {
-          if (isMonthLockedInLocks(mainForLock.locks, checkYm, wOrg)) {
+          if (lockCtx.isLocked(checkYm, data.workerId)) {
             return NextResponse.json({ error: `${checkYm.slice(0, 4)}年${parseInt(checkYm.slice(4, 6))}月は月次締め済みのため日付変更できません。先にロックを解除してください` }, { status: 409 })
           }
         }
@@ -806,11 +809,19 @@ export async function POST(request: NextRequest) {
         //   旧: 先に旧日の p を消してから新日の多現場チェックをしていたため、409 で中断すると旧日の有給だけが消え、
         //   申請は「承認済み・旧日」のまま残った（残数が1日戻り、給与から有給が1日消える）
         let stubKeysM: string[] = []
+        let prevEntryM: AttendanceEntry | null = null
         {
           // 多現場重複ガード（2026-08-31 横展開・approve と同じ）
           const { detectMultiSiteConflict } = await import('@/lib/attendance')
           const dayM = await inspectDayBeforePaidLeave(data.siteId, data.workerId, newYm, newDay)
           stubKeysM = dayM.homeLeaveStubKeys
+          prevEntryM = dayM.attDoc[attKey(data.siteId, data.workerId, newYm, newDay)] ?? null
+          // 変更先の日が最終承認済みなら、さかのぼり・最終承認の権限がある人だけ（承認と同じ・2026-10-21 総点検）
+          {
+            const canEditFinal = !(await requireCap(request, 'attendance.backfill')) || !(await requireCap(request, 'attendance.finalApprove'))
+            const finalErr = finalApprovedEditError({ foreman: !!dayM.dayApproval?.foreman, final: !!dayM.dayApproval?.final }, canEditFinal)
+            if (finalErr) return NextResponse.json({ error: `${newDate}: ${finalErr}` }, { status: 409 })
+          }
           const sitesAllM = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
           const conflictM = detectMultiSiteConflict(dayM.attForConflict, data.siteId, data.workerId, newYm, newDay, sitesAllM, { w: 0, p: 1 })
           if (conflictM) {
@@ -831,14 +842,15 @@ export async function POST(request: NextRequest) {
             }, { status: 409 })
           }
           if ((dayM.existingWork || dayM.dayApproval) && body.allowOverwrite === true) {
-            await logActivity('admin', 'leave.overwriteWork',
+            await logActivity(await actorLabel(request), 'leave.overwriteWork',
               `${data.workerName} ${newDate} の${dayM.existingWork ? `出勤入力（${describeWork(dayM.existingWork)}）` : ''}${dayM.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（日付変更）`)
           }
         }
         // 新日付に p=1 を書込（残骸掃除つき・approve と同方式・2026-08-27）
-        const mvEntry = { w: 0, p: 1 }
-        await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, mvEntry,
-          { deleteFields: computeAttendanceDeleteFields(mvEntry) })
+        await writeAttendanceEntry({
+          siteId: data.siteId, workerId: data.workerId, ym: newYm, day: newDay,
+          entry: { w: 0, p: 1 }, prevEntry: prevEntryM, actor: `leave-modify:${String(authForModify.actor)}`,
+        })
         await clearHomeLeaveStubs(newYm, stubKeysM)
 
         // 2026-09-02 修正（有給総点検・第4回）: 旧日の p は「申請時の siteId」だけでなく
@@ -846,7 +858,7 @@ export async function POST(request: NextRequest) {
         //   日付変更すると旧 p が残り、残数が1日余計に減って給与も有給2日扱いになっていた。
         //   ヘルパーは dot-notation で .p だけ消す（併存フィールドは温存＝IM-11 の方針維持）
         try {
-          const { removePaidLeaveForDay } = await import('@/lib/attendance')
+          const { removePaidLeaveForDay } = await import('@/lib/attendance.server')
           await removePaidLeaveForDay(data.workerId, data.date)
         } catch (delErr) {
           console.error('[modify_date] 旧日の p 削除失敗:', delErr)

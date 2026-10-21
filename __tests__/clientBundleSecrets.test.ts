@@ -79,8 +79,10 @@ describe('サーバー専用ファイル（*.server.ts）', () => {
       expect(readFileSync(f, 'utf8'), relative(ROOT, f)).toMatch(/^import 'server-only'/m)
     }
   })
-  it('*.server.ts を画面側（app/api 以外の app・components・lib）から import していない', () => {
-    const files = [...walk(join(ROOT, 'app')), ...walk(join(ROOT, 'components')), ...walk(join(ROOT, 'lib'))]
+  // lib/ のサーバー側ファイル（attendance-save.ts など）は compute.server.ts を import してよい。画面から届く連鎖に
+  // *.server.ts が無いことは __tests__/clientBundleIsolation.test.ts が import をたどって確かめる（2026-10-21）
+  it('*.server.ts を画面側（app/api 以外の app・components）から直接 import していない', () => {
+    const files = [...walk(join(ROOT, 'app')), ...walk(join(ROOT, 'components'))]
     const bad = files
       .map(f => relative(ROOT, f))
       .filter(f => !f.startsWith('app/api/') && !/\.server\.ts$/.test(f))
