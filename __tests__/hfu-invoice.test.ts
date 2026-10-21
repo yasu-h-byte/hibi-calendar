@@ -59,7 +59,7 @@ const attD: Record<string, AttendanceEntry> = {
   ...entries('own', 201, [5], { w: 1, p: 1 }),        // 有給 → 除外
   ...entries('sup', 201, [7, 8]),
   ...entries('sup', 202, [7, 8, 9]),
-  ...entries('sup', 202, [10], { w: 0.6 }),           // 休業補償 → 除外
+  ...entries('sup', 202, [10], { w: 0.6 }),           // 現場都合休 → 人工には入れず「待機料」の行（9月分〜）
   ...entries('own', 10, [1, 2, 3]),                   // 日比建設所属 → 入らない
 }
 
@@ -91,10 +91,11 @@ describe('buildHfuInvoiceDraft', () => {
     expect(bySite('sup')).toEqual([
       { siteId: 'sup', siteName: '応援現場', role: '鳶', days: 2, rate: 20000, amount: 40000 },
       { siteId: 'sup', siteName: '応援現場', role: '土工', days: 3, rate: 15000, amount: 45000 },
+      { siteId: 'sup', siteName: '応援現場', role: '土工', unit: 'standby', days: 1, rate: 9000, amount: 9000 },
     ])
-    expect(draft.subtotal).toBe(175938)
-    expect(draft.tax).toBe(17593)
-    expect(draft.total).toBe(193531)
+    expect(draft.subtotal).toBe(184938)
+    expect(draft.tax).toBe(18493)
+    expect(draft.total).toBe(203431)
   })
 
   test('従来の請求書（2025-12 分）と同じ計算: 鳶 94人工×30,000 ＋ 残業 4h×4,688 → 税込 3,122,627', () => {
@@ -141,12 +142,17 @@ describe('待機料（現場の都合で休ませた日・2026年10月分〜）'
   const ym10 = '202610'
   const att10 = Object.fromEntries(Object.entries(attD).map(([k, v]) => [k.replace(ym, ym10), v])) as Record<string, AttendanceEntry>
 
-  test('開始月は 2026年10月分。9月分は従来どおり 0.6補 を請求に入れない', () => {
-    expect(HFU_STANDBY_FROM_YM).toBe('202610')
-    expect(buildHfuInvoiceDraft(main, attD, ym)!.lines.some(l => l.unit === 'standby')).toBe(false)
-    const sep = buildHfuInvoiceDraft(main, attD, ym)!.detail.find(d => d.siteId === 'sup')!
-    expect(sep.rows.find(r => r.label === 'チャン')!.cells[10]).toBeUndefined()
-    expect(sep.standbyDays).toBeUndefined()
+  test('開始月は 2026年9月分（手作りの9月分が 0.6人工として含めていたのに合わせる）。8月分は 0.6補 を請求に入れない', () => {
+    expect(HFU_STANDBY_FROM_YM).toBe('202609')
+    expect(buildHfuInvoiceDraft(main, attD, ym)!.lines.some(l => l.unit === 'standby')).toBe(true)
+    const ym08 = '202608'
+    const att08 = Object.fromEntries(Object.entries(attD).map(([k, v]) => [k.replace(ym, ym08), v])) as Record<string, AttendanceEntry>
+    const aug = buildHfuInvoiceDraft(main, att08, ym08)!
+    expect(aug.lines.some(l => l.unit === 'standby')).toBe(false)
+    const sup = aug.detail.find(d => d.siteId === 'sup')!
+    expect(sup.rows.find(r => r.label === 'チャン')!.cells[10]).toBeUndefined()
+    expect(sup.standbyDays).toBeUndefined()
+    expect(aug.subtotal).toBe(175938)
   })
 
   test('単価 = 1人工の単価 × 率（円未満四捨五入）', () => {

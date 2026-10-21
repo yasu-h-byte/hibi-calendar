@@ -140,8 +140,8 @@ export default function IssueView({ ym }: { ym: string }) {
     rows.push({
       key: 'hfu', kind: 'HFU', title: 'HFU → 日比建設', sub: 'グループ内の請求（HFU 所属の人工 × 社内単価）',
       state: st.state, amount: st.issued ? st.issued.total : null, amountLabel: st.issued ? '税込' : '', no: st.issued?.no || '',
-      href: `/peer-invoice?company=${HFU_INVOICE_COMPANY_ID}&ym=${ym}`,
-      action: st.state === 'none' ? '請求書を作る' : st.state === 'pending' ? '開いて承認' : st.state === 'returned' ? '直して再申請' : '開く・印刷',
+      href: st.state === 'paper' ? `/paper-invoice?ym=${ym}` : `/peer-invoice?company=${HFU_INVOICE_COMPANY_ID}&ym=${ym}`,
+      action: st.state === 'none' ? '請求書を作る' : st.state === 'pending' ? '開いて承認' : st.state === 'paper' ? '紙の控えを見る' : st.state === 'returned' ? '直して再申請' : '開く・印刷',
     })
   }
 

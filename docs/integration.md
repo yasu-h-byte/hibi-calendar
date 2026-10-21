@@ -17,7 +17,7 @@
 | `subcons[]` | 外注・同業者ごとの支払見込み（出面 × 単価）、マスタの単価・残業単価、現場別の内訳（その現場・月で実際に使った単価つき）。請求書の単価の照合に使う |
 | `peerBilling[]` | 応援現場で同業者へ請求する**見込み**（同業者との請求・支払一覧と同じ計算。まだ請求書を発行していない金額も含む） |
 | `peerInvoices[]` | 実際に発行・取り消しした「応援の請求書」（`no`・`companyId`・`issueDate`・`dueDate`・`subtotal`（税抜）・`tax`・`total`（税込）・`status`（`issued`\|`void`）・`sites[]`（現場ごとの内訳））。発行済みがあればこちらを確定額として使う（docs/peer-invoice.md） |
-| `hfuInvoices[]` | HFU → 日比建設 の請求書（2026-09-26・グループ内。形は `peerInvoices[]` と同じ）。`peerInvoices[]` には含まれない。日比建設から見ると支払い、HFU から見ると入金（docs/peer-invoice.md「HFU → 日比建設 の請求書」） |
+| `hfuInvoices[]` | HFU → 日比建設 の請求書（2026-09-26・グループ内。形は `peerInvoices[]` と同じ）。`peerInvoices[]` には含まれない。日比建設から見ると支払い、HFU から見ると入金（docs/peer-invoice.md「HFU → 日比建設 の請求書」）。**手作りで出して控えを入れたもの**（2026年9月分の2枚）も `source: 'paper'` 付きで入る（2026-10-21）。紙の控えは `no` が空のことがあり、`sites[]` は明細の現場名から引き当てたもの（引き当てられない行は `siteId` が空） |
 | `primeInvoices[]` | 山岡（一次）への請求書（2026-10-20・docs/prime-invoice.md）。大林組の控えから作って発行したもの（`no`・`siteId`・`ratio`・`subtotal`（税抜）・`tax`・`total`（税込）・`issueDate`・`status`（`issued`\|`void`）・`sheets[]`（工種ごと: 大林組への額・控除の合計・請求額））。発行すると `sites[].billing` も同じ税抜に自動で書かれるので、入金予定はどちらを見ても同じ。給与の控除の内訳は渡さない |
 | `hfuWorkforce` | HFU 所属の作業員の人数と稼働（2026-09-27）: 在籍人数 `heads`・その月に人工がある人数 `workingHeads`・人工 `workDays`・残業 `otHours`・待機の日数 `standbyDays`（現場の都合で休ませた日。2026年10月分から待機料として請求・人工には含めない）・社内単価での額 `amount`（税抜・待機料を含む）・単価 `tobiRate`/`dokoRate`・出面が入っている最後の日 `lastDate`。人件費 `laborCost`（給与計算の支給額・残業や手当を含む・会社負担の社会保険は含まない）とその人工 `laborManDays`、日額の平均 `dailyRateAvg`。人工の数え方は HFU → 日比建設 の請求書の下書きと同じ。締まっていない月は途中の数字。経営コックピットの HFU 黒字化シミュレーター（鳶の売上の見込み）で使う |
 | `closed` | 出面が締まった月か（前月より前）。締まっていない月は数字が動く |

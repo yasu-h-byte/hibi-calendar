@@ -40,8 +40,13 @@ export const HFU_DEFAULT_INVOICE_PREFIX = 'HFU'
 
 export const isHfuInvoiceCompanyId = (id: string) => id === HFU_INVOICE_COMPANY_ID
 
-/** 待機料をこの月分から請求する（2026-10-21 代表決定）。それより前の月は現場都合休を請求に入れない（従来どおり） */
-export const HFU_STANDBY_FROM_YM = '202610'
+/**
+ * 待機料をこの月分から請求する（2026-10-21 代表決定）。
+ * 当初は 10月分からの予定だったが、HFU が手作りで出していた 9月分の請求書（紙の控え）が現場都合休を
+ * 「0.6人工」として人工に含めていた（= 単価×60%・待機料と同じ額）ことが分かり、システムの数字が紙と合うよう
+ * DEDURA＋ で扱う最初の月（9月分）からにした。それより前の月は請求に入れない
+ */
+export const HFU_STANDBY_FROM_YM = '202609'
 /** 待機料の率の既定（%）。設定（hfuInvoice.standbyRatePct）が未保存のときに使う */
 export const HFU_STANDBY_DEFAULT_RATE_PCT = 60
 /** 請求書に印字する待機料の行の名前（「鳶 待機料」のように職種の後ろに付く） */

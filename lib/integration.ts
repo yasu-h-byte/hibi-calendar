@@ -21,8 +21,10 @@ import { applyPayrollCosts } from '@/lib/payroll-cost'
 import { resolveSiteParties, type CompanyLike } from '@/lib/companies'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import { buildPeerStatements } from '@/lib/peer-statement'
-import { summarizePeerInvoiceSites } from '@/lib/peer-invoice'
-import { listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
+import { summarizePeerInvoiceSites, computeDueDate } from '@/lib/peer-invoice'
+import { listPeerInvoicesForYm, listPaperInvoicesForYm } from '@/lib/peer-invoice-store'
+import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
+import type { PaperInvoice } from '@/lib/paper-invoice'
 import { listPrimeBundlesForYm } from '@/lib/prime-invoice-store'
 import { reportSitesForPeriod } from '@/lib/report-sites'
 import { buildHfuInvoiceDraft } from '@/lib/hfu-invoice'
@@ -91,6 +93,44 @@ export interface IntegrationPeerInvoice {
   total: number
   status: 'issued' | 'void'
   sites: { siteId: string; siteName: string; amount: number }[]
+  /**
+   * 'paper' = 手作りで出して DEDURA＋ に控えを入れたもの（/paper-invoice・2026-10-21）。無ければシステムで発行したもの。
+   * HFU → 日比建設 は 2026年9月分を手作りで出したので、hfuInvoices[] にこの印で入る。
+   * 紙の控えは請求書番号が無いことがある（no は空）。現場（sites）は明細の現場名から引き当てたもので、引き当てられない行は siteId が空
+   */
+  source?: 'paper'
+}
+
+/**
+ * 紙の控え（手作りの請求書）を経営コックピットへ渡す形にする。発行日は控えの発行日、無ければ対象月の末日。
+ * 支払期日は HFU → 日比建設 の支払条件から。現場は明細の現場名と現場マスタの名前の前方一致で引き当てる
+ * （手作りは「笹塚駅南口東地区」のように短く書くため）。税抜小計が無い控えは 税込 ÷ 1.1 で補う
+ */
+export function paperInvoiceToIntegration(
+  p: Pick<PaperInvoice, 'companyId' | 'companyName' | 'ym' | 'no' | 'issueDate' | 'subtotal' | 'tax' | 'total' | 'lines'>,
+  sites: { id: string; name: string }[],
+  paymentTerms: Parameters<typeof computeDueDate>[1],
+): IntegrationPeerInvoice {
+  const ym = p.ym
+  const lastDay = new Date(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(4, 6), 10), 0).getDate()
+  const subtotal = p.subtotal ?? Math.round(p.total / 1.1)
+  const tax = p.tax ?? (p.total - subtotal)
+  const bySite = new Map<string, { siteId: string; siteName: string; amount: number }>()
+  for (const l of p.lines || []) {
+    const text = (l.site || '').trim()
+    const hit = text ? sites.find(s => s.name.startsWith(text) || text.startsWith(s.name)) : undefined
+    const key = hit ? hit.id : `?${text}`
+    const cur = bySite.get(key)
+    if (cur) cur.amount += l.amount
+    else bySite.set(key, { siteId: hit ? hit.id : '', siteName: hit ? hit.name : text, amount: l.amount })
+  }
+  return {
+    no: p.no || '', companyId: p.companyId, companyName: p.companyName, ym,
+    issueDate: p.issueDate || `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(lastDay).padStart(2, '0')}`,
+    dueDate: computeDueDate(ym, paymentTerms),
+    subtotal, tax, total: p.total,
+    status: 'issued', sites: [...bySite.values()], source: 'paper',
+  }
 }
 
 /**
@@ -278,7 +318,13 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     status: inv.status, sites: summarizePeerInvoiceSites(inv.lines),
   })
   const peerInvoices = peerInvoiceRecords.filter(inv => inv.kind !== 'hfu').map(toIntegration)
-  const hfuInvoices = peerInvoiceRecords.filter(inv => inv.kind === 'hfu').map(toIntegration)
+  // HFU → 日比建設 は手作りで出した月（2026年9月分）がある。紙の控えも「出した請求書」として渡す（source: 'paper'・2026-10-21）。
+  //   同業者の紙の控えは現場の請求額（sites[].billing）に割り振っているので peerInvoices には入れない
+  const paperHfu = (await listPaperInvoicesForYm(ym)).filter(p => p.companyId === HFU_INVOICE_COMPANY_ID)
+  const hfuInvoices = [
+    ...peerInvoiceRecords.filter(inv => inv.kind === 'hfu').map(toIntegration),
+    ...paperHfu.map(p => paperInvoiceToIntegration(p, main.sites, main.hfuInvoice?.paymentTerms)),
+  ]
   // 山岡（一次）への請求書（2026-10-20）。下書き・確認待ちはまだ請求書として出ていないので渡さない
   const primeInvoices: IntegrationPrimeInvoice[] = (await listPrimeBundlesForYm(ym))
     .filter((b): b is typeof b & { status: 'issued' | 'void' } => b.status === 'issued' || b.status === 'void')
