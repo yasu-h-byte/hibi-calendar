@@ -37,6 +37,8 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   // 2026-10-08 追加
   { coll: 'feedback', prefix: 'feedback', note: '困ったこと・要望のやり取り（画像は Storage の feedback/ に置き、退避しない）' },
   { coll: 'leaveSettleRequests', prefix: 'leavesettle', note: '有給精算の申請・承認（承認済みの日数は plData の buyoutHistory にも記録）' },
+  // 2026-10-22 追加
+  { coll: 'calendarStatusLog', prefix: 'calstatlog', note: '就業カレンダーの提出・最終承認・差し戻し・取り消しの台帳（append-only・lib/calendar-status-log.server.ts）' },
 ]
 
 /**

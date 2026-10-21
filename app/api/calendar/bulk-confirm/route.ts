@@ -7,6 +7,7 @@ import { DayType } from '@/types'
 import { checkSiteCalendarLegal, legalBlockResponse } from '@/lib/calendar-legal-check'
 import { countWorkDays, resolveDayType } from '@/lib/calendar'
 import { ym7 } from '@/lib/ym'
+import { appendCalendarStatusLog } from '@/lib/calendar-status-log.server'
 
 export async function POST(request: NextRequest) {
   // 提出を飛ばした直接確定は管理者・事業責任者のみ
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
       if (ex?.status === 'approved') {
         // 承認後の修正（承認の記録は残し、days と updatedAt だけ更新）
         await updateDoc(doc(db, 'siteCalendar', docId), { days: site.days, updatedAt: now, updatedBy: approvedBy })
+        await appendCalendarStatusLog({ siteId: site.siteId, ym, event: 'revise', by: approvedBy, at: now, note: '一括確定で修正' })
         revised.push(site.siteId)
         continue
       }
@@ -105,6 +107,11 @@ export async function POST(request: NextRequest) {
         rejectedReason: null,
         updatedAt: now,
         updatedBy: approvedBy,
+      })
+      // 「いつ・誰が」の台帳（append-only・2026-10-22）。提出が無かった現場は提出も今・この人として記録される
+      await appendCalendarStatusLog({
+        siteId: site.siteId, ym, event: 'approve', by: approvedBy, at: now,
+        note: ex?.submittedAt ? '一括確定' : '一括確定（提出なしで直接承認）',
       })
     }
 

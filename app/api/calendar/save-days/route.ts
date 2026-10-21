@@ -6,10 +6,11 @@ import { ym7 } from '@/lib/ym'
 import { logActivity } from '@/lib/activity'
 import { checkSiteCalendarLegal, legalBlockResponse } from '@/lib/calendar-legal-check'
 import { countWorkDays } from '@/lib/calendar'
+import { appendCalendarStatusLog } from '@/lib/calendar-status-log.server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { siteId, ym: ymRaw, days, updatedBy, acknowledgeWarnings } = await request.json()
+    const { siteId, ym: ymRaw, days, acknowledgeWarnings } = await request.json()
     // siteCalendar の docId/ym は "YYYY-MM" 形式で統一（2026-05-08 正規化）
     const ym = ym7(ymRaw)
 
@@ -19,6 +20,8 @@ export async function POST(request: NextRequest) {
     //       上書きできた（承認済みの休日設定の書き換え含む）。監査(B)で塞いだ。
     const role = await getApiRole(request, ym)
     if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // 誰がやったかは通行証（getApiRole）から決める。旧: 画面が送る body の updatedBy をそのまま記録していた（2026-10-22）
+    const updatedBy = role.workerId ?? 0
     const canEdit = isManagerRole(role.role) || (role.role === 'foreman' && role.foremanSites.includes(siteId))
     if (!canEdit) {
       return NextResponse.json({ error: '保存権限がありません（担当現場の職長または管理者のみ）' }, { status: 403 })
@@ -75,17 +78,18 @@ export async function POST(request: NextRequest) {
       if (blocked) return blocked
     }
 
+    const updatedAt = new Date().toISOString()
     await setDoc(doc(db, 'siteCalendar', docId), {
       siteId,
       ym,
       days,
       status: existingData.status === 'rejected' ? 'draft' : (existingData.status || 'draft'),
       submittedAt: existingData.submittedAt || null,
-      submittedBy: existingData.submittedBy || null,
+      submittedBy: existingData.submittedBy ?? null,   // 代表（ID 0）が消えないよう `|| null` にしない（2026-10-22）
       approvedAt: existingData.approvedAt || null,
-      approvedBy: existingData.approvedBy || null,
+      approvedBy: existingData.approvedBy ?? null,
       rejectedReason: existingData.status === 'rejected' ? null : (existingData.rejectedReason || null),
-      updatedAt: new Date().toISOString(),
+      updatedAt,
       updatedBy,
     })
 
@@ -109,6 +113,8 @@ export async function POST(request: NextRequest) {
         ? `${siteId} ${ym} 承認後修正: ${diffSummary}`
         : `${siteId} ${ym} 承認後修正（変更なし or 全置換）`
       await logActivity(String(updatedBy || 'admin'), 'calendar.reviseApproved', detail)
+      // 「いつ・誰が」の台帳（append-only・2026-10-22）。差分は長くなるので先頭だけ
+      await appendCalendarStatusLog({ siteId, ym, event: 'revise', by: updatedBy, at: updatedAt, note: diffSummary ? diffSummary.slice(0, 200) : null })
     }
 
     return NextResponse.json({ success: true })

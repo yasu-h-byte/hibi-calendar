@@ -16,6 +16,8 @@ import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
+import { ApprovalTrail, CalendarHistoryModal } from '@/components/calendar/ApprovalTrail'
+import type { CalendarTrailFields } from '@/lib/calendar-approval-trail'
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify・FieldError）に置き換え
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた（まとめて確定する前の確認）
@@ -44,7 +46,8 @@ interface CalQuestion {
   createdAt: string
 }
 
-interface SiteCalendarData {
+/** /api/calendar/status の1現場。提出・承認・差し戻し・取り消しの「いつ・誰が」と名前は CalendarTrailFields（2026-10-22） */
+interface SiteCalendarData extends CalendarTrailFields {
   siteId: string
   siteName: string
   /** 応援現場か（取りまとめ役を「責任者」と呼ぶ・2026-09-30） */
@@ -153,6 +156,8 @@ export default function CalendarManagePage() {
   const [error, setError] = useState('')
   const [editingDays, setEditingDays] = useState<Record<string, Record<string, DayType>>>({})
   const [saving, setSaving] = useState(false)
+  // 「履歴を見る」（提出・承認・差し戻し・取り消しの時系列。開いている現場の分・2026-10-22）
+  const [historyOpen, setHistoryOpen] = useState(false)
   // 承認済みカレンダーの修正モード（admin/approver 限定）。siteId をキーに保持。
   // 台風等で承認後にカレンダーを修正する場合、明示的にこのフラグを立てて編集可能にする。
   const [revisingApproved, setRevisingApproved] = useState<Record<string, boolean>>({})
@@ -577,11 +582,15 @@ export default function CalendarManagePage() {
             return (
               <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
                 {/* Site header */}
-                <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between">
+                <div className="p-4 border-b dark:border-gray-700 space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-hibi-navy dark:text-white">{site.siteName}</h3>
                     {statusBadge(site)}
                   </div>
+                  {/* 提出: 誰が・いつ ／ 最終承認: 誰が・いつ（古い月は「記録なし」・2026-10-22） */}
+                  <ApprovalTrail cal={site} onHistory={() => setHistoryOpen(true)} />
+                  <CalendarHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)}
+                    siteId={site.siteId} siteName={site.siteName} ym={ym} password={password} />
                 </div>
 
                 {/* 差し戻し理由（職長が修正理由を確認できる） */}
@@ -688,7 +697,7 @@ export default function CalendarManagePage() {
                                 const saveRes = await fetchWithAuth('/api/calendar/save-days', { password,
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 })
+                                  body: JSON.stringify({ siteId: site.siteId, ym, days })
                                 })
                                 if (!saveRes.ok) {
                                   const sd = await saveRes.json().catch(() => ({}))
@@ -967,7 +976,7 @@ export default function CalendarManagePage() {
                                         const postRevise = (ack: boolean) => fetchWithAuth('/api/calendar/save-days', { password,
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0, acknowledgeWarnings: ack })
+                                          body: JSON.stringify({ siteId: site.siteId, ym, days, acknowledgeWarnings: ack })
                                         })
                                         let res = await postRevise(false)
                                         // 承認後の修正にも法令チェック（2026-10-02 総合点検）。warn は確認のうえで続行

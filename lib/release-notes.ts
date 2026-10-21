@@ -28,6 +28,19 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261022_calendar_trail',
+    title: '就業カレンダーに「いつ・誰が」提出し、承認したかが出るようになりました',
+    content:
+      'PC の就業カレンダーと職長スマホの「就業カレ」で、現場の名前の下に「提出: 名前 10/21 18:05 ／ 最終承認: 名前 10/22 09:10」と出ます。'
+      + '承認待ち・差し戻し（理由つき）・承認後の修正も同じ場所で分かります。'
+      + '「履歴を見る」を押すと、その月の提出・承認・差し戻し・取り消しが起きた順に並びます。'
+      + 'これまでの月は記録が残っている分だけ出て、無いものは「記録なし」と出ます。',
+    category: 'new',
+    publishedAt: '2026-10-22T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', 'jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261021_receive_extax',
     title: '請求・原価「受け取る」: 届いた請求書を税抜で並べ、差を人工で言い換えるようにしました',
     content:

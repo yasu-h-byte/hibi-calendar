@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { ym7 } from '@/lib/ym'
+import { appendCalendarStatusLog } from '@/lib/calendar-status-log.server'
 
 /**
  * カレンダーステータスの巻き戻しAPI
@@ -74,13 +75,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 取り消しの前の承認は台帳（calendarStatusLog）に残っている。siteCalendar の項目は消して「承認待ち」に戻す
+      const revertedAt = new Date().toISOString()
       await updateDoc(calRef, {
         status: 'submitted',
         approvedAt: null,
         approvedBy: null,
-        revertedAt: new Date().toISOString(),
-        revertedBy: revertedBy || null,
+        revertedAt,
+        revertedBy,   // 代表（ID 0）が消えないよう `|| null` にしない（2026-10-22）
       })
+      await appendCalendarStatusLog({ siteId, ym, event: 'unapprove', by: revertedBy, at: revertedAt, note: deletedSigns > 0 ? `署名${deletedSigns}件も削除` : null })
 
       await logActivity(String(revertedBy || 'admin'), 'calendar.unapprove', `${siteId} ${ym} の承認を取消し（署名${deletedSigns}件も削除）`)
 
@@ -92,13 +96,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `提出済みではありません（現在: ${currentStatus}）` }, { status: 400 })
       }
 
+      const revertedAt = new Date().toISOString()
       await updateDoc(calRef, {
         status: 'draft',
         submittedAt: null,
         submittedBy: null,
-        revertedAt: new Date().toISOString(),
-        revertedBy: revertedBy || null,
+        revertedAt,
+        revertedBy,
       })
+      await appendCalendarStatusLog({ siteId, ym, event: 'unsubmit', by: revertedBy, at: revertedAt })
 
       await logActivity(String(revertedBy || 'admin'), 'calendar.unsubmit', `${siteId} ${ym} の提出を取消し`)
 

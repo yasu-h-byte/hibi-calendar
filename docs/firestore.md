@@ -106,7 +106,7 @@ workSchedule?: {
 書くときは子値を非空マップにして `merge: true`（空マップ置換の罠は踏まない）。
 
 ### siteCalendar/{siteId}_{ym}
-就業カレンダー。
+就業カレンダー。承認の流れは「職長が作成・提出 → 事業責任者（政仁さん）が最終承認」。
 
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
@@ -114,6 +114,34 @@ workSchedule?: {
 | ym | string | YYYY-MM |
 | days | map | 日付→dayType（work/off/holiday） |
 | status | string | draft/submitted/approved/rejected |
+| submittedBy / submittedAt | number / string | 提出した人（worker id）・時刻（ISO）。提出の取り消し（revert unsubmit）で null に戻る |
+| approvedBy / approvedAt | number / string | 最終承認した人・時刻。承認の取り消し（revert unapprove）で null に戻る |
+| rejectedBy / rejectedAt / rejectedReason | number / string / string | 差し戻した人・時刻・理由。再提出で rejectedReason だけ null |
+| revertedBy / revertedAt | number / string | 最後に取り消した人・時刻（承認の取り消し／提出の取り消しの区別は status で見る） |
+| updatedBy / updatedAt | number / string | 最後に days を保存した人・時刻。`approvedAt < updatedAt` なら「承認後の修正」（配置者に再署名を求める） |
+
+- 「誰が」は必ず通行証（`getApiRole`）から決める（画面が送る値は使わない・2026-10-21 / save-days は 2026-10-22）
+- ID は `?? null` で扱う（代表は ID 0。`|| null` だと消える・2026-10-22）
+- 画面（PC の就業カレンダー・職長スマホの「就業カレ」）には「提出: 名前 M/D HH:MM ／ 最終承認: 名前 M/D HH:MM」を
+  日本時間で出す（`lib/calendar-approval-trail.ts`）。項目が無い古い月は「記録なし」
+
+### calendarStatusLog/{siteId}_{ym}_{at}_{event}（2026-10-22）
+就業カレンダーの提出・最終承認・差し戻し・取り消し・承認後の修正の台帳。**append-only・削除しない**
+（siteCalendar の submittedAt / approvedAt は取り消すと消えるため、時系列はここが正本）。
+`lib/calendar-status-log.server.ts` が書き、`GET /api/calendar/history?siteId&ym` が読む（権限 calendar.view）。
+日次バックアップの対象。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| siteId / ym | string | 現場ID・YYYY-MM |
+| event | string | submit / approve / reject / unapprove / unsubmit / revise |
+| at | string | 出来事の時刻（ISO・siteCalendar に書いた時刻と同じ値） |
+| by / byName | number / string | 誰が（worker id）・その時点の人員マスタの名前（凍結。給与の項目は持たない） |
+| reason | string? | 差し戻しの理由 |
+| note | string? | 「一括確定」「提出なしで直接承認」「署名n件も削除」・承認後の修正の差分（先頭 200 字） |
+| loggedAt | string | 書いた時刻 |
+
+台帳を付け始める前の月は、履歴画面が siteCalendar の項目から起こして補う（`synthesizeTrailFromDoc`・取り消した承認は残らない）。
 
 ### calendarSign/{workerId}_{ym}_{siteId}
 カレンダー署名。
