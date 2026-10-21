@@ -123,6 +123,7 @@ export function explainSubconDiff(diff: number, expected: Pick<SubconExpected, '
   if (!(rate > 0)) return null
   const sign = diff < 0 ? '−' : '+'
   const abs = Math.abs(diff)
+  if (abs / rate < 0.05) return null   // 端数（1円など）は「約 0.0人工分」と出しても意味が無い
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
   // 人工 k 個 ＋ 残業 h（0.5h 刻み）で 1円以内に説明できるか（k は近い方から 2 つ試す）
   for (const k of [Math.round(abs / rate), Math.floor(abs / rate)]) {
