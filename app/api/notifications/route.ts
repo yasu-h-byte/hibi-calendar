@@ -73,6 +73,14 @@ export async function GET(request: NextRequest) {
     //   通知が全部止まる）。dashboard/ledger と同じく「今日時点で退職済み」のみ除外
     const activeWorkers = main.workers.filter(w => !isAlreadyRetired(w.retired, todayJstIso()))
 
+    // 互いに独立した読み（評価・評価セッション・本人からの連絡）は先に並べて走らせる（2026-10-21 総点検。旧: ブロックごとに直列）。
+    //   失敗はそれぞれのブロックの catch で拾う（ここでは投げない）
+    const prefetch = <T,>(p: Promise<T>) => p.then(v => ({ ok: true as const, v }), e => ({ ok: false as const, e }))
+    const evalApprovedP = prefetch(getDocs(query(collection(db, 'evaluations'), where('status', '==', 'approved'))))
+    const evalSessionsP = prefetch(getDocs(query(collection(db, 'evaluations'), where('status', 'in', ['collecting', 'reviewing']))))
+    const attConfirmOpenP = prefetch(getDocs(query(collection(db, 'attConfirm'), where('issueOpen', '==', true))))
+    const unwrap = <T,>(r: { ok: true; v: T } | { ok: false; e: unknown }): T => { if (!r.ok) throw r.e; return r.v }
+
     // 0. バックアップが止まっている・一部失敗している（代表だけ・2026-10-02 総合点検）
     //   旧: 日次バックアップが失敗しても応答に書くだけで、誰も気づけなかった。
     //   demmen/system.lastBackup（app/api/backup/snapshot が毎回書く）を見る。代表のベルだけ・1回の読み取り
@@ -261,8 +269,7 @@ export async function GET(request: NextRequest) {
     try {
       const foreignWorkers = activeWorkers.filter(w => w.visa && w.visa !== 'none')
       // evaluationsコレクションから承認済み評価を取得
-      const evalQuery = query(collection(db, 'evaluations'), where('status', '==', 'approved'))
-      const evalSnaps = await getDocs(evalQuery)
+      const evalSnaps = unwrap(await evalApprovedP)
       const approvedEvals: Record<number, string> = {} // workerId → 最新の evaluationDate
       evalSnaps.forEach(snap => {
         const data = snap.data()
@@ -309,11 +316,7 @@ export async function GET(request: NextRequest) {
     //   (c) status='collecting' で開始から7日以上経過し、未提出者がいる
     //       → admin/approver にエスカレーション通知（停滞リマインダー）
     try {
-      const sessQuery = query(
-        collection(db, 'evaluations'),
-        where('status', 'in', ['collecting', 'reviewing']),
-      )
-      const sessSnaps = await getDocs(sessQuery)
+      const sessSnaps = unwrap(await evalSessionsP)
       // 評価者ID→名前 の参照マップ（停滞リマインダー用）
       const workerNameById = new Map<number, string>()
       for (const w of main.workers) {
@@ -718,7 +721,7 @@ export async function GET(request: NextRequest) {
     //   attConfirm の issueOpen だけを読む（未対応が無ければ0件の読み取り）。
     //   事務・事業責任者・代表は全員分、職長は自分の現場の人だけ
     try {
-      const qs = await getDocs(query(collection(db, 'attConfirm'), where('issueOpen', '==', true)))
+      const qs = unwrap(await attConfirmOpenP)
       const open = qs.docs.map(d => d.data() as { ym: string; workerId: number; workerName: string })
       const mine = role === 'foreman' ? open.filter(c => myForemanWorkers.has(c.workerId)) : open
       if (mine.length > 0) {

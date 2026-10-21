@@ -63,6 +63,7 @@ export const BACKUP_EXCLUDED: readonly { coll: string; reason: string }[] = [
   { coll: 'attendanceHistory', reason: '出面の変更履歴（90日の保険・1件ずつが大きい）。正本は att_YYYYMM' },
   { coll: 'accessLog', reason: 'スタッフのアクセス履歴（消えても業務に影響なし）' },
   { coll: 'loginThrottle', reason: 'ログインの失敗回数（15 分で消える一時的な記録・lib/login-throttle.server.ts）' },
+  { coll: 'leaveIndex', reason: '有給の索引（出面から作り直せる・POST /api/leave/index・lib/leave-index.server.ts）' },
   { coll: 'workerPhotos', reason: '顔写真（撮り直せる・大きい）' },
 ]
 
