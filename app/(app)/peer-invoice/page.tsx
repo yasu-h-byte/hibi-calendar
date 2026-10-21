@@ -34,13 +34,14 @@ import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { shiftYm } from '@/lib/month-nav'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
+import { HFU_STANDBY_LABEL } from '@/lib/hfu-invoice'
 import { latestPeerInvoiceRecord } from '@/lib/peer-invoice-latest'
 
 // ── API レスポンスと同じ形の型（lib/peer-invoice.ts・lib/peer-invoice-store.ts 参照） ──
-interface PeerInvoiceLine { siteId: string; siteName: string; role: '鳶' | '土工'; days: number; rate: number; amount: number; unit?: 'h' }
-interface PeerInvoiceDetailCell { md: number; ot?: number; night?: boolean }
-interface PeerInvoiceDetailRow { key: string; label: string; isSubcon: boolean; cells: Record<number, PeerInvoiceDetailCell>; total: number }
-interface PeerInvoiceSiteDetail { siteId: string; siteName: string; rows: PeerInvoiceDetailRow[]; dayTotals: Record<number, number>; siteTotal: number }
+interface PeerInvoiceLine { siteId: string; siteName: string; role: '鳶' | '土工'; days: number; rate: number; amount: number; unit?: 'h' | 'standby' }
+interface PeerInvoiceDetailCell { md: number; ot?: number; night?: boolean; standby?: boolean }
+interface PeerInvoiceDetailRow { key: string; label: string; isSubcon: boolean; cells: Record<number, PeerInvoiceDetailCell>; total: number; standbyDays?: number }
+interface PeerInvoiceSiteDetail { siteId: string; siteName: string; rows: PeerInvoiceDetailRow[]; dayTotals: Record<number, number>; siteTotal: number; standbyDays?: number }
 interface PeerInvoiceCompanyInfo { postal: string; address: string; honorific: string }
 interface CompanyProfile {
   name: string; nameEn: string; representative?: string; postal: string; address: string; tel: string; fax?: string; email?: string
@@ -410,6 +411,7 @@ function PeerInvoicePageInner() {
         .pi-detail-table td.pi-label { text-align: left; font-size: 7px; white-space: nowrap; padding-left: 3px; }
         .pi-detail-table td.pi-weekend, .pi-detail-table th.pi-weekend { background: #FFF3E0; }
         .pi-detail-table td.pi-night { background: #E8ECF5; font-weight: 700; }
+        .pi-detail-table td.pi-standby { color: #666; }
         .pi-detail-table td.pi-total, .pi-detail-table th.pi-total { font-weight: 700; background: #F2F4F9; }
       `}</style>
     </div>
@@ -478,8 +480,8 @@ function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
               {view.lines.map((l, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid #E6E9F0' }}>
                   <td style={{ padding: '6px 8px' }}>{l.siteName}</td>
-                  <td style={{ padding: '6px 8px' }}>{l.unit === 'h' ? `${l.role} 残業` : l.role}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtMd(l.days)}{l.unit === 'h' ? ' h' : isHfu ? ' 人工' : ''}</td>
+                  <td style={{ padding: '6px 8px' }}>{l.unit === 'h' ? `${l.role} 残業` : l.unit === 'standby' ? `${l.role} ${HFU_STANDBY_LABEL}` : l.role}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtMd(l.days)}{l.unit === 'h' ? ' h' : l.unit === 'standby' ? ' 日' : isHfu ? ' 人工' : ''}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{yen(l.rate)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{yen(l.amount)}</td>
                 </tr>
@@ -496,6 +498,12 @@ function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
               </tbody>
             </table>
           </div>
+
+          {view.lines.some(l => l.unit === 'standby') && (
+            <p style={{ fontSize: 9.5, color: '#555', marginTop: 8 }}>
+              ※ {HFU_STANDBY_LABEL}: 現場の都合により作業がなかった日の分です（作業員は貴社の専属として待機）。1日あたり 1人工の単価 × 待機料の率。明細では「待」と記しています。
+            </p>
+          )}
 
           <div style={{ marginTop: 18, padding: 10, background: '#F6F7FA', borderRadius: 8, fontSize: 10.5 }}>
             <div style={{ fontWeight: 700, marginBottom: 3 }}>お振込先</div>
@@ -538,6 +546,7 @@ function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
                     return <th key={d} className={wd === 0 || wd === 6 ? 'pi-weekend' : ''}>{d}<br />{WEEKDAY_JA[wd]}</th>
                   })}
                   <th className="pi-total">残業計(h)</th>
+                  {isHfu && <th className="pi-total">待機(日)</th>}
                   <th className="pi-total">合計人工</th>
                 </tr>
               </thead>
@@ -550,10 +559,11 @@ function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
                       {days.map(d => {
                         const cell = row.cells[d]
                         const wd = weekdayOf(view.ym, d)
-                        const cls = [cell?.night ? 'pi-night' : '', (wd === 0 || wd === 6) && !cell?.night ? 'pi-weekend' : ''].filter(Boolean).join(' ')
-                        return <td key={d} className={cls}>{cell ? fmtMd(cell.md) : ''}</td>
+                        const cls = [cell?.night ? 'pi-night' : '', cell?.standby ? 'pi-standby' : '', (wd === 0 || wd === 6) && !cell?.night ? 'pi-weekend' : ''].filter(Boolean).join(' ')
+                        return <td key={d} className={cls}>{cell ? (cell.standby ? '待' : fmtMd(cell.md)) : ''}</td>
                       })}
                       <td className="pi-total">{otTotal > 0 ? fmtMd(Math.round(otTotal * 10) / 10) : ''}</td>
+                      {isHfu && <td className="pi-total">{row.standbyDays ? row.standbyDays : ''}</td>}
                       <td className="pi-total">{fmtMd(row.total)}</td>
                     </tr>
                   )
@@ -562,6 +572,7 @@ function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
                   <td className="pi-label" style={{ fontWeight: 700 }}>現場合計</td>
                   {days.map(d => <td key={d} className="pi-total">{site.dayTotals[d] ? fmtMd(site.dayTotals[d]) : ''}</td>)}
                   <td className="pi-total" />
+                  {isHfu && <td className="pi-total">{site.standbyDays ? site.standbyDays : ''}</td>}
                   <td className="pi-total">{fmtMd(site.siteTotal)}</td>
                 </tr>
               </tbody>
@@ -570,7 +581,7 @@ function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
           <p style={{ fontSize: 8, color: '#888', marginTop: 6 }}>
             人工は 1=日勤／0.5=半日／1.5=夜勤／2.5=日勤+夜勤 の単位です（背景色のセルは夜勤を含む日）。
             {isHfu
-              ? '残業計の時間は、請求書本体の「残業」の行（時間 × 残業単価）に載せています。'
+              ? `残業計の時間は、請求書本体の「残業」の行（時間 × 残業単価）に載せています。${site.standbyDays ? `「待」は現場の都合により作業がなかった日（待機）で、人工には数えず、請求書本体の「${HFU_STANDBY_LABEL}」の行（日数 × 単価）に載せています。` : ''}`
               : '残業計の時間は 7時間（日本人・外注は8時間）で1人工に換算し、請求書本体の人工に含めています。「（外注）」は応援先へ連れて行った外注先の人工です。'}
           </p>
         </div>

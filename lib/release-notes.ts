@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261021_hfu_standby_fee',
+    title: 'HFU → 日比建設 の請求書に「待機料」の行が入ります（2026年10月分から）',
+    content:
+      '現場の都合で休ませた日（出面の 0.6補）を、HFU から日比建設へ「待機料」として請求します。1日あたり 1人工の単価 × 60%（率は 設定 → HFU → 日比建設 の請求書 で変えられます）。'
+      + '現場ごと・鳶/土工ごとの別の行になり、人工や残業の行は今までどおりです。出面明細にはその日を「待」と記し、人工の合計には入れず「待機(日)」の列で数えます。9月分までの請求書は変わりません。',
+    category: 'info',
+    publishedAt: '2026-10-21T18:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261021_peer_invoice_issue_fix',
     title: '応援の請求書・HFU → 日比建設 の請求書が「発行できませんでした（Server error）」になるのを直しました',
     content:

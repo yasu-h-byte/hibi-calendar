@@ -29,7 +29,7 @@ const HFU_INVOICE_DEFAULTS = {
     bank: { bankName: '青梅信用金庫', branch: '秋津', accountType: '普通', accountNo: '0086328', holder: 'エイチエフユナイテッド株式会社 代表取締役 日比 靖仁' },
     invoicePrefix: 'HFU',
   },
-  tobiRate: 30000, dokoRate: 0,
+  tobiRate: 30000, dokoRate: 0, standbyRatePct: 60,
   paymentTerms: { closing: 'end', payMonthOffset: 1, payDay: 'end' },
 }
 
@@ -196,14 +196,18 @@ export async function POST(request: NextRequest) {
       }
       const tobiRate = Math.max(0, Math.round(Number(hfuInvoice.tobiRate) || 0))
       const dokoRate = Math.max(0, Math.round(Number(hfuInvoice.dokoRate) || 0))
+      // 待機料の率（%・0〜100）。未指定（古い画面）は既定の 60。0 は「待機料を出さない」なので 0 のまま残す
+      const standbyRatePct = hfuInvoice.standbyRatePct === undefined || hfuInvoice.standbyRatePct === null
+        ? 60
+        : Math.min(100, Math.max(0, Math.round(Number(hfuInvoice.standbyRatePct) || 0)))
       const pt = hfuInvoice.paymentTerms
       const paymentTerms = pt && (pt.payMonthOffset === 1 || pt.payMonthOffset === 2)
         ? { closing: 'end', payMonthOffset: pt.payMonthOffset, payDay: pt.payDay === 'end' ? 'end' : Math.min(28, Math.max(1, Number(pt.payDay) || 25)) }
         : { closing: 'end', payMonthOffset: 1, payDay: 'end' }
       const docRef = doc(db, 'demmen', 'main')
       const { updateDoc } = await import('@/lib/fsdb')
-      await updateDoc(docRef, { hfuInvoice: { profile: hfuInvoice.profile, tobiRate, dokoRate, paymentTerms } })
-      await logActivity('admin', 'settings.hfuInvoice', `HFU → 日比建設 の請求書設定を更新（鳶 ¥${tobiRate.toLocaleString()}・土工 ¥${dokoRate.toLocaleString()}）(${tier})`)
+      await updateDoc(docRef, { hfuInvoice: { profile: hfuInvoice.profile, tobiRate, dokoRate, standbyRatePct, paymentTerms } })
+      await logActivity('admin', 'settings.hfuInvoice', `HFU → 日比建設 の請求書設定を更新（鳶 ¥${tobiRate.toLocaleString()}・土工 ¥${dokoRate.toLocaleString()}・待機料 ${standbyRatePct}%）(${tier})`)
       return NextResponse.json({ success: true })
     }
 
