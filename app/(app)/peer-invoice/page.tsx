@@ -23,6 +23,7 @@
  * 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify）に置き換え
  */
 import { Icon } from '@/components/ui/Icon'
+import { fmtYen as yen } from '@/lib/format'
 import { Chip, PageHeader } from '@/components/ui/PageParts'
 import InvoiceNav from '@/components/invoice/InvoiceNav'
 import { Suspense, useCallback, useEffect, useState } from 'react'
@@ -88,7 +89,6 @@ const BLANK_ISSUER: CompanyProfile = {
   invoiceRegNo: '', bank: { bankName: '', branch: '', accountType: '普通', accountNo: '', holder: '' }, invoicePrefix: 'HC',
 }
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 const jpYm = (ym: string) => `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6), 10)}月`
 const jpDate = (iso: string) => {
   if (!iso || iso.length < 10) return '—'

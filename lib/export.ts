@@ -1847,7 +1847,7 @@ function isoToJst(iso?: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ''
-  const j = new Date(d.getTime() + 9 * 3600 * 1000)
+  const j = new Date(d.getTime() + 9 * 3600 * 1000)   // utc-ok: 時刻つきの表示（UTC の getter で日本時間を読む）
   const p = (n: number) => String(n).padStart(2, '0')
   return `${j.getUTCFullYear()}/${p(j.getUTCMonth() + 1)}/${p(j.getUTCDate())} ${p(j.getUTCHours())}:${p(j.getUTCMinutes())}`
 }

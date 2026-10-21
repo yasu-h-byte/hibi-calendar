@@ -7,8 +7,8 @@
  * 金額は lib/prime-invoice.ts で計算した凍結内容をそのまま描く（ここで計算しない）。
  */
 import type { PrimeInvoiceBundle, PrimeSheet } from '@/lib/prime-invoice'
+import { fmtYen as yen } from '@/lib/format'
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 /** 今回請求額の字の大きさ。桁数（「¥」「,」込みの文字数）で縮める: 〜11文字は元の大きさ、12〜13文字は小、14文字〜は極小 */
 export function totalAmtClass(total: number): string {

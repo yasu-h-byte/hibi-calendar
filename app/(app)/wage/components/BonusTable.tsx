@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -67,7 +68,6 @@ interface Override {
 
 const HY: Hyogo[] = ['SS', 'S', 'A', 'B', 'C']
 const RATIO = { SS: '5%', S: '15%', A: '60%', B: '15%', C: '5%' }
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 export default function BonusTable() {
   const [pw, setPw] = useState('')

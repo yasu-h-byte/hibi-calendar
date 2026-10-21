@@ -14,6 +14,7 @@
  */
 
 import { staffLinkOrigin } from '@/lib/public-origin'
+import { fmtYenOrDash as yen } from '@/lib/format'
 import { confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -22,7 +23,6 @@ import LaborCostPanel from './LaborCostPanel'
 
 const ALLOWED_VIEWERS = [0, 1]   // 代表・事業責任者
 
-const yen = (v: number | null | undefined) => v == null ? '—' : '¥' + Math.round(v).toLocaleString()
 const signedPitch = (v: number) => (v > 0 ? '+' : '') + v
 
 /** 選んだ事由の合計（±3でクランプ）。サーバの specialAdjustment と同じ規則 */

@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import Link from 'next/link'
 import { PageHeader, Segment, Chip, RowButton } from '@/components/ui/PageParts'
 import { confirmDialog } from '@/lib/confirm-dialog'
@@ -36,7 +37,6 @@ import { WageMap } from './WageMap'
 
 const OWNER_ID = 0 // 日比靖仁
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 const signed = (v: number) => (v >= 0 ? '+' : '−') + '¥' + Math.abs(Math.round(v)).toLocaleString()
 
 export default function WageAnalysisPage() {

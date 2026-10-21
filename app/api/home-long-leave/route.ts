@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole } from '@/lib/auth'
-import { currentYmJst } from '@/lib/date-utils'
+import { currentYmJst, todayJstIso, addDaysIso } from '@/lib/date-utils'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers.server'
@@ -74,11 +74,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate dates are at least 90 days (3 months) in the future (JST)
-      const now = new Date()
-      const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      const minDate = new Date(jstNow)
-      minDate.setDate(minDate.getDate() + 90)
-      const minDateStr = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`
+      const minDateStr = addDaysIso(todayJstIso(), 90)
 
       if (startDate < minDateStr) {
         return NextResponse.json({ error: 'Start date must be at least 90 days ahead' }, { status: 400 })

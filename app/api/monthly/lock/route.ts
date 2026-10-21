@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { currentYmJst } from '@/lib/date-utils'
 import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
@@ -17,12 +18,6 @@ async function loadCalendarDaysForYm(ym: string): Promise<Record<string, Record<
   const m: Record<string, Record<string, string>> = {}
   for (const c of cals) if (c.days) m[c.siteId] = c.days
   return m
-}
-
-/** JST 基準の当月 YYYYMM */
-function currentYmJst(): string {
-  const jst = new Date(Date.now() + 9 * 3600 * 1000)
-  return `${jst.getUTCFullYear()}${String(jst.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 /**

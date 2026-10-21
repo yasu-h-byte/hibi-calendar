@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { todayJstIso } from '@/lib/date-utils'
 import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
@@ -119,10 +120,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate date is at least next day (JST)
-      const now = new Date()
-      // Convert to JST for date comparison
-      const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      const todayStr = `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, '0')}-${String(jstNow.getDate()).padStart(2, '0')}`
+      const todayStr = todayJstIso()
 
       // 2026-09-30（代表決定）: 有給は前日までに申請。当日・過ぎた日は不可（旧: 当日OK）
       {

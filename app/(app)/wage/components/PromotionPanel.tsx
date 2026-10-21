@@ -10,13 +10,13 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import {
   promote, dailyForStep, capDaily, GRADE_LABELS, GRADES_IN_ORDER, type JpGrade,
 } from '@/lib/jp-wage'
 import { isAlreadyRetired } from '@/lib/workers'
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 interface W { id: number; name: string; grade: JpGrade | ''; step: number | null; daily: number }
 interface Rec {

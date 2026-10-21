@@ -126,11 +126,7 @@ export async function POST(request: NextRequest) {
     const nowIso = new Date().toISOString()
 
     // 本日のJST日付を YYYY-MM-DD で返す（Vercelサーバーは UTC のため補正）
-    const todayJST = () => {
-      const now = new Date()
-      const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
-      return jst.toISOString().slice(0, 10)
-    }
+    const todayJST = () => todayJstIso()
 
     if (action === 'recordBuyout') {
       // Phase 6: 買取記録（日本人期末買取 or 退職時清算）

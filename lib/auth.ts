@@ -1,4 +1,5 @@
 import { AuthUser, UserRole, Site, Worker } from '@/types'
+import { currentYmJst } from '@/lib/date-utils'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
@@ -131,9 +132,7 @@ export const OWNER_WORKER_ID = 0
 
 /** 当月の YYYYMM を返す（JST 基準） */
 function currentYm(): string {
-  const now = new Date()
-  const jst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  return `${jst.getFullYear()}${String(jst.getMonth() + 1).padStart(2, '0')}`
+  return currentYmJst()
 }
 
 // 職長の判定（computeForemanSites / foremenOfSiteForMonth / approvingForemenOfSite / isProxyApprovalSite）は

@@ -6,12 +6,12 @@
  * 旧「請求・支払の一覧」の支払う側を引き継いだ。届いた請求書との見比べは下の一覧（ReceiveView）が行う。
  */
 import { useCallback, useEffect, useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import type { PeerStatement } from '@/lib/peer-statement'
 
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 export default function PaymentsPreview({ ym }: { ym: string }) {
   const { ready } = useAuthPassword()

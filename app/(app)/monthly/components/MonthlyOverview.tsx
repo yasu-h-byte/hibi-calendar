@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/ui/Icon'
+import { fmtYen as yen } from '@/lib/format'
 import { Chip, AmountChip, type ChipTone } from '@/components/ui/PageParts'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './StaffConfirmBadge'
 
@@ -62,7 +63,6 @@ export interface OverviewWorker {
   restMismatchDays?: number[]
 }
 
-const yen = (n: number) => `¥${Math.round(n).toLocaleString()}`
 const num = (n: number) => (Math.round(n * 10) / 10).toLocaleString()
 
 // ─── 締めの準備カード ───────────────────────────────

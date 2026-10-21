@@ -11,6 +11,7 @@
  * 旧「請求・支払の一覧」（/peer-statement）の請求する側を引き継いだ。支払う側はタブ③へ。
  */
 import { useCallback, useEffect, useState } from 'react'
+import { fmtYen as yen } from '@/lib/format'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
@@ -36,7 +37,6 @@ const STATE: Record<InvState, { label: string; tone: ChipTone }> = {
   returned: { label: '差し戻し・取り下げ', tone: 'amber' },
   none: { label: 'まだ', tone: 'amber' },
 }
-const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 interface Row {
   key: string

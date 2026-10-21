@@ -6,6 +6,11 @@ export function fmtYen(value: number): string {
   return `¥${Math.round(value).toLocaleString()}`
 }
 
+/** 金額が無いときは「—」（請求書・賃金の画面。2026-10-21 総点検で 17 か所の `const yen = …` を集約） */
+export function fmtYenOrDash(value: number | null | undefined): string {
+  return typeof value === 'number' ? fmtYen(value) : '—'
+}
+
 /** Format yen for KPI cards (large numbers): 9757001 → "¥976万" */
 export function fmtYenMan(value: number): string {
   const man = Math.round(value / 10000)

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { jstWallClock, jstYmOf, jstIsoOf, addMonthsSafe, isSunday } from '@/lib/date-utils'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc, where } from '@/lib/fsdb'
 import { applyDueScheduledWorkerChanges } from '@/lib/worker-crud'
@@ -50,7 +51,7 @@ function isoDate(d: Date = new Date()): string {
   // YYYYMMDD-HHmmss（JST）
   // ⚠️ 2026-05-08 修正: 秒精度に変更。同一分内に手動再実行されても docId が衝突せず、
   //    既存のスナップショットが上書きされない。
-  const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  const jst = jstWallClock(d)
   const yyyy = jst.getFullYear()
   const mm = String(jst.getMonth() + 1).padStart(2, '0')
   const dd = String(jst.getDate()).padStart(2, '0')
@@ -61,18 +62,13 @@ function isoDate(d: Date = new Date()): string {
 }
 
 function ymKey(d: Date): string {
-  const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  return `${jst.getFullYear()}${String(jst.getMonth() + 1).padStart(2, '0')}`
+  return jstYmOf(d)
 }
 
 function relativeYm(d: Date, monthsOffset: number): string {
   // JST の年・月を取り出し、整数計算で月をずらす。
   //   ※ Date.setMonth は月末31日起点だと繰り上がって対象月が抜ける（監査⑦の横展開）。
-  const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  const total = jst.getMonth() + monthsOffset
-  const y = jst.getFullYear() + Math.floor(total / 12)
-  const m0 = ((total % 12) + 12) % 12
-  return `${y}${String(m0 + 1).padStart(2, '0')}`
+  return addMonthsSafe(jstIsoOf(d).slice(0, 8) + '01', monthsOffset).slice(0, 7).replace('-', '')
 }
 
 export async function GET(request: NextRequest) {
@@ -113,7 +109,7 @@ export async function GET(request: NextRequest) {
     //     旧: 3ヶ月窓のみで、過去月の doc が事故で消えると復元手段が無かった
     //     （5月の事故は当月だったから救えたが、過去月なら詰みだった）。
     //     30日保持なので日曜分は常に直近4〜5世代残る。
-    const isSundayJst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' })).getDay() === 0
+    const isSundayJst = isSunday(jstIsoOf(now))
     const attYms = new Set<string>([-1, 0, 1].map(o => relativeYm(now, o)))
     if (isSundayJst) {
       // demmen コレクションから att_ ドキュメントを列挙
