@@ -30,7 +30,7 @@
 | API ルート | 76 本 → 73 本（3 本削除） |
 | 画面 | 34 画面 |
 | テスト | 128 ファイル・1,471 件（点検前 1,388 件） |
-| 最大のファイル | lib/compute.ts 3,608 行 → 3,330 行、app/(app)/evaluation/page.tsx 2,698 行 |
+| 最大のファイル | lib/compute.ts 3,608 行 → 4 本に分割（最大 1,585 行）、app/(app)/evaluation/page.tsx 2,698 行（未分割・§7） |
 
 ---
 
@@ -131,28 +131,22 @@ firebase Web SDK の grpc（サーバーのフォールバック専用・本番�
 | 6 | 通知ベル | ✅ 読む月を「使う月」だけに（37 → 13〜16 か月）。直列 getDocs の並列化と /api/leave の 48 か月読みは未着手 |
 | 7 | approvalGap・/api/monthly | ✅ 承認を「現場×月」の範囲クエリ 1 回に（テスト 2 件追加）。/api/monthly の読みを並列に |
 
-## 6. まだ残っている作業（優先順）
+## 6. 第 3 弾（同じ PR・2026-10-22）で済ませたもの
 
-| # | 作業 | 大きさ | 守り |
+| # | 作業 | 結果 |
+|---|---|---|
+| 1 | localStorage の 'hibi_auth' 直読み 39 行 | ✅ readAuth / saveAuth / clearAuth（lib/hooks/useAuthPassword.ts）に。lint:auth で直読みも落とす |
+| 2 | HFU 判定の自前実装 | ✅ 20 か所＋同じ関数の定義 4 か所 → lib/locks.ts orgKeyOf |
+| 3 | /api/leave GET の 48 か月読み | ✅ 確定月は 30 分キャッシュ（getMultiMonthAttData に cachedForClosed）。残数の検証は読み直したまま |
+| 5 | 巨大ファイルの分割 | ✅ lib/compute.ts 3,330 行 → 4 本（compute / compute-monthly / compute-overtime / compute-vn-salary）、lib/export.ts 1,959 行 → 5 本（export / export-attendance / export-subcon / export-monthly / export-labor）。計算・帳票の中身は変えず、golden master を含むテストは変更なしで合格 |
+| 7 | 画面の role 直書き | ✅ 権限表と完全に同じ組み合わせの 7 か所を can() に（invoice.approve / calendar.approve / wage.view / wage.decide）。残りは「職長の画面の見せ方」の判定で、権限ではない |
+
+## 7. 残っているもの（性質が違うので別に進める）
+
+| # | 件 | なぜ今回やらなかったか | 進め方 |
 |---|---|---|---|
-| 1 | localStorage の 'hibi_auth' 直読み 39 行 → useAuthPassword（hook に saveAuth / clearAuth を足す） | 中 | lint:auth に hibi_auth を足す |
-| 2 | HFU 判定の自前実装（`=== 'hfu' \|\| === 'HFU'` 6 か所・inline の `w.org === 'hfu'` 31 か所）→ orgKeyOf / isWorkerOfOrg | 小 | — |
-| 3 | /api/leave GET の 48 か月読み（確定月はキャッシュ・範囲を付与レコードに絞る）、通知ベルの直列 getDocs の並列化 | 中 | — |
-| 4 | 有給・欠勤だけの軽い索引ドキュメント（leaveIndex/{workerId}）で出面の大量読みを根治 | 大 | 移行スクリプト |
-| 5 | 巨大ファイルの分割（compute.ts 5 本・evaluation/page.tsx タブごと・export.ts 5 本・attendance/[token] のフォーム共通化） | 大 | golden master |
-| 6 | Next 15 / ESLint 9 / firebase 13 への更新 | 大（最後） | — |
-| 7 | 画面の role 直書き 53 行 → can()（§4-7・代表の判断つき） | 中 | 権限表テスト |
-
----
-
-## 6. 確かめて問題なかったもの（網羅性のため）
-
-- **権限**: 76 本の API すべてに認証あり。給与を返す API はすべて pay.view 系。workers / sites / evaluation の GET は許可リスト方式。
-  画面 27 本すべて PAGE_CAPS に載り、テストが足し忘れを落とす。Firestore / Storage ルール（本番の実物）は deny-by-default
-- **通行証**: HMAC-SHA256・timingSafeEqual・期限付き。個人通行証はパスワードの指紋入りで変更・削除で失効。API はパスワードそのものを受け付けない
-- **人工の数え方**: calcManDays 1 か所（p/r/h/hk/exam = 0・夜勤 1.5）を鳶換算・応援明細・山岡の検算が共有
-- **承認ゲート**: 本人確認・月締め・応援/HFU/山岡の請求が同じ approvalGap と FINAL_APPROVAL_REQUIRED_FROM_YM を共有
-- **期間**: 山岡は primePeriodOf（前月 21 日〜当月 20 日）1 か所、月単位は billingPeriodOf 1 か所
-- **定数**: 85%・道具半額 2.5 万・精算の月 24 日・PAY_VIEWER は 1 か所定義
-- **キャッシュ**: getMainData の無効化（registerMainWriteHook）、getAttDataCached の呼び出し 4 か所すべてが isClosedMonthYm で守られている
-- **日付**: lint:utc の対象パターンは 0 件（手書きの JST 変換が 8 か所残る → §5-4）
+| 1 | 有給・欠勤だけの索引ドキュメント（leaveIndex） | Firestore に新しいコレクションを作り、全出面から一度作る移行を本番で流す必要がある（本番データの書き換え＝代表の OK が要る）。索引と出面がずれたときの直し方も決めてから | 設計を 1 枚にして代表の OK → 移行スクリプト → 書き込み側（writeAttendanceEntry）で二重更新 → 読む側を順に切り替え |
+| 2 | app/(app)/evaluation/page.tsx（2,698 行）のタブ分割・app/attendance/[token]/page.tsx のフォーム共通化 | 画面の中身を動かす変更で、Preview で実際に触って確かめないと安全と言えない（テストは画面を見ない） | 画面ごとに 1 PR。Preview で代表が一通り触る |
+| 3 | Next 15 / ESLint 9 / firebase 13 | メジャー更新で、動き（キャッシュ・リクエストの扱い）が変わる。今回の整理が本番で落ち着いてから | 別 PR・Preview で全画面確認 |
+| 4 | 就業カレンダーの「提出なしで直接承認」（canForceApprove）の権限表への追加 | 権限表に該当する能力が無い（代表だけの操作）。能力を増やすかは代表の判断 | §4-7 と一緒に |
+| 5 | 通知ベルの直列 getDocs の並列化 | 10 分ごとの裏の処理で、人の待ち時間に効かない | 気が向いたときで可 |
