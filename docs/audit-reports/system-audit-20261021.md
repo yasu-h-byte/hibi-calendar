@@ -29,7 +29,7 @@
 | TypeScript ファイル | 315 本（約 93,000 行） |
 | API ルート | 76 本 → 73 本（3 本削除） |
 | 画面 | 34 画面 |
-| テスト | 128 ファイル・1,469 件（点検前 1,388 件） |
+| テスト | 128 ファイル・1,471 件（点検前 1,388 件） |
 | 最大のファイル | lib/compute.ts 3,608 行 → 3,330 行、app/(app)/evaluation/page.tsx 2,698 行 |
 
 ---
@@ -119,20 +119,29 @@ firebase Web SDK の grpc（サーバーのフォールバック専用・本番�
 
 ---
 
-## 5. 次に進める作業（優先順）
+## 5. 第 2 弾（同じ PR・2026-10-21 夜）で済ませたもの
+
+| # | 作業 | 結果 |
+|---|---|---|
+| 1 | 有給の承認・日付変更・時季指定の出面書き込みを writeAttendanceEntry に | ✅ 変更履歴に残り、最終承認済みの日は事業責任者・代表だけ。テストの「未移行」例外を外した。帰国（home-leave-sync）は月まとめの reconcile なので対象外のまま |
+| 2 | 退職日の自前比較 → isEmployedOn / isAlreadyRetired | ✅ 7 か所。lint:retired に日付比較の検出を追加 |
+| 3 | 画面の生 fetch → fetchWithAuth | ✅ 150 か所・41 ファイル。lint:auth（新設）で再発を落とす。localStorage 直読み 39 行は未着手（§6） |
+| 4 | 重複ヘルパー | ✅ 円表示 17 か所 → fmtYen / fmtYenOrDash、JST 変換 12 か所 → jstIsoOf / jstYmOf / jstWallClock（lint:utc に検出追加）。HFU 判定は未着手（§6） |
+| 5 | 操作ログの actor | ✅ 固定 'admin' 約 50 か所 → actorLabel(request)（通行証から） |
+| 6 | 通知ベル | ✅ 読む月を「使う月」だけに（37 → 13〜16 か月）。直列 getDocs の並列化と /api/leave の 48 か月読みは未着手 |
+| 7 | approvalGap・/api/monthly | ✅ 承認を「現場×月」の範囲クエリ 1 回に（テスト 2 件追加）。/api/monthly の読みを並列に |
+
+## 6. まだ残っている作業（優先順）
 
 | # | 作業 | 大きさ | 守り |
 |---|---|---|---|
-| 1 | 有給の承認・時季指定・帰国の出面書き込みを writeAttendanceEntry（変更履歴＋最終承認済みガード）に通す | 中 | attendanceWriteEntry.test の例外を外す |
-| 2 | 退職日の自前比較（`w.retired && iso > w.retired` 10 か所）を isEmployedOn に。lint:retired に日付比較を足す | 小 | lint |
-| 3 | 画面の生 fetch 154 行・localStorage 直読み 39 行 → fetchWithAuth / useAuthPassword（hook に saveAuth / clearAuth を足す） | 大（画面ごと） | 新しい lint:auth |
-| 4 | 円表示 17 か所 → fmtYen、JST 手書き 8 か所 → date-utils、HFU 判定 25 ファイル → orgs.ts | 小〜中 | lint:utc に Asia/Tokyo を足す |
-| 5 | 操作ログの actor 固定 'admin'（約 60 か所）→ 通行証から | 中 | — |
-| 6 | 通知ベルの月の絞り込み（有効な付与期間だけ・13〜15 か月）と直列 getDocs の並列化、/api/leave の 48 か月読み | 中 | — |
-| 7 | approvalGap を「現場×日ごとの getDoc」から範囲クエリ（現場×月）に。/api/monthly の直列 5 RTT を並列に | 中 | goldenSynthetic |
-| 8 | 有給・欠勤だけの軽い索引ドキュメント（leaveIndex/{workerId}）で出面の大量読みを根治 | 大 | 移行スクリプト |
-| 9 | 巨大ファイルの分割（compute.ts 5 本・evaluation/page.tsx タブごと・export.ts 5 本・attendance/[token] のフォーム共通化） | 大 | golden master |
-| 10 | Next 15 / ESLint 9 / firebase 13 への更新 | 大（最後） | — |
+| 1 | localStorage の 'hibi_auth' 直読み 39 行 → useAuthPassword（hook に saveAuth / clearAuth を足す） | 中 | lint:auth に hibi_auth を足す |
+| 2 | HFU 判定の自前実装（`=== 'hfu' \|\| === 'HFU'` 6 か所・inline の `w.org === 'hfu'` 31 か所）→ orgKeyOf / isWorkerOfOrg | 小 | — |
+| 3 | /api/leave GET の 48 か月読み（確定月はキャッシュ・範囲を付与レコードに絞る）、通知ベルの直列 getDocs の並列化 | 中 | — |
+| 4 | 有給・欠勤だけの軽い索引ドキュメント（leaveIndex/{workerId}）で出面の大量読みを根治 | 大 | 移行スクリプト |
+| 5 | 巨大ファイルの分割（compute.ts 5 本・evaluation/page.tsx タブごと・export.ts 5 本・attendance/[token] のフォーム共通化） | 大 | golden master |
+| 6 | Next 15 / ESLint 9 / firebase 13 への更新 | 大（最後） | — |
+| 7 | 画面の role 直書き 53 行 → can()（§4-7・代表の判断つき） | 中 | 権限表テスト |
 
 ---
 
