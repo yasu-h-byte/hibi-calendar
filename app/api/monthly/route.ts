@@ -21,8 +21,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const main = await getMainData()
-    const att = await getAttData(ym)
+    // 独立した読みは並列に（2026-10-21 総点検。旧: main → att → カレンダー → 帰国 → 手当 の直列 5 往復）
+    const [main, att, cals, homeLeaves] = await Promise.all([
+      getMainData(),
+      getAttData(ym),
+      getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0]),
+      getAllActiveHomeLeaves(),
+    ])
     const prescribedDays = main.workDays[ym] || 0
     // カレンダーから現場別所定日数を取得（5月以降は手入力不要）
     const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
@@ -31,11 +36,9 @@ export async function GET(request: NextRequest) {
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
     // 外国人給与の週残業しきい値を「カレンダー予定日ベース」で判定するための日別カレンダー（監査④）。
     //   Excel出力(/api/export)と同一基準にし、画面とExcelの残業額を一致させる。
-    const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
     const calendarDaysMap: Record<string, Record<string, string>> = {}
     for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
     // 帰国中（一時帰国・復帰未定）期間を給与計算へ渡す（帰国中日を無給かつ非欠勤扱いにする）
-    const homeLeaves = await getAllActiveHomeLeaves()
     // 遠方現場日当・運転手当（2026-10 施行。施行前の月は undefined＝計算不変）
     const allowances = await loadMonthlyAllowances(main, ym, att.d, att.drv)
     const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
