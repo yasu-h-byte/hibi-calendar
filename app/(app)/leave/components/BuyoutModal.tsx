@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { PLWorker } from '../types'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
@@ -64,17 +65,17 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
       const currentFy = targetPrev && worker.prevPeriod
         ? worker.prevPeriod.fy
         : (worker.grantDate ? worker.grantDate.slice(0, 4) : String(new Date().getFullYear()))
-      const res = await fetch('/api/leave', {
+      const res = await fetchWithAuth('/api/leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'recordBuyout',
           workerId: worker.id,
           fy: currentFy,
           days,
           amount: buyoutForm.amount ? Number(buyoutForm.amount) : undefined,
-          reason: buyoutForm.reason,
-        }),
+          reason: buyoutForm.reason
+        })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)

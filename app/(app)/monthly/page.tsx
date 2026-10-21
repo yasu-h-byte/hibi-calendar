@@ -14,7 +14,7 @@ import { summarizeOpenIssues, type PayNoteAck } from '@/lib/pay-note-ack'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import ConfirmReminder from './components/ConfirmReminder'
 import { can } from '@/lib/permissions'
-import { postJson } from '@/lib/api-client'
+import { fetchWithAuth, postJson  } from '@/lib/api-client'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { UnderlineTabs, ToolButton, Segment, SearchBox, RowButton } from '@/components/ui/PageParts'
@@ -425,9 +425,8 @@ function MonthlyPageInner() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/monthly?ym=${ym}`, {
-        headers: { 'x-admin-password': password },
-        signal: req.signal,
+      const res = await fetchWithAuth(`/api/monthly?ym=${ym}`, { password,
+        signal: req.signal
       })
       if (!req.isCurrent()) return
       if (!res.ok) {
@@ -472,7 +471,7 @@ function MonthlyPageInner() {
   useEffect(() => {
     if (!password || !ym) return
     let alive = true
-    fetch(`/api/attendance/confirm?ym=${ym}`, { headers: { 'x-admin-password': password } })
+    fetchWithAuth(`/api/attendance/confirm?ym=${ym}`, { password })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then((j: { items?: (StaffConfirmInfo & { workerId: number })[] }) => {
         if (!alive) return
@@ -492,7 +491,7 @@ function MonthlyPageInner() {
   useEffect(() => {
     if (!password || !ym) return
     let alive = true
-    fetch(`/api/monthly/note-ack?ym=${ym}`, { headers: { 'x-admin-password': password } })
+    fetchWithAuth(`/api/monthly/note-ack?ym=${ym}`, { password })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then((j: { acks?: PayNoteAck[] }) => { if (alive) setNoteAcks(j.acks || []) })
       // 読めなかったときは「確認なし」として全部を未確認で出す（安全側）
@@ -512,9 +511,9 @@ function MonthlyPageInner() {
     const key = `${iss.workerId}|${iss.field}`
     setAckBusy(key)
     try {
-      const res = await fetch('/api/monthly/note-ack', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'ack', ym, workerId: iss.workerId, code: iss.field, message: iss.message, note }),
+      const res = await fetchWithAuth('/api/monthly/note-ack', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ack', ym, workerId: iss.workerId, code: iss.field, message: iss.message, note })
       })
       if (!res.ok) {
         const j = await res.json().catch(() => null)
@@ -537,9 +536,9 @@ function MonthlyPageInner() {
     const key = `${iss.workerId}|${iss.field}`
     setAckBusy(key)
     try {
-      const res = await fetch('/api/monthly/note-ack', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'unack', ym, workerId: iss.workerId, code: iss.field }),
+      const res = await fetchWithAuth('/api/monthly/note-ack', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unack', ym, workerId: iss.workerId, code: iss.field })
       })
       if (!res.ok) {
         const j = await res.json().catch(() => null)
@@ -576,10 +575,10 @@ function MonthlyPageInner() {
     if (!ok) return
     setLockToggling(true)
     try {
-      const post = (extra: Record<string, unknown> = {}) => fetch('/api/monthly/lock', {
+      const post = (extra: Record<string, unknown> = {}) => fetchWithAuth('/api/monthly/lock', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ ym, locked: newLocked, org, ...extra }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ym, locked: newLocked, org, ...extra })
       })
       // 締めの前の確認（承知のうえでだけ締める）。サーバが順に返すので、1つずつ聞いて旗を足して送り直す:
       //   PAY_NOTES_UNACKED   給与チェックの注意点で「確認した」が付いていないもの（2026-10-05）
@@ -679,9 +678,7 @@ function MonthlyPageInner() {
         if (card.needsOrg) params.set('org', exportSelectedOrg[card.type] || 'all')
         if (card.type === 'monthlyExcel') params.set('org', 'all')
 
-        const res = await fetch(`/api/export?${params}`, {
-          headers: { 'x-admin-password': password },
-        })
+        const res = await fetchWithAuth(`/api/export?${params}`, { password })
 
         if (!res.ok) {
           const errText = await res.text()
@@ -870,7 +867,7 @@ function MonthlyPageInner() {
           setExportError('')
           setExportDownloading(`${type}-${org}`)
           try {
-            const res = await fetch(`/api/export?type=${type}&ym=${ymClean}&org=${org}`, { headers: { 'x-admin-password': password } })
+            const res = await fetchWithAuth(`/api/export?type=${type}&ym=${ymClean}&org=${org}`, { password })
             if (!res.ok) { setExportError('ダウンロードに失敗しました'); return }
             const blob = await res.blob()
             const url = URL.createObjectURL(blob)

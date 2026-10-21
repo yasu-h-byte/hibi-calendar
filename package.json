@@ -14,6 +14,7 @@
     "lint:utc": "node scripts/lint-utc-date.mjs",
     "lint:px": "node scripts/lint-px-text.mjs",
     "lint:dialog": "node scripts/lint-browser-dialogs.mjs",
+    "lint:auth": "node scripts/lint-screen-auth.mjs",
     "check:bundle": "node scripts/check-client-bundle-secrets.mjs",
     "lint:pay": "node scripts/lint-pay-in-docs.mjs",
     "diagnose:firestore": "node scripts/diagnose-merge-empty-map.mjs",

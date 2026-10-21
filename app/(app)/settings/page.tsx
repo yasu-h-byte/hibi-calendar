@@ -4,6 +4,7 @@
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -402,9 +403,7 @@ export default function SettingsPage() {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch('/api/settings', {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth('/api/settings', { password })
       if (!res.ok) throw new Error('Unauthorized')
       const data = await res.json()
       setRates({ tobiRate: 0, dokoRate: 0, baseDays: 20, ...data.defaultRates })
@@ -418,7 +417,7 @@ export default function SettingsPage() {
   const fetchHfuInvoice = useCallback(async () => {
     if (!password) return
     try {
-      const res = await fetch('/api/settings?action=getHfuInvoice', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/settings?action=getHfuInvoice', { password })
       if (!res.ok) return
       const h = (await res.json()).hfuInvoice
       if (!h) return
@@ -436,7 +435,7 @@ export default function SettingsPage() {
   const fetchCompanyProfile = useCallback(async () => {
     if (!password) return
     try {
-      const res = await fetch('/api/settings?action=getCompanyProfile', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/settings?action=getCompanyProfile', { password })
       if (!res.ok) return
       const data = await res.json()
       if (data.companyProfile) setCompanyProfile({ ...EMPTY_COMPANY_PROFILE, ...data.companyProfile, bank: { ...EMPTY_COMPANY_PROFILE.bank, ...(data.companyProfile.bank || {}) } })
@@ -447,8 +446,8 @@ export default function SettingsPage() {
     if (!password) return
     try {
       const [pwRes, wRes] = await Promise.all([
-        fetch('/api/settings?action=getUserPasswords', { headers: { 'x-admin-password': password } }),
-        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/settings?action=getUserPasswords', { password }),
+        fetchWithAuth('/api/workers', { password }),
       ])
       if (pwRes.ok) {
         const data = await pwRes.json()
@@ -479,9 +478,7 @@ export default function SettingsPage() {
       if (filterUser) params.set('userId', filterUser)
       if (filterAction) params.set('action', filterAction)
 
-      const res = await fetch(`/api/activity?${params.toString()}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/activity?${params.toString()}`, { password })
       if (res.ok) {
         const data = await res.json()
         setActivityEntries(data.entries || [])
@@ -497,7 +494,7 @@ export default function SettingsPage() {
     if (!password) return
     setUsersLoading(true)
     try {
-      const workersRes = await fetch('/api/workers', { headers: { 'x-admin-password': password } })
+      const workersRes = await fetchWithAuth('/api/workers', { password })
       if (workersRes.ok) {
         const data = await workersRes.json()
         const all: UserWorker[] = data.workers || []
@@ -529,9 +526,7 @@ export default function SettingsPage() {
     setAnnLoading(true)
     try {
       // 投稿の編集・削除用なので、投稿したものだけ（リリースノートはコード側・lib/release-notes.ts）
-      const res = await fetch('/api/announcements?scope=posted', {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth('/api/announcements?scope=posted', { password })
       if (res.ok) {
         const data = await res.json()
         setAnnouncements(data.announcements || [])
@@ -556,10 +551,10 @@ export default function SettingsPage() {
     const body = annEditId
       ? { action: 'update', id: annEditId, ...annForm }
       : { action: 'add', ...annForm, publishedBy }
-    const res = await fetch('/api/announcements', {
+    const res = await fetchWithAuth('/api/announcements', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -577,10 +572,10 @@ export default function SettingsPage() {
       description: 'スタッフの画面からも消えます。',
       confirmLabel: '削除する',
     }))) return
-    const res = await fetch('/api/announcements', {
+    const res = await fetchWithAuth('/api/announcements', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'delete', id }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id })
     })
     if (res.ok) {
       showMessage('success', '削除しました')
@@ -607,28 +602,27 @@ export default function SettingsPage() {
   }
 
   const handleSaveRates = async () => {
-    const res = await fetch('/api/settings', {
+    const res = await fetchWithAuth('/api/settings', { password,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-admin-password': password,
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         action: 'saveDefaultRates',
         tobiRate: rates.tobiRate,
         dokoRate: rates.dokoRate,
-        baseDays: rates.baseDays,
-      }),
+        baseDays: rates.baseDays
+      })
     })
     if (!res.ok) return failReason(res)
     showMessage('success', 'デフォルト単価を保存しました')
   }
 
   const handleSaveCompanyProfile = async () => {
-    const res = await fetch('/api/settings', {
+    const res = await fetchWithAuth('/api/settings', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'saveCompanyProfile', companyProfile }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'saveCompanyProfile', companyProfile })
     })
     if (!res.ok) return failReason(res, '管理者パスワードでログインしているか確認してください')
     showMessage('success', '請求書の自社情報を保存しました')
@@ -636,10 +630,10 @@ export default function SettingsPage() {
 
   const handleSaveHfuInvoice = async () => {
     const { profile, tobiRate, dokoRate, standbyRatePct, payMonthOffset, payDay } = hfuInvoice
-    const res = await fetch('/api/settings', {
+    const res = await fetchWithAuth('/api/settings', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, standbyRatePct, paymentTerms: { closing: 'end', payMonthOffset, payDay } } }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, standbyRatePct, paymentTerms: { closing: 'end', payMonthOffset, payDay } } })
     })
     if (!res.ok) return failReason(res, '管理者パスワードでログインしているか確認してください')
     showMessage('success', 'HFU → 日比建設 の請求書の設定を保存しました')
@@ -648,13 +642,12 @@ export default function SettingsPage() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetchWithAuth('/api/settings', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: 'backup' }),
+        body: JSON.stringify({ action: 'backup' })
       })
       if (!res.ok) throw new Error('Export failed')
       const data = await res.json()
@@ -714,13 +707,12 @@ export default function SettingsPage() {
     if (!importPreview) return
     setRestoring(true)
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetchWithAuth('/api/settings', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: 'restore', data: importPreview.raw }),
+        body: JSON.stringify({ action: 'restore', data: importPreview.raw })
       })
       if (!res.ok) {
         const err = await res.json()
@@ -1002,10 +994,10 @@ export default function SettingsPage() {
                   // 空欄は「変更なし」。null は削除
                   const changes = Object.fromEntries(Object.entries(pwChanges).filter(([, v]) => v === null || (typeof v === 'string' && v !== '')))
                   if (Object.keys(changes).length === 0) { showMessage('error', '変更がありません'); return null }
-                  const res = await fetch('/api/settings', {
+                  const res = await fetchWithAuth('/api/settings', { password,
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                    body: JSON.stringify({ action: 'saveUserPasswords', changes }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'saveUserPasswords', changes })
                   })
                   if (!res.ok) return failReason(res)
                   showMessage('success', '個人パスワードを保存しました（本人に口頭で伝えてください）')

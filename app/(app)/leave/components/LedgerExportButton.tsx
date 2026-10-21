@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { ToolButton } from '@/components/ui/PageParts'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { Icon } from '@/components/ui/Icon'
@@ -26,9 +27,7 @@ export default function LedgerExportButton({ password }: { password: string }) {
   const download = async (scope: string) => {
     setBusy(scope)
     try {
-      const res = await fetch(`/api/leave/export-ledger?scope=${scope}${allPeriods ? '&range=all' : ''}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/leave/export-ledger?scope=${scope}${allPeriods ? '&range=all' : ''}`, { password })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
         notify.failed('管理簿の出力', err?.error || 'サーバが受け付けませんでした', '時間をおいてもう一度お試しください')

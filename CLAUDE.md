@@ -57,6 +57,8 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
   必ず完全なクラス名を文字列リテラルで書く
 - 文字の大きさは **px で指定しない**（`text-[10px]` 禁止）。rem 系（`text-3xs`/`text-2xs`/`text-xs`/`text-sm`…）を使う。
   10px 相当より小さい字は使わない。`npm run lint:px` が検出する。表は [docs/ui-design.md](docs/ui-design.md) の「文字の大きさ」節
+- 画面から API を呼ぶときは `lib/api-client.ts`（fetchWithAuth / postJson / getJson）を使う。通行証のヘッダ `'x-admin-password'` を
+  画面で手書きしない（2026-10-21 に 150 か所を置き換えた。`npm run lint:auth` が検出する）
 - ブラウザ標準の `confirm()` / `alert()` / `prompt()` は使わない。確認は `lib/confirm-dialog.ts`（confirmDialog / confirmDanger / confirmWithReason）、
   お知らせは `lib/notify.ts`（notify.success / failed / error）、入力の不備は `<FieldError>`。`npm run lint:dialog` が検出する。
   独自モーダルの枠（`fixed inset-0`）も書かず `components/ui/Modal.tsx` の `<Modal>` を使う（同じ lint が検出）。決まりは [docs/ui-design.md](docs/ui-design.md) の「確認・お知らせ・保存の部品」節

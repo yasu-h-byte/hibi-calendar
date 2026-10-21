@@ -8,6 +8,7 @@
  * 承認・却下・取り消しはサーバで権限と上限（残数・年5日の枠・月24日）を確かめ直す。金額は出さない。
  */
 import { useCallback, useEffect, useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog, confirmDanger, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { ymLabel, type LeaveSettleRequest } from '@/lib/leave-settle'
@@ -37,7 +38,7 @@ export default function LeaveSettleApprovals({ token, password, canApprove = tru
     try {
       const res = isMypage
         ? await fetch(`/api/leave-settle?token=${token}&scope=approvals`)
-        : await fetch('/api/leave-settle', { headers: { 'x-admin-password': password || '' } })
+        : await fetchWithAuth('/api/leave-settle', { password: password || '' })
       if (!res.ok) { setRequests([]); return }
       setRequests((await res.json()).requests || [])
     } catch { setRequests([]) }
@@ -67,10 +68,10 @@ export default function LeaveSettleApprovals({ token, password, canApprove = tru
     }
     setBusy(r.id)
     try {
-      const res = await fetch('/api/leave-settle', {
+      const res = await fetchWithAuth('/api/leave-settle', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(password ? { 'x-admin-password': password } : {}) },
-        body: JSON.stringify({ action, id: r.id, reason, ...(token ? { token } : {}) }),
+        headers: { 'Content-Type': 'application/json', ...(password ? { } : {}) },
+        body: JSON.stringify({ action, id: r.id, reason, ...(token ? { token } : {}) })
       })
       if (!res.ok) {
         notify.failed(action === 'approve' ? '承認' : action === 'reject' ? '却下' : '取り消し',

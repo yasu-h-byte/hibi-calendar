@@ -4,6 +4,7 @@
 // 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { useEffect, useState, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { visaLabel } from '@/lib/labels'
 import { jobLabel } from '@/lib/jobs'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
@@ -111,9 +112,7 @@ export default function ToolBudgetPage() {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch('/api/tool-budget', {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth('/api/tool-budget', { password })
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
@@ -161,15 +160,15 @@ export default function ToolBudgetPage() {
 
   // 保存ボタン（SaveButton）の約束: うまくいったら何も返さない・サーバの断りは { ok: false, error }（ボタンが赤の帯を出す）
   const saveBudgetSettings = async () => {
-    const res = await fetch('/api/tool-budget', {
+    const res = await fetchWithAuth('/api/tool-budget', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'setDefaultBudget',
         defaultBudget: Number(defaultBudget) || 30000,
         budgetByVisa: toNumMap(budgetByVisa),
-        budgetByJob: toNumMap(budgetByJob),
-      }),
+        budgetByJob: toNumMap(budgetByJob)
+      })
     })
     if (!res.ok) { const j = await res.json().catch(() => null); return { ok: false, error: j?.error || 'サーバが受け付けませんでした' } }
     await fetchData()
@@ -400,10 +399,10 @@ function WorkerModal({
 
   // 保存ボタン（SaveButton）の約束: うまくいったら何も返さない・サーバの断りは { ok: false, error }（ボタンが赤の帯を出す）
   const saveAnchor = async () => {
-    const r = await fetch('/api/tool-budget', {
+    const r = await fetchWithAuth('/api/tool-budget', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ action: 'setPeriodAnchor', workerId: worker.workerId, anchor: anchor || null }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setPeriodAnchor', workerId: worker.workerId, anchor: anchor || null })
     })
     // 2026-10-02 総合点検: 旧は応答を見ておらず、権限なし・形式不正でも「保存しました」と出た
     if (!r.ok) { const j = await r.json().catch(() => null); return { ok: false, error: j?.error || 'サーバが受け付けませんでした' } }
@@ -412,15 +411,15 @@ function WorkerModal({
 
   const saveBudget = async () => {
     if (!worker.period) return null
-    const r = await fetch('/api/tool-budget', {
+    const r = await fetchWithAuth('/api/tool-budget', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'setBudget',
         workerId: worker.workerId,
         periodStart: worker.period.start,
-        budget: Number(budget),
-      }),
+        budget: Number(budget)
+      })
     })
     if (!r.ok) { const j = await r.json().catch(() => null); return { ok: false, error: j?.error || 'サーバが受け付けませんでした' } }
     onRefresh()
@@ -430,9 +429,9 @@ function WorkerModal({
   //   戻り値: true=登録した / null=「やめる」が押された（失敗ではない） / false=だめだった（帯はここで出す）
   const addPurchase = async (date: string, amount: number, item: string, subsidyKind?: ToolSubsidyKind): Promise<boolean | null> => {
     if (!worker.period) return null
-    const post = (allowOver: boolean, allowDuplicate: boolean) => fetch('/api/tool-budget', {
+    const post = (allowOver: boolean, allowDuplicate: boolean) => fetchWithAuth('/api/tool-budget', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'addPurchase',
         workerId: worker.workerId,
@@ -442,8 +441,8 @@ function WorkerModal({
         item,
         allowOver,
         allowDuplicate,
-        ...(subsidyKind ? { subsidyKind } : {}),
-      }),
+        ...(subsidyKind ? { subsidyKind } : {})
+      })
     })
     try {
       // 2026-10-09: 同じ購入の二度登録（duplicate）と残高超え（over_budget）は、確認してから通す。両方当たることもあるので順に聞く
@@ -528,10 +527,10 @@ function WorkerModal({
   const fetchView = useCallback(async (idx: number) => {
     setViewLoading(true)
     try {
-      const r = await fetch('/api/tool-budget', {
+      const r = await fetchWithAuth('/api/tool-budget', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'getPeriod', workerId: worker.workerId, periodIndex: idx }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getPeriod', workerId: worker.workerId, periodIndex: idx })
       })
       if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('前の期間の読み込み', j?.error || 'サーバが受け付けませんでした'); return }
       setViewData(await r.json())
@@ -570,10 +569,10 @@ function WorkerModal({
       })
     if (!ok) return
     try {
-      const r = await fetch('/api/tool-budget', {
+      const r = await fetchWithAuth('/api/tool-budget', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'setPurchaseSubsidy', workerId: worker.workerId, periodStart: shownPeriod.start, purchaseId: p.id, subsidyKind: kind }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setPurchaseSubsidy', workerId: worker.workerId, periodStart: shownPeriod.start, purchaseId: p.id, subsidyKind: kind })
       })
       if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('半額負担の変更', j?.error || 'サーバが受け付けませんでした'); return }
       refreshAfterChange()
@@ -588,15 +587,15 @@ function WorkerModal({
       confirmLabel: '削除する',
     }))) return
     try {
-      const r = await fetch('/api/tool-budget', {
+      const r = await fetchWithAuth('/api/tool-budget', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'deletePurchase',
           workerId: worker.workerId,
           periodStart: shownPeriod.start,
-          purchaseId,
-        }),
+          purchaseId
+        })
       })
       if (!r.ok) { const j = await r.json().catch(() => null); notify.failed('購入記録を削除', j?.error || 'サーバが受け付けませんでした'); return }
       notify.success('購入記録を削除しました')

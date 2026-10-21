@@ -7,6 +7,7 @@
 // 保守操作（繰越再計算・正規化・時効処理・手動付与の入口）は components/leave/MaintenanceButton に集約済み。
 
 import { useEffect, useState, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import LedgerExportButton from './components/LedgerExportButton'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import MaintenanceButton from '@/components/leave/MaintenanceButton'
@@ -94,15 +95,15 @@ export default function LeavePage() {
     setError('')
     try {
       const [res, reqRes, siteRes, pendRes, hlRes] = await Promise.all([
-        fetch(`/api/leave?calendar=true${asOfDate ? `&asOf=${asOfDate}` : ''}`, { headers: { 'x-admin-password': password } }),
-        fetch('/api/leave-request', { headers: { 'x-admin-password': password } }),
-        fetch('/api/sites', { headers: { 'x-admin-password': password } }),
-        fetch('/api/leave', {
+        fetchWithAuth(`/api/leave?calendar=true${asOfDate ? `&asOf=${asOfDate}` : ''}`, { password }),
+        fetchWithAuth('/api/leave-request', { password }),
+        fetchWithAuth('/api/sites', { password }),
+        fetchWithAuth('/api/leave', { password,
           method: 'POST',
-          headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'getPendingGrants' }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'getPendingGrants' })
         }),
-        fetch('/api/home-leave', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/home-leave', { password }),
       ])
       if (hlRes.ok) {
         const d = await hlRes.json()

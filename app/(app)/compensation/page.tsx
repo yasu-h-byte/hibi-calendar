@@ -11,6 +11,7 @@
  * 既存ページ（/wage・/evaluation 等）はそのまま。ここは入口だけを整理する。
  */
 import { useEffect, useState, type ReactNode } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import Link from 'next/link'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Chip } from '@/components/ui/PageParts'
@@ -83,8 +84,8 @@ export default function CompensationHubPage() {
     } catch { /* 未ログイン扱い */ }
     setWorkerId(wid)
     if (!pw) return
-    const h = { headers: { 'x-admin-password': pw } }
-    fetch('/api/evaluation', h).then(r => r.ok ? r.json() : null).then(j => {
+    const h = { password: pw }
+    fetchWithAuth('/api/evaluation', h).then(r => r.ok ? r.json() : null).then(j => {
       if (j) setEvalData({
         evaluations: j.evaluations || [], evaluators: j.evaluators || [],
         workerIds: ((j.workers || []) as { id: number }[]).map(w => Number(w.id)),
@@ -92,7 +93,7 @@ export default function CompensationHubPage() {
     }).catch(() => {})
     // 等級・号数が未設定の日本人社員（/wage のお知らせと同じ判定）。賃金制度を開ける人にだけ出す
     if (wid !== null && WAGE_VIEWERS.includes(wid)) {
-      fetch('/api/workers', h).then(r => r.ok ? r.json() : null).then(j => {
+      fetchWithAuth('/api/workers', h).then(r => r.ok ? r.json() : null).then(j => {
         if (!j?.workers) return
         const ws = j.workers as Record<string, unknown>[]
         setUnset(ws

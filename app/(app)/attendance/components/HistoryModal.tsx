@@ -10,6 +10,7 @@
  * 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
  */
 import { useEffect, useState, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { Modal, CancelButton } from '@/components/ui/Modal'
@@ -61,9 +62,7 @@ export default function HistoryModal({
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/attendance/history?ym=${ym}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/attendance/history?ym=${ym}`, { password })
       if (!res.ok) {
         const e = await res.json().catch(() => null)
         notify.failed('履歴の取得', e?.error || 'サーバが受け付けませんでした')
@@ -86,10 +85,10 @@ export default function HistoryModal({
     }))) return
     setBusy(h.id)
     try {
-      const res = await fetch('/api/attendance/history', {
+      const res = await fetchWithAuth('/api/attendance/history', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ id: h.id }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: h.id })
       })
       if (!res.ok) {
         const e = await res.json().catch(() => null)

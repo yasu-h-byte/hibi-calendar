@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState, useRef } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useParams, useRouter } from 'next/navigation'
 import type { Evaluation, EvaluationScores, EvaluationReview, ABCGrade } from '@/types'
 import { EVALUATION_CATEGORIES } from '@/lib/evaluation-criteria'
@@ -95,7 +96,7 @@ export default function PrintEvaluationPage() {
     const { password } = JSON.parse(stored)
     ;(async () => {
       try {
-        const res = await fetch('/api/evaluation', { headers: { 'x-admin-password': password } })
+        const res = await fetchWithAuth('/api/evaluation', { password })
         if (!res.ok) {
           setError('評価データの取得に失敗しました')
           setLoading(false)

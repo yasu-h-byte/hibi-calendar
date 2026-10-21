@@ -3,6 +3,7 @@
 // 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
 
 import { useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { PageHeader, ToolButton, Chip } from '@/components/ui/PageParts'
 import { PrimaryButton } from '@/components/ui/Modal'
@@ -113,11 +114,10 @@ export default function DebugAttPage() {
       }
       const { password } = JSON.parse(auth)
       const dates = repairDates.split(',').map(s => s.trim()).filter(Boolean)
-      const res = await fetch('/api/debug/repair-att-site', {
+      const res = await fetchWithAuth('/api/debug/repair-att-site', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           workerId: Number(repairWorkerId),
@@ -126,8 +126,8 @@ export default function DebugAttPage() {
           oldSiteId: repairOldSiteId,
           newSiteId: repairNewSiteId,
           skipIfNewExists,
-          dryRun,
-        }),
+          dryRun
+        })
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
@@ -154,13 +154,12 @@ export default function DebugAttPage() {
         return
       }
       const { password } = JSON.parse(auth)
-      const res = await fetch('/api/debug/inspect-att', {
+      const res = await fetchWithAuth('/api/debug/inspect-att', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ workerNameLike, ym }),
+        body: JSON.stringify({ workerNameLike, ym })
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))

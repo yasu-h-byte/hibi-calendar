@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { calcGrantMonthFromHire, calcLegalPL } from '@/lib/leave-utils'
 import { calcLastUsableDayIso, todayJstIso } from '@/lib/date-utils'
 import { jpDeemedDate } from '@/lib/leave-compute'
@@ -76,17 +77,17 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/leave', {
+      const res = await fetchWithAuth('/api/leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'grant',
           workerId: Number(grantForm.workerId),
           fy: grantForm.grantDate ? grantForm.grantDate.slice(0, 4) : String(new Date().getFullYear()),
           grantDays: grantForm.grantDays,
           grantMonth: grantForm.grantMonth,
-          grantDate: grantForm.grantDate,
-        }),
+          grantDate: grantForm.grantDate
+        })
       })
       // 2026-08-27 修正: 失敗（重複・検証エラー等）を成功扱いにしない。
       //   付与日数は支給額に直結するため、失敗時はフォームを保持して理由を表示する

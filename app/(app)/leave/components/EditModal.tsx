@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { addDaysIso, addMonthsSafe, calcLastUsableDayIso } from '@/lib/date-utils'
 import { PLWorker } from '../types'
 import { Modal, CancelButton } from '@/components/ui/Modal'
@@ -40,10 +41,10 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
       // fy は編集後の付与日から算出（旧: 編集前の日付 → 年またぎ修正で
       //   fy と grantDate が食い違うレコードができていた 2026-08-27）
       const fyBase = (editForm as { grantDate?: string }).grantDate || worker.grantDate
-      const res = await fetch('/api/leave', {
+      const res = await fetchWithAuth('/api/leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workerId: worker.id, fy: fyBase ? fyBase.slice(0, 4) : String(new Date().getFullYear()), ...payload }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workerId: worker.id, fy: fyBase ? fyBase.slice(0, 4) : String(new Date().getFullYear()), ...payload })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)

@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
@@ -35,7 +36,7 @@ export function fetchSidebarBadges(password: string): Promise<SidebarBadges | nu
   if (_badgesShared && _badgesShared.password === password && now - _badgesShared.at < BADGES_SHARE_MS) {
     return _badgesShared.promise
   }
-  const promise = fetch('/api/sidebar-badges', { headers: { 'x-admin-password': password } })
+  const promise = fetchWithAuth('/api/sidebar-badges', { password })
     .then(r => r.ok ? r.json() : null)
     .then(data => (data?.badges as SidebarBadges | undefined) ?? null)
     .catch(() => null)

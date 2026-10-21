@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { fetchWithAuth } from '@/lib/api-client'
 
 // ダッシュボード（2026-10-01 改修・UI順次改修 波1・見本キャンバス6段目「ダッシュボード 改善案」）
 //
@@ -189,7 +190,7 @@ function AnnouncementsCard({ password }: { password: string }) {
 
   useEffect(() => {
     if (!password) return
-    fetch('/api/announcements', { headers: { 'x-admin-password': password } })
+    fetchWithAuth('/api/announcements', { password })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setItems((data.announcements || []).slice(0, 3)) })
       .finally(() => setLoaded(true))
@@ -540,10 +541,9 @@ export default function DashboardPage() {
     setError('')
     try {
       const params = new URLSearchParams({ ym, period: 'month', site: 'all' })
-      const res = await fetch(`/api/dashboard?${params}`, {
-        headers: { 'x-admin-password': password },
+      const res = await fetchWithAuth(`/api/dashboard?${params}`, { password,
         cache: 'no-store',
-        signal: ctrl.signal,
+        signal: ctrl.signal
       })
       if (ctrl.signal.aborted) return
       if (!res.ok) { setError('データの取得に失敗しました'); return }

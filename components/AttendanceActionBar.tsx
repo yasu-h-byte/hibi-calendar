@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { notify } from '@/lib/notify'
 import { SidePanel, CloseButton, Chip } from '@/components/ui/PageParts'
 
@@ -116,8 +117,8 @@ export default function AttendanceActionBar({
     setLoading(true)
     try {
       const [lrRes, hlRes] = await Promise.all([
-        fetch('/api/leave-request', { headers: { 'x-admin-password': password } }),
-        fetch('/api/home-long-leave', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/leave-request', { password }),
+        fetchWithAuth('/api/home-long-leave', { password }),
       ])
       if (lrRes.ok) {
         const d = await lrRes.json()
@@ -150,15 +151,15 @@ export default function AttendanceActionBar({
     if (ids.length === 0) return
     setProcessing(`${apiPath}:${action}:${ids[0]}`)
     try {
-      const results = await Promise.all(ids.map(id => fetch(apiPath, {
+      const results = await Promise.all(ids.map(id => fetchWithAuth(apiPath, { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
           requestId: id,
           ...(action === 'foreman_approve' ? { foremanId: userWorkerId } : { approvedBy: userWorkerId }),
-          ...extra,
-        }),
+          ...extra
+        })
       })))
       // 2026-09-02 修正: 旧は res.ok を見ておらず、残数超・ロック・権限エラーが無言で失敗して
       //   「承認したのに残る」状態になっていた（dashboard / RequestsTab と同じく失敗を明示）

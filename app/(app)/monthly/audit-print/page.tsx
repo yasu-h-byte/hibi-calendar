@@ -20,6 +20,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import { fmtYen } from '@/lib/format'
 import PayrollAuditContent, { type PayrollAuditWorker } from '@/components/monthly/PayrollAuditContent'
@@ -63,9 +64,7 @@ export default function AuditPrintPage() {
       setLoading(false)
       return
     }
-    fetch(`/api/monthly?ym=${ym}&includeDaily=true`, {
-      headers: { 'x-admin-password': password },
-    })
+    fetchWithAuth(`/api/monthly?ym=${ym}&includeDaily=true`, { password })
       .then(async r => {
         if (!r.ok) throw new Error(`API ${r.status}`)
         return r.json()

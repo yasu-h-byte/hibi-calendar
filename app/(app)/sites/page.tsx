@@ -4,6 +4,7 @@
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { siteLeaderLabel } from '@/lib/companies'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
 import { COMPANY_ROLES, SELF_COMPANY_ID, SELF_COMPANY_LABEL, hasRole, resolveSiteParties, type CompanyRole } from '@/lib/companies'
@@ -173,15 +174,14 @@ export default function SitesPage() {
   }, [])
 
   const headers = useCallback(() => ({
-    'x-admin-password': password,
     'Content-Type': 'application/json',
-  }), [password])
+  }), [])
 
   const fetchSites = useCallback(async () => {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch('/api/sites', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/sites', { password })
       if (res.ok) {
         const data = await res.json()
         setSites(data.sites || [])
@@ -299,7 +299,7 @@ export default function SitesPage() {
       reason: { label: '工種名', placeholder: '例：鉄骨、仮設' },
     })
     if (!wt) return
-    const res = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'addWorkType', parentId: editId, workType: wt }) })
+    const res = await fetchWithAuth('/api/sites', { password, method: 'POST', headers: headers(), body: JSON.stringify({ action: 'addWorkType', parentId: editId, workType: wt }) })
     const data = await res.json().catch(() => null)
     if (!res.ok) { notify.failed('工種の追加', data?.error || 'サーバが受け付けませんでした'); return }
     await fetchSites()
@@ -327,7 +327,7 @@ export default function SitesPage() {
     if (addCo.roles.length === 0) errors.roles = '役割を1つ以上選んでください'
     if (errors.name || errors.roles) { setAddCo({ ...addCo, errors }); return null }
     const roles = addCo.roles
-    const res = await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'add', name, roles, type: '鳶業者' }) })
+    const res = await fetchWithAuth('/api/subcons', { password, method: 'POST', headers: headers(), body: JSON.stringify({ action: 'add', name, roles, type: '鳶業者' }) })
     const data = await res.json().catch(() => null)
     if (!res.ok) return { ok: false, error: data?.error || 'サーバが受け付けませんでした' }
     const added = data?.subcon as SubconMinimal | undefined
@@ -374,7 +374,7 @@ export default function SitesPage() {
 
       // 現場マスタの編集権限が無く「運転手当なし」だけ変えられる人（事業責任者）は、その指定だけを保存する（2026-09-30 点検）
       if (editId && !canEditMaster && canSetNoDrive) {
-        const r = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'setNoDriveAllowance', id: editId, value: formNoDrive }) })
+        const r = await fetchWithAuth('/api/sites', { password, method: 'POST', headers: headers(), body: JSON.stringify({ action: 'setNoDriveAllowance', id: editId, value: formNoDrive }) })
         if (!r.ok) {
           const err = await r.json().catch(() => null)
           return { ok: false, error: err?.error || 'サーバが受け付けませんでした' }
@@ -420,7 +420,7 @@ export default function SitesPage() {
             calendarFromYm: calFromForSave(),
           }
       // 2026-09-15: 保存の失敗を画面に出す（以前は応答を見ておらず、失敗しても何も起きないように見えた）
-      const saveRes = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      const saveRes = await fetchWithAuth('/api/sites', { password, method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!saveRes.ok) {
         const err = await saveRes.json().catch(() => null)
         return { ok: false, error: err?.error || 'サーバが受け付けませんでした' }
@@ -446,8 +446,8 @@ export default function SitesPage() {
           // Only call API if changed or new
           const existing = mforeman[key]
           if (!existing || existing.wid !== Number(dep.wid)) {
-            const r = await fetch('/api/sites', {
-              method: 'POST',
+            const r = await fetchWithAuth('/api/sites', {
+              password, method: 'POST',
               headers: headers(),
               body: JSON.stringify({ action: 'setDeputy', siteId: editId, ym: ymKey, workerId: dep.wid }),
             })
@@ -460,8 +460,8 @@ export default function SitesPage() {
         for (const key of existingKeys) {
           if (!newKeys.has(key)) {
             const ym = key.slice(editId.length + 1)
-            const r = await fetch('/api/sites', {
-              method: 'POST',
+            const r = await fetchWithAuth('/api/sites', {
+              password, method: 'POST',
               headers: headers(),
               body: JSON.stringify({ action: 'removeDeputy', siteId: editId, ym }),
             })
@@ -481,8 +481,8 @@ export default function SitesPage() {
     if (!editId) return
     setSaving(true)
     try {
-      const res = await fetch('/api/sites', {
-        method: 'POST',
+      const res = await fetchWithAuth('/api/sites', {
+        password, method: 'POST',
         headers: headers(),
         body: JSON.stringify({ action: 'delete', id: editId }),
       })

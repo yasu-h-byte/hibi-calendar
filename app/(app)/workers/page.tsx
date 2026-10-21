@@ -25,7 +25,7 @@ import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
-import { postJson } from '@/lib/api-client'
+import { fetchWithAuth, postJson  } from '@/lib/api-client'
 import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog, FieldError, RowButton } from '@/components/ui/PageParts'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -190,15 +190,14 @@ export default function WorkersPage() {
   const canEdit = can(authUser, 'workers.edit')
 
   const headers = useCallback(() => ({
-    'x-admin-password': password,
     'Content-Type': 'application/json',
-  }), [password])
+  }), [])
 
   const fetchWorkers = useCallback(async () => {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch('/api/workers', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/workers', { password })
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
@@ -366,7 +365,7 @@ export default function WorkersPage() {
     if (editId !== null && !canEditPay) {
       for (const k of ['rate', 'hourlyRate', 'otMul', 'jpGrade', 'jpStep', 'salary'] as const) delete (body as Record<string, unknown>)[k]
     }
-    const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+    const res = await fetchWithAuth('/api/workers', { password, method: 'POST', headers: headers(), body: JSON.stringify(body) })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: '' }))
       return { ok: false, error: err.error || 'サーバが受け付けませんでした' }
@@ -384,8 +383,8 @@ export default function WorkersPage() {
       description: '退職させたいだけなら「やめる」を押して、編集画面で「退職日」を設定してください。退職日なら過去の給与記録は残り、翌月から自動で集計の対象外になります。\n完全削除は出面の実績がないスタッフだけできます。',
       confirmLabel: '完全に削除する',
     }))) return
-    const res = await fetch('/api/workers', {
-      method: 'POST', headers: headers(),
+    const res = await fetchWithAuth('/api/workers', {
+      password, method: 'POST', headers: headers(),
       body: JSON.stringify({ action: 'delete', id }),
     })
     if (!res.ok) {
@@ -752,10 +751,10 @@ export default function WorkersPage() {
                             setPhotoBusy(true)
                             try {
                               const dataUri = await fileToAvatarDataUri(file)
-                              const res = await fetch('/api/workers/photo', {
+                              const res = await fetchWithAuth('/api/workers/photo', { password,
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                body: JSON.stringify({ action: 'save', workerId: editId, workerName: form.name, dataUri }),
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ action: 'save', workerId: editId, workerName: form.name, dataUri })
                               })
                               if (!res.ok) {
                                 const err = await res.json().catch(() => ({}))
@@ -779,10 +778,10 @@ export default function WorkersPage() {
                             setPhotoError('')
                             setPhotoBusy(true)
                             try {
-                              const res = await fetch('/api/workers/photo', {
+                              const res = await fetchWithAuth('/api/workers/photo', { password,
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                body: JSON.stringify({ action: 'delete', workerId: editId, workerName: form.name }),
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ action: 'delete', workerId: editId, workerName: form.name })
                               })
                               if (!res.ok) throw new Error('削除に失敗しました')
                               reloadPhotos()

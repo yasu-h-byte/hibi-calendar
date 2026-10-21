@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import { Worker, Evaluation, EvaluationRank, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
@@ -89,8 +90,8 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
           return ''
         })()
         const [wRes, eRes] = await Promise.all([
-          fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-          fetch('/api/evaluation', { headers: { 'x-admin-password': password } }),
+          fetchWithAuth('/api/workers', { password }),
+          fetchWithAuth('/api/evaluation', { password }),
         ])
         if (cancelled) return
         if (wRes.ok) {

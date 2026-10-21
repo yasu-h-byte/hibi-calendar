@@ -3,6 +3,7 @@
 // 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { LeaveRequest, SiteOption, MforemanMap } from '../types'
+import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { todayJstIso } from '@/lib/date-utils'
@@ -104,9 +105,9 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      const res = await fetch('/api/leave-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'foreman_approve', requestId: id, foremanId: user?.workerId || 0 }),
+      const res = await fetchWithAuth('/api/leave-request', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'foreman_approve', requestId: id, foremanId: user?.workerId || 0 })
       })
       // 失敗（権限なし・処理済み等）を必ず表示する（個別最終承認と同方式 2026-08-27）
       if (!res.ok) {
@@ -121,9 +122,9 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      const post = (extra: Record<string, unknown> = {}) => fetch('/api/leave-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'approve', requestId: id, approvedBy: user?.workerId || 0, ...extra }),
+      const post = (extra: Record<string, unknown> = {}) => fetchWithAuth('/api/leave-request', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', requestId: id, approvedBy: user?.workerId || 0, ...extra })
       })
       let res = await post()
       // 残数超過（2026-08-04 追加）: 承認は出面に P を書く「実行」なので残数を再確認している。
@@ -175,9 +176,9 @@ export default function RequestsTab({
     if (reason === null) return
     patchUi({ processingReq: id })
     try {
-      const res = await fetch('/api/leave-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'revoke', requestId: id, reason }),
+      const res = await fetchWithAuth('/api/leave-request', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'revoke', requestId: id, reason })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
@@ -191,9 +192,9 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      const res = await fetch('/api/leave-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'reject', requestId: id, rejectedBy: user?.workerId || 0, reason: rejectReason }),
+      const res = await fetchWithAuth('/api/leave-request', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reject', requestId: id, rejectedBy: user?.workerId || 0, reason: rejectReason })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
@@ -212,9 +213,9 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      const postMod = (extra: Record<string, unknown> = {}) => fetch('/api/leave-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'modify_date', requestId: id, newDate, modifiedBy: user?.workerId || 0, ...extra }),
+      const postMod = (extra: Record<string, unknown> = {}) => fetchWithAuth('/api/leave-request', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'modify_date', requestId: id, newDate, modifiedBy: user?.workerId || 0, ...extra })
       })
       let res = await postMod()
       // 変更先の日に出勤入力・承認がある（2026-10-02 総合点検）: 確認のうえでだけ上書き
@@ -262,16 +263,16 @@ export default function RequestsTab({
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
       const wid = user?.workerId || 0
-      const post = (id: string, extra: Record<string, unknown> = {}) => fetch('/api/leave-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      const post = (id: string, extra: Record<string, unknown> = {}) => fetchWithAuth('/api/leave-request', { password,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
           requestId: id,
           ...(action === 'foreman_approve' ? { foremanId: wid } : {}),
           ...(action === 'approve' ? { approvedBy: wid } : {}),
           ...(action === 'reject' ? { rejectedBy: wid, reason: opts.reason || '' } : {}),
-          ...extra,
-        }),
+          ...extra
+        })
       })
       // 2026-08-27 修正（有給総点検・第3回）: 旧実装は投げっぱなしで、残数不足(409)や
       //   月次ロックの拒否を無言でスキップしていた（帰国に伴う15件一括などで

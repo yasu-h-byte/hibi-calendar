@@ -2,6 +2,7 @@
 // 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
 
 import { useEffect, useState, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { isTobiGroup } from '@/lib/jobs'
 import { PageHeader, TodoCard, Segment, Chip, type ChipTone } from '@/components/ui/PageParts'
 
@@ -99,9 +100,7 @@ export default function AccessLogPage() {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/access-log?days=${Number(days)}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/access-log?days=${Number(days)}`, { password })
       if (res.ok) {
         const data = await res.json()
         setRows(data.rows || [])

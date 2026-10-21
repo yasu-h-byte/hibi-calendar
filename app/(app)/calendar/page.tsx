@@ -1,6 +1,7 @@
 'use client'
 
 import { siteLeaderLabel } from '@/lib/companies'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { summarizeSignStatus, buildSignRequestMessage } from '@/lib/calendar-sign-status'
 import CalendarEditor from '@/components/CalendarEditor'
@@ -189,9 +190,7 @@ export default function CalendarManagePage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/calendar/status?ym=${ym}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/calendar/status?ym=${ym}`, { password })
       if (res.ok) {
         const data = await res.json()
         setSites(data.sites || [])
@@ -214,7 +213,7 @@ export default function CalendarManagePage() {
   const fetchOverview = useCallback(async () => {
     if (!password || user?.role === 'foreman') return
     try {
-      const res = await fetch('/api/calendar/overview', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/calendar/overview', { password })
       if (res.ok) setOverview(await res.json())
     } catch { /* 全体状況の取得失敗はページ機能を阻害しない */ }
   }, [password, user?.role])
@@ -227,7 +226,7 @@ export default function CalendarManagePage() {
   const fetchQuestions = useCallback(async () => {
     if (!password || user?.role === 'foreman') return
     try {
-      const res = await fetch(`/api/calendar/question?ym=${ym}`, { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth(`/api/calendar/question?ym=${ym}`, { password })
       if (res.ok) { const d = await res.json(); setQuestions(d.items || []) }
     } catch { /* 取得失敗は致命的でない */ }
   }, [password, ym, user?.role])
@@ -238,10 +237,10 @@ export default function CalendarManagePage() {
 
   const resolveQuestion = async (id: string) => {
     try {
-      const res = await fetch('/api/calendar/question', {
+      const res = await fetchWithAuth('/api/calendar/question', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ resolve: true, id, resolvedBy: user?.workerId || 0 }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolve: true, id, resolvedBy: user?.workerId || 0 })
       })
       if (res.ok) fetchQuestions()
       else { const d = await res.json().catch(() => ({})); notify.failed('対応済みに', d.error || 'サーバが受け付けませんでした') }
@@ -294,10 +293,10 @@ export default function CalendarManagePage() {
     sitesPayload: { siteId: string; days: Record<string, DayType> }[],
     ack = false,
   ): Promise<boolean> => {
-    const res = await fetch('/api/calendar/bulk-confirm', {
+    const res = await fetchWithAuth('/api/calendar/bulk-confirm', { password,
       method: 'POST',
-      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ym, sites: sitesPayload, approvedBy: user!.workerId, acknowledgeWarnings: ack }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ym, sites: sitesPayload, approvedBy: user!.workerId, acknowledgeWarnings: ack })
     })
     if (res.ok) return true
     const data = await res.json().catch(() => ({}))
@@ -312,10 +311,10 @@ export default function CalendarManagePage() {
 
   // 提出済みカレンダーの承認（/api/calendar/approve）。法令警告は確認の上で続行可。
   const postApproveWithAck = async (siteId: string, ack = false): Promise<boolean> => {
-    const res = await fetch('/api/calendar/approve', {
+    const res = await fetchWithAuth('/api/calendar/approve', { password,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ siteId, ym, approvedBy: user!.workerId, acknowledgeWarnings: ack }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteId, ym, approvedBy: user!.workerId, acknowledgeWarnings: ack })
     })
     if (res.ok) return true
     const data = await res.json().catch(() => ({}))
@@ -684,10 +683,10 @@ export default function CalendarManagePage() {
                               setSaving(true)
                               try {
                                 // まず日付を保存（失敗したら提出しない・2026-10-02 総合点検。旧: 結果を見ずに古い内容のまま提出が進んだ）
-                                const saveRes = await fetch('/api/calendar/save-days', {
+                                const saveRes = await fetchWithAuth('/api/calendar/save-days', { password,
                                   method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                  body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 }),
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 })
                                 })
                                 if (!saveRes.ok) {
                                   const sd = await saveRes.json().catch(() => ({}))
@@ -695,10 +694,10 @@ export default function CalendarManagePage() {
                                   return
                                 }
                                 // 提出
-                                const res = await fetch('/api/calendar/submit', {
+                                const res = await fetchWithAuth('/api/calendar/submit', { password,
                                   method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                  body: JSON.stringify({ siteId: site.siteId, ym, submittedBy: user?.workerId || 0 }),
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, submittedBy: user?.workerId || 0 })
                                 })
                                 if (!res.ok) {
                                   const data = await res.json().catch(() => ({}))
@@ -737,10 +736,10 @@ export default function CalendarManagePage() {
                               }))) return
                               setSaving(true)
                               try {
-                                const res = await fetch('/api/calendar/revert', {
+                                const res = await fetchWithAuth('/api/calendar/revert', { password,
                                   method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                  body: JSON.stringify({ siteId: site.siteId, ym, action: 'unsubmit', revertedBy: user?.workerId || 0 }),
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, action: 'unsubmit', revertedBy: user?.workerId || 0 })
                                 })
                                 if (res.ok) { fetchData() }
                                 else { const d = await res.json().catch(() => ({})); notify.failed('提出の取り消し', d.error || 'サーバが受け付けませんでした') }
@@ -767,10 +766,10 @@ export default function CalendarManagePage() {
                               if (reason === null) return
                               setSaving(true)
                               try {
-                                const res = await fetch('/api/calendar/reject', {
+                                const res = await fetchWithAuth('/api/calendar/reject', { password,
                                   method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                  body: JSON.stringify({ siteId: site.siteId, ym, reason: reason.trim(), rejectedBy: user?.workerId || 0 }),
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, reason: reason.trim(), rejectedBy: user?.workerId || 0 })
                                 })
                                 if (res.ok) { fetchData() }
                                 else { const d = await res.json().catch(() => ({})); notify.failed('差し戻し', d.error || 'サーバが受け付けませんでした') }
@@ -905,10 +904,10 @@ export default function CalendarManagePage() {
                                                   disarm()
                                                   setSaving(true)
                                                   try {
-                                                    const res = await fetch('/api/calendar/revert', {
+                                                    const res = await fetchWithAuth('/api/calendar/revert', { password,
                                                       method: 'POST',
-                                                      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                                      body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 }),
+                                                      headers: { 'Content-Type': 'application/json' },
+                                                      body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 })
                                                     })
                                                     if (res.ok) { fetchData() }
                                                     else { const d = await res.json().catch(() => ({})); notify.failed('承認の取り消し', d.error || 'サーバが受け付けませんでした') }
@@ -963,10 +962,10 @@ export default function CalendarManagePage() {
                                       }))) return
                                       setSaving(true)
                                       try {
-                                        const postRevise = (ack: boolean) => fetch('/api/calendar/save-days', {
+                                        const postRevise = (ack: boolean) => fetchWithAuth('/api/calendar/save-days', { password,
                                           method: 'POST',
-                                          headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                          body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0, acknowledgeWarnings: ack }),
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0, acknowledgeWarnings: ack })
                                         })
                                         let res = await postRevise(false)
                                         // 承認後の修正にも法令チェック（2026-10-02 総合点検）。warn は確認のうえで続行
@@ -1192,9 +1191,7 @@ export default function CalendarManagePage() {
                     setLedgerYmError(null)
                     setDownloadingLedger(true)
                     try {
-                      const res = await fetch(`/api/export?type=consentLedger&ym=${ymClean}`, {
-                        headers: { 'x-admin-password': password },
-                      })
+                      const res = await fetchWithAuth(`/api/export?type=consentLedger&ym=${ymClean}`, { password })
                       if (!res.ok) {
                         const d = await res.json().catch(() => ({}))
                         notify.failed('台帳の出力', d.error || 'サーバが受け付けませんでした')

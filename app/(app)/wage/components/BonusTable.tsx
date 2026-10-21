@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { fmtYen as yen } from '@/lib/format'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
@@ -86,8 +87,8 @@ export default function BonusTable() {
       // 買い取る有給の期は支給日で決まる（支給日の時点で終わっている直近の期）ので支給日を渡す（2026-10-02 総合点検）
       const q = paidOnIso && /^\d{4}-\d{2}-\d{2}$/.test(paidOnIso) ? `?paidOn=${paidOnIso}` : ''
       const [wr, br] = await Promise.all([
-        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-        fetch(`/api/jp-wage/bonus${q}`, { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/workers', { password }),
+        fetchWithAuth(`/api/jp-wage/bonus${q}`, { password }),
       ])
       // 評語は年次改定で決めたものを初期値にする（賞与と昇給で別の評価を付けない）
       const bj = br.ok ? await br.json() : { records: [], hyogo: {}, members: [] }
@@ -188,14 +189,14 @@ export default function BonusTable() {
     }))) return null
     setBusy(true); setMsg('')
     try {
-      const res = await fetch('/api/jp-wage/bonus', {
+      const res = await fetchWithAuth('/api/jp-wage/bonus', { password: pw,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           label, paidOn, pool: poolNum,
           hyogo: Object.fromEntries(members.map(m => [String(m.workerId), m.hyogo])),
-          lines: lines.map(({ idx: _idx, ...l }) => l),
-        }),
+          lines: lines.map(({ idx: _idx, ...l }) => l)
+        })
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || `失敗しました（${res.status}）`)
@@ -227,9 +228,8 @@ export default function BonusTable() {
     }))) return
     setBusy(true)
     try {
-      const res = await fetch(`/api/jp-wage/bonus?id=${encodeURIComponent(r.id)}`, {
-        method: 'DELETE', headers: { 'x-admin-password': pw },
-      })
+      const res = await fetchWithAuth(`/api/jp-wage/bonus?id=${encodeURIComponent(r.id)}`, { password: pw,
+        method: 'DELETE'})
       const j = await res.json().catch(() => ({}))
       if (!res.ok) { notify.failed('取り消し', j.error); return }
       const removed = (j.removedBuyouts || []) as Array<{ name: string; days: number }>

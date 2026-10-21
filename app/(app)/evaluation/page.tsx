@@ -4,6 +4,7 @@
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 import { useEffect, useState, useCallback } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import {
   Worker,
@@ -307,10 +308,10 @@ export default function EvaluationPage() {
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
-      const res = await fetch('/api/evaluation', {
+      const res = await fetchWithAuth('/api/evaluation', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'recalculateWeights', evaluationId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'recalculateWeights', evaluationId })
       })
       if (res.ok) {
         await fetchData()
@@ -334,10 +335,10 @@ export default function EvaluationPage() {
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
-      const res = await fetch('/api/evaluation', {
+      const res = await fetchWithAuth('/api/evaluation', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'recalculateAllWeights' }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'recalculateAllWeights' })
       })
       if (res.ok) {
         const d = await res.json()
@@ -363,10 +364,10 @@ export default function EvaluationPage() {
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
-      const res = await fetch('/api/evaluation', {
+      const res = await fetchWithAuth('/api/evaluation', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'recalculateAllMetrics' }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'recalculateAllMetrics' })
       })
       if (res.ok) {
         const d = await res.json()
@@ -392,10 +393,10 @@ export default function EvaluationPage() {
     setRecalculatingWeights(true)
     const { password } = getAuth()
     try {
-      const res = await fetch('/api/evaluation', {
+      const res = await fetchWithAuth('/api/evaluation', { password,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'recalculateMetrics', evaluationId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'recalculateMetrics', evaluationId })
       })
       if (res.ok) {
         await fetchData()
@@ -433,8 +434,8 @@ export default function EvaluationPage() {
     setAuthUser(prev => (prev && user && prev.workerId === user.workerId && prev.role === user.role) ? prev : user)
     try {
       const [wRes, eRes] = await Promise.all([
-        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-        fetch('/api/evaluation', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/workers', { password }),
+        fetchWithAuth('/api/evaluation', { password }),
       ])
       if (wRes.ok) {
         const d = await wRes.json()
@@ -532,11 +533,10 @@ export default function EvaluationPage() {
     const wasEditing = isEditing
     const targetName = reviewSession.workerName
     try {
-      const res = await fetch('/api/evaluation', {
+      const res = await fetchWithAuth('/api/evaluation', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           action: 'submitReview',
@@ -544,8 +544,8 @@ export default function EvaluationPage() {
           evaluatorId: authUser.workerId,
           evaluatorName: authUser.name,
           scores: myReview,
-          comment: myComment,
-        }),
+          comment: myComment
+        })
       })
       if (res.ok) {
         await fetchData()
@@ -597,13 +597,12 @@ export default function EvaluationPage() {
       if (createEvaluatorIds.length > 0) {
         requestBody.evaluatorIds = createEvaluatorIds
       }
-      const res = await fetch('/api/evaluation', {
+      const res = await fetchWithAuth('/api/evaluation', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(requestBody)
       })
       if (res.ok) {
         setShowCreateModal(false)
@@ -649,11 +648,10 @@ export default function EvaluationPage() {
     let ok = false
     const { password } = getAuth()
     try {
-      const res = await fetch('/api/evaluation', {
+      const res = await fetchWithAuth('/api/evaluation', { password,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           action: 'approve',
@@ -664,8 +662,8 @@ export default function EvaluationPage() {
           manualScore: calc.total,
           totalScore,
           rank,
-          raiseAmount,
-        }),
+          raiseAmount
+        })
       })
       if (res.ok) {
         // 確定値はサーバが法令フロア適用込みで再計算する。表示はその値を使う
@@ -1486,7 +1484,7 @@ export default function EvaluationPage() {
     // 最新の評価者リストを取得してからモーダルを開く
     const { password } = getAuth()
     try {
-      const res = await fetch('/api/evaluation', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/evaluation', { password })
       if (res.ok) {
         const d = await res.json()
         const evals = d.evaluators || []

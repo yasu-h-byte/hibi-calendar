@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { fetchWithAuth } from '@/lib/api-client'
 import { fmtYen as yen } from '@/lib/format'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import {
@@ -42,8 +43,8 @@ export default function PromotionPanel() {
   const load = useCallback(async (password: string) => {
     try {
       const [wr, pr] = await Promise.all([
-        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-        fetch('/api/jp-wage/promotion', { headers: { 'x-admin-password': password } }),
+        fetchWithAuth('/api/workers', { password }),
+        fetchWithAuth('/api/jp-wage/promotion', { password }),
       ])
       if (wr.ok) {
         const j = await wr.json()
@@ -87,10 +88,10 @@ export default function PromotionPanel() {
     }))) return
     setBusy(true); setErr(''); setMsg('')
     try {
-      const res = await fetch('/api/jp-wage/promotion', {
+      const res = await fetchWithAuth('/api/jp-wage/promotion', { password: pw,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({ workerId: target.id, toGrade, addPitch: pitch, reason, at }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workerId: target.id, toGrade, addPitch: pitch, reason, at })
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || `失敗しました（${res.status}）`)

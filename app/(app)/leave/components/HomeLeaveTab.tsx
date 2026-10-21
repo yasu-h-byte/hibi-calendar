@@ -139,9 +139,9 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     setHlSaving(true)
     try {
       const w = workers.find(w => w.id === Number(ui.formWorkerId))
-      const res = await fetch('/api/home-leave', {
+      const res = await fetchWithAuth('/api/home-leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create',
           workerId: Number(ui.formWorkerId),
@@ -149,8 +149,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           startDate: ui.formStart,
           ...(ui.formUndecided ? { returnUndecided: true } : { endDate: ui.formEnd }),
           reason: ui.formReason,
-          note: ui.formNote,
-        }),
+          note: ui.formNote
+        })
       })
       if (res.ok) {
         patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
@@ -160,9 +160,9 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       if (res.status === 409) {
         const fixed = await askFixEndDate(res)
         if (!fixed) { patchUi({ formEnd: '' }); return null }
-        const retry = await fetch('/api/home-leave', {
+        const retry = await fetchWithAuth('/api/home-leave', { password,
           method: 'POST',
-          headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'create',
             workerId: Number(ui.formWorkerId),
@@ -170,8 +170,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
             startDate: ui.formStart,
             endDate: fixed,
             reason: ui.formReason,
-            note: ui.formNote,
-          }),
+            note: ui.formNote
+          })
         })
         if (retry.ok) {
           patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
@@ -196,9 +196,9 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     if (!ui.editUndecided && !ui.editEnd) return
     setHlSaving(true)
     try {
-      const res = await fetch('/api/home-leave', {
+      const res = await fetchWithAuth('/api/home-leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'update',
           id,
@@ -207,8 +207,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           returnUndecided: ui.editUndecided,
           ...(ui.editUndecided ? {} : { endDate: ui.editEnd }),
           reason: ui.editReason,
-          note: ui.editNote,
-        }),
+          note: ui.editNote
+        })
       })
       if (res.ok) {
         cancelHlEdit()
@@ -218,17 +218,17 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       if (res.status === 409) {
         const fixed = await askFixEndDate(res)
         if (!fixed) return
-        const retry = await fetch('/api/home-leave', {
+        const retry = await fetchWithAuth('/api/home-leave', { password,
           method: 'POST',
-          headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'update', id,
             startDate: ui.editStart,
             returnUndecided: false,
             endDate: fixed,
             reason: ui.editReason,
-            note: ui.editNote,
-          }),
+            note: ui.editNote
+          })
         })
         if (retry.ok) { cancelHlEdit(); onRefresh(); return }
         const rerr = await retry.json().catch(() => null)
@@ -242,10 +242,10 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
   const handleHlDelete = async (id: string) => {
     setHlSaving(true)
     try {
-      const res = await fetch('/api/home-leave', {
+      const res = await fetchWithAuth('/api/home-leave', { password,
         method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', id }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id })
       })
       if (res.ok) {
         patchUi({ deleteConfirm: null })
