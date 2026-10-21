@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261021_receive_extax',
+    title: '請求・原価「受け取る」: 届いた請求書を税抜で並べ、差を人工で言い換えるようにしました',
+    content:
+      '一覧の「請求書」が税込、「出面 × 単価」が税抜だったので、請求書の方が多く見えていました。請求書も税抜を主に出し（税込は小さく）、差は「請求書が少ない −¥26,000（−1人工分）」のように、どちらが多いかと人工・残業の何個分かを添えます。右の見比べにも税込・税抜の両方を並べました。',
+    category: 'fix',
+    publishedAt: '2026-10-21T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261021_audit_decisions',
     title: '守りを 4 つ足しました（ログインの回数制限・締め前の確認・給与欄の開始日・待機料の承認）',
     content:

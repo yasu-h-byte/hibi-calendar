@@ -113,6 +113,30 @@ export function compareSubconInvoice(invoices: Pick<SubconInvoice, 'subtotal' | 
 }
 
 /**
+ * 差（請求書 − 出面 × 単価）を「人工・残業の何個分か」で言い換える（純粋・2026-10-21 代表「税抜と税込だからわかりづらい」）。
+ * 単価は人工の多い現場のものを使う。人工の整数個 ＋ 残業の 0.5h 刻みで 1円以内に説明できるときだけ返し、できなければ「約 ◯人工分」
+ */
+export function explainSubconDiff(diff: number, expected: Pick<SubconExpected, 'sites'> | null | undefined): string | null {
+  if (!diff || !expected?.sites?.length) return null
+  const main = [...expected.sites].sort((a, b) => b.workDays - a.workDays)[0]
+  const rate = main.rate, otRate = main.otRate
+  if (!(rate > 0)) return null
+  const sign = diff < 0 ? '−' : '+'
+  const abs = Math.abs(diff)
+  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+  // 人工 k 個 ＋ 残業 h（0.5h 刻み）で 1円以内に説明できるか（k は近い方から 2 つ試す）
+  for (const k of [Math.round(abs / rate), Math.floor(abs / rate)]) {
+    const rest = abs - k * rate
+    if (Math.abs(rest) <= 1 && k > 0) return `${sign}${k}人工分`
+    if (otRate > 0 && rest > 0) {
+      const h = Math.round((rest / otRate) * 2) / 2
+      if (h > 0 && Math.abs(rest - h * otRate) <= 1) return k > 0 ? `${sign}${k}人工 ＋ 残業${fmt(h)}h 分` : `${sign}残業${fmt(h)}h 分`
+    }
+  }
+  return `約 ${sign}${(abs / rate).toFixed(1)}人工分`
+}
+
+/**
  * 「税抜小計＋消費税＝税込合計」の確認（純粋）。小計と消費税の両方が入っているときだけ見る。
  */
 export function subconTotalsError(f: { subtotal?: number | null; tax?: number | null; total: number }): string | null {

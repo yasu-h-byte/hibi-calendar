@@ -2,7 +2,7 @@
  * 受け取った外注の請求書と出面 × 単価の見比べ（lib/subcon-invoice.ts・2026-10-05）
  */
 import { describe, test, expect } from 'vitest'
-import { compareSubconInvoice, invoiceExTax, subconTotalsError, missingSubconInvoices, type SubconExpected } from '@/lib/subcon-invoice'
+import { compareSubconInvoice, invoiceExTax, subconTotalsError, missingSubconInvoices, explainSubconDiff, type SubconExpected } from '@/lib/subcon-invoice'
 
 const exp = (cost: number, workDays = 10): SubconExpected => ({ workDays, otCount: 0, cost, sites: [] })
 
@@ -56,5 +56,27 @@ describe('missingSubconInvoices', () => {
       { a: '吉本建設工業', b: '村田工業', c: '鈴高組（土工）' },
     )
     expect(m.map(x => x.companyName)).toEqual(['吉本建設工業'])
+  })
+})
+
+describe('explainSubconDiff（差を人工・残業で言い換える）', () => {
+  const ex = (rate: number, otRate: number): Pick<SubconExpected, 'sites'> => ({ sites: [{ siteId: 's', siteName: 'S', workDays: 20, otCount: 0, cost: 20 * rate, rate, otRate }] })
+  test('ちょうど人工の整数個', () => {
+    expect(explainSubconDiff(-26000, ex(26000, 4063))).toBe('−1人工分')
+    expect(explainSubconDiff(52000, ex(26000, 4063))).toBe('+2人工分')
+  })
+  test('人工 ＋ 残業 h（0.5h 刻み・1円以内）', () => {
+    expect(explainSubconDiff(-30063, ex(26000, 4063))).toBe('−1人工 ＋ 残業1h 分')
+    expect(explainSubconDiff(-2032, ex(26000, 4063))).toBe('−残業0.5h 分')   // 4063 × 0.5 = 2031.5 → 1円以内
+  })
+  test('説明できないときは約◯人工分、差が無ければ null', () => {
+    expect(explainSubconDiff(-15000, ex(26000, 4063))).toBe('約 −0.6人工分')
+    expect(explainSubconDiff(0, ex(26000, 4063))).toBeNull()
+    expect(explainSubconDiff(-26000, { sites: [] })).toBeNull()
+    expect(explainSubconDiff(-26000, ex(0, 0))).toBeNull()
+  })
+  test('単価は人工の多い現場のもの', () => {
+    const two: Pick<SubconExpected, 'sites'> = { sites: [{ siteId: 'a', siteName: 'A', workDays: 2, otCount: 0, cost: 60000, rate: 30000, otRate: 4688 }, { siteId: 'b', siteName: 'B', workDays: 20, otCount: 0, cost: 520000, rate: 26000, otRate: 4063 }] }
+    expect(explainSubconDiff(-26000, two)).toBe('−1人工分')
   })
 })
