@@ -3,6 +3,8 @@
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { useSearchParams } from 'next/navigation'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
@@ -403,10 +405,10 @@ function MonthlyPageInner() {
 
   // Read auth
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
       try {
-        const { password: pw, user } = JSON.parse(stored)
+        const { password: pw, user } = stored
         setPassword(pw)
         setCanResolveConfirm(can(user, 'monthly.close'))
       } catch { /* ignore */ }
@@ -717,7 +719,7 @@ function MonthlyPageInner() {
   const tabFilteredWorkers = useMemo(() => {
     if (!data) return []
     if (tab === 'hibi') return data.workers.filter(w => w.org === 'hibi')
-    if (tab === 'hfu') return data.workers.filter(w => w.org === 'hfu')
+    if (tab === 'hfu') return data.workers.filter(w => orgKeyOf(w.org) === 'hfu')
     return data.workers
   }, [data, tab])
 

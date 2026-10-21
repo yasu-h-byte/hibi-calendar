@@ -4,6 +4,7 @@
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { siteLeaderLabel } from '@/lib/companies'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
@@ -164,9 +165,9 @@ export default function SitesPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
-      const { password: pw, user } = JSON.parse(stored)
+      const { password: pw, user } = stored
       setPassword(pw)
       setCanSetNoDrive(can(user, 'sites.noDriveAllowance'))
       setCanEditMaster(can(user, 'masters.edit'))

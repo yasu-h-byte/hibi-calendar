@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { fmtYen as yen } from '@/lib/format'
 import Link from 'next/link'
@@ -92,8 +93,8 @@ export default function WageAnalysisPage() {
   useEffect(() => {
     let password = ''
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const parsed = raw ? JSON.parse(raw) : null
+      const raw = readAuth()
+      const parsed = raw
       password = parsed?.password || ''
       if (parsed?.user?.workerId !== OWNER_ID) { setAllowed(false); return }
       setAllowed(true)

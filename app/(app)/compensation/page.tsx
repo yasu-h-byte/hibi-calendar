@@ -11,6 +11,7 @@
  * 既存ページ（/wage・/evaluation 等）はそのまま。ここは入口だけを整理する。
  */
 import { useEffect, useState, type ReactNode } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import Link from 'next/link'
 import { Icon, type IconName } from '@/components/ui/Icon'
@@ -75,8 +76,8 @@ export default function CompensationHubPage() {
     let pw = ''
     let wid: number | null = null
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const parsed = raw ? JSON.parse(raw) : null
+      const raw = readAuth()
+      const parsed = raw
       // workerId 0（代表）は falsy — 真偽判定せず型で見る
       if (typeof parsed?.user?.workerId === 'number') wid = parsed.user.workerId
       pw = parsed?.password || ''

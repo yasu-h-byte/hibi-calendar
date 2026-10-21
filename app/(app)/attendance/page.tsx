@@ -8,6 +8,8 @@
 // 2026-10-03: 確認と失敗の知らせを共通部品（confirmDialog / confirmDanger / notify）に置き換え。
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { permRoleOf, roleCan } from '@/lib/permissions'
@@ -134,10 +136,10 @@ export default function AttendanceGridPage() {
 
   // Read auth
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
       try {
-        const { password: pw, user } = JSON.parse(stored)
+        const { password: pw, user } = stored
         setPassword(pw)
         if (user) {
           setUserRole(user.role || '')
@@ -1122,7 +1124,7 @@ export default function AttendanceGridPage() {
     }
     // filter() で既に新しい配列が返るため slice() は不要
     const hibi = data.workers.filter(w => w.org === 'hibi').sort(sortFn)
-    const hfu = data.workers.filter(w => w.org === 'hfu').sort(sortFn)
+    const hfu = data.workers.filter(w => orgKeyOf(w.org) === 'hfu').sort(sortFn)
     const groups: { org: string; label: string; workers: Worker[] }[] = []
     if (hibi.length > 0) groups.push({ org: 'hibi', label: '日比建設', workers: hibi })
     if (hfu.length > 0) groups.push({ org: 'hfu', label: 'HFU', workers: hfu })

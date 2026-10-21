@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 
 // ダッシュボード（2026-10-01 改修・UI順次改修 波1・見本キャンバス6段目「ダッシュボード 改善案」）
@@ -520,9 +521,9 @@ export default function DashboardPage() {
   const [actionBadges, setActionBadges] = useState<{ monthly: number; calendar: number; leave: number } | null>(null)
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
-      const { password: pw, user } = JSON.parse(stored)
+      const { password: pw, user } = stored
       setPassword(pw)
       setUserRole(user?.role || '')
       setUserForemanSites(user?.foremanSites || [])

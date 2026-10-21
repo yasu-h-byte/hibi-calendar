@@ -20,6 +20,8 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import { fmtYen } from '@/lib/format'
@@ -57,8 +59,8 @@ export default function AuditPrintPage() {
       setLoading(false)
       return
     }
-    const stored = localStorage.getItem('hibi_auth')
-    const password = stored ? JSON.parse(stored).password : ''
+    const stored = readAuth()
+    const password = stored ? stored.password : ''
     if (!password) {
       setError('認証情報がありません。/monthly を一度開いてからこのページに遷移してください')
       setLoading(false)
@@ -88,7 +90,7 @@ export default function AuditPrintPage() {
     //   Excel の小計と突き合わせられるようにする（旧: 表紙の支給合計と Excel の小計が黙って食い違っていた）
     const isVn = (w: PayrollAuditWorker) => !!w.visa && w.visa !== 'none'
     const all = data.workers
-      .filter(w => (org === 'hibi' ? w.org === 'hibi' : w.org === 'hfu'))
+      .filter(w => (org === 'hibi' ? w.org === 'hibi' : orgKeyOf(w.org) === 'hfu'))
       .filter(w => isVn(w) || w.rate > 0 || (w.salary || 0) > 0)
       .sort((a, b) => (isVn(a) === isVn(b) ? a.id - b.id : isVn(a) ? -1 : 1))
     return [all.filter(w => !w.isDispatched), all.filter(w => !!w.isDispatched)]
@@ -268,7 +270,7 @@ export default function AuditPrintPage() {
                     {unconfirmed && <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded mr-2 align-middle">未確定（締め前）</span>}
                     {worker.name}
                     <span className="ml-2 text-xs opacity-80">
-                      ({worker.org === 'hfu' ? 'HFU' : '日比建設'}) — ID:{worker.id}{worker.payrollNo ? ` — 従業員番号:${worker.payrollNo}` : ''}
+                      ({orgKeyOf(worker.org) === 'hfu' ? 'HFU' : '日比建設'}) — ID:{worker.id}{worker.payrollNo ? ` — 従業員番号:${worker.payrollNo}` : ''}
                     </span>
                   </div>
                 </div>

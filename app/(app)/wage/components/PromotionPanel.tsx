@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { fmtYen as yen } from '@/lib/format'
 import { confirmDialog } from '@/lib/confirm-dialog'
@@ -64,8 +65,8 @@ export default function PromotionPanel() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const p = raw ? JSON.parse(raw)?.password : ''
+      const raw = readAuth()
+      const p = raw ? raw?.password : ''
       if (!p) return
       setPw(p); load(p)
     } catch { /* 履歴が出せなくても致命的ではない */ }

@@ -4,6 +4,7 @@
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 import { useEffect, useState, useCallback } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -418,9 +419,9 @@ export default function EvaluationPage() {
 
   const getAuth = () => {
     try {
-      const stored = localStorage.getItem('hibi_auth')
+      const stored = readAuth()
       if (stored) {
-        const { password, user } = JSON.parse(stored)
+        const { password, user } = stored
         return { password, user: user as AuthUser }
       }
     } catch { /* ignore */ }

@@ -3,6 +3,7 @@
 // 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { LeaveRequest, SiteOption, MforemanMap } from '../types'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
@@ -103,8 +104,8 @@ export default function RequestsTab({
   const handleForemanApprove = async (id: string) => {
     patchUi({ processingReq: id })
     try {
-      const stored = localStorage.getItem('hibi_auth')
-      const { user } = stored ? JSON.parse(stored) : { user: null }
+      const stored = readAuth()
+      const { user } = stored ? stored : { user: null }
       const res = await fetchWithAuth('/api/leave-request', { password,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'foreman_approve', requestId: id, foremanId: user?.workerId || 0 })
@@ -120,8 +121,8 @@ export default function RequestsTab({
   const handleApprove = async (id: string) => {
     patchUi({ processingReq: id })
     try {
-      const stored = localStorage.getItem('hibi_auth')
-      const { user } = stored ? JSON.parse(stored) : { user: null }
+      const stored = readAuth()
+      const { user } = stored ? stored : { user: null }
       const post = (extra: Record<string, unknown> = {}) => fetchWithAuth('/api/leave-request', { password,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve', requestId: id, approvedBy: user?.workerId || 0, ...extra })
@@ -190,8 +191,8 @@ export default function RequestsTab({
   const handleReject = async (id: string) => {
     patchUi({ processingReq: id })
     try {
-      const stored = localStorage.getItem('hibi_auth')
-      const { user } = stored ? JSON.parse(stored) : { user: null }
+      const stored = readAuth()
+      const { user } = stored ? stored : { user: null }
       const res = await fetchWithAuth('/api/leave-request', { password,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reject', requestId: id, rejectedBy: user?.workerId || 0, reason: rejectReason })
@@ -211,8 +212,8 @@ export default function RequestsTab({
     if (!newDate) { patchUi({ modifyDateError: '新しい日付を選択してください' }); return }
     patchUi({ processingReq: id })
     try {
-      const stored = localStorage.getItem('hibi_auth')
-      const { user } = stored ? JSON.parse(stored) : { user: null }
+      const stored = readAuth()
+      const { user } = stored ? stored : { user: null }
       const postMod = (extra: Record<string, unknown> = {}) => fetchWithAuth('/api/leave-request', { password,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'modify_date', requestId: id, newDate, modifiedBy: user?.workerId || 0, ...extra })
@@ -260,8 +261,8 @@ export default function RequestsTab({
     const bulkKey = `bulk:${action}:${ids[0]}`
     patchUi({ processingReq: bulkKey })
     try {
-      const stored = localStorage.getItem('hibi_auth')
-      const { user } = stored ? JSON.parse(stored) : { user: null }
+      const stored = readAuth()
+      const { user } = stored ? stored : { user: null }
       const wid = user?.workerId || 0
       const post = (id: string, extra: Record<string, unknown> = {}) => fetchWithAuth('/api/leave-request', { password,
         method: 'POST', headers: { 'Content-Type': 'application/json' },

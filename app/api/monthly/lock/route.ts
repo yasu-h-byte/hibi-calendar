@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { orgKeyOf } from '@/lib/locks'
 import { currentYmJst } from '@/lib/date-utils'
 import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
@@ -47,7 +48,7 @@ async function checkReadyToLock(
 
   // ② 職長の日次承認チェック
   const main = await getMainData()
-  const isHfu = (o?: string) => o === 'hfu' || o === 'HFU'
+  const isHfu = (o?: string) => orgKeyOf(o) === 'hfu'
   const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
   const workerOrg = new Map(main.workers.map(w => [w.id, isHfu(w.org) ? 'hfu' : 'hibi']))
 
@@ -176,7 +177,7 @@ async function savePayrollSnapshot(ym: string, orgKey: 'hibi' | 'hfu' | 'all', l
   // 締めスナップショットも画面(/api/monthly)と同じく手当込みで凍結する
   const allowances = await loadMonthlyAllowances(main, ym, att.d, att.drv)
   const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
-  const isHfu = (org?: string) => org === 'hfu' || org === 'HFU'
+  const isHfu = (org?: string) => orgKeyOf(org) === 'hfu'
   const workers = result.workers
     .filter(w => orgKey === 'all' ? true : (orgKey === 'hfu' ? isHfu(w.org) : !isHfu(w.org)))
     .map(w => ({

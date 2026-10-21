@@ -4,6 +4,8 @@
 // 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { useEffect, useState, useCallback } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { visaLabel } from '@/lib/labels'
 import { jobLabel } from '@/lib/jobs'
@@ -100,9 +102,9 @@ export default function ToolBudgetPage() {
 
   useEffect(() => {
     try {
-      const auth = localStorage.getItem('hibi_auth')
+      const auth = readAuth()
       if (auth) {
-        const { password: pw } = JSON.parse(auth)
+        const { password: pw } = auth
         setPassword(pw || '')
       }
     } catch { /* ignore */ }
@@ -274,7 +276,7 @@ export default function ToolBudgetPage() {
           <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
             <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">一人ずつ</h2>
             <Segment value={org} onChange={v => { setOrg(v); setListFilter('all') }} items={[
-              ['all', `全員 ${workers.length}`], ['hibi', `日比建設 ${workers.filter(w => w.org === 'hibi').length}`], ['hfu', `HFU ${workers.filter(w => w.org === 'hfu').length}`],
+              ['all', `全員 ${workers.length}`], ['hibi', `日比建設 ${workers.filter(w => w.org === 'hibi').length}`], ['hfu', `HFU ${workers.filter(w => orgKeyOf(w.org) === 'hfu').length}`],
             ]} />
             {listFilter !== 'all' && (
               <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[0.8125rem] font-bold">

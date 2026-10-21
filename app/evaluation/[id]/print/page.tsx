@@ -16,6 +16,8 @@
  */
 
 import { useEffect, useState, useRef } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useParams, useRouter } from 'next/navigation'
 import type { Evaluation, EvaluationScores, EvaluationReview, ABCGrade } from '@/types'
@@ -88,12 +90,12 @@ export default function PrintEvaluationPage() {
   const printed = useRef(false)
 
   useEffect(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('hibi_auth') : null
+    const stored = readAuth()
     if (!stored) {
       router.replace('/')
       return
     }
-    const { password } = JSON.parse(stored)
+    const { password } = stored
     ;(async () => {
       try {
         const res = await fetchWithAuth('/api/evaluation', { password })
@@ -141,7 +143,7 @@ export default function PrintEvaluationPage() {
 
   const years = yearsFromHire(worker.hireDate)
   const tenureLabel = years > 0 ? `${years}年` : '1年未満'
-  const orgLabel = worker.org === 'hfu' ? 'HFU' : '日比建設'
+  const orgLabel = orgKeyOf(worker.org) === 'hfu' ? 'HFU' : '日比建設'
   const visaLabel = VISA_LABELS[worker.visa] || worker.visa
   const reviews: EvaluationReview[] = evaluation.reviews || []
   const weights = evaluation.evaluatorWeights || {}

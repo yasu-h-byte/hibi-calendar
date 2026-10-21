@@ -13,7 +13,7 @@ import 'server-only'
 import { db } from './firebase'
 import { doc, getDoc, registerMainWriteHook } from '@/lib/fsdb'
 import type { AttendanceEntry } from '@/types'
-import { normalizeBilling, parseDKey, type MainData, type RawWorker, type RawSite, type RawSubcon, type PLRecord, type CompanyProfile, type HfuInvoiceSettings } from './compute'
+import { normalizeBilling, parseDKey, isClosedMonthYm, type MainData, type RawWorker, type RawSite, type RawSubcon, type PLRecord, type CompanyProfile, type HfuInvoiceSettings } from './compute'
 import { withWorkTypeSiteCalendars } from './site-hierarchy'
 import {
   DRIVE_ALLOWANCE_FROM_YM, SITE_ALLOWANCE_FROM_YM, calcMonthlyAllowances, dailyAllowanceYen, isAllowanceEligibleDay,
@@ -126,14 +126,18 @@ export function invalidateAttDataCache(ym?: string): void {
 }
 
 /** 複数月の出面データを読み込み・結合 */
-export async function getMultiMonthAttData(ymList: string[]): Promise<{
+export async function getMultiMonthAttData(
+  ymList: string[],
+  /** cachedForClosed: 前月より前の確定月は getAttDataCached（30 分）で読む（一覧・表示用。残数の検証には使わない・2026-10-21） */
+  opts?: { cachedForClosed?: boolean },
+): Promise<{
   d: Record<string, AttendanceEntry>
   sd: Record<string, { n: number; on: number }>
   perMonth: Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>
 }> {
   const merged = { d: {} as Record<string, AttendanceEntry>, sd: {} as Record<string, { n: number; on: number }> }
   const perMonth = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>()
-  const results = await Promise.all(ymList.map(ym => getAttData(ym)))
+  const results = await Promise.all(ymList.map(ym => (opts?.cachedForClosed && isClosedMonthYm(ym)) ? getAttDataCached(ym) : getAttData(ym)))
   for (let i = 0; i < ymList.length; i++) {
     const att = results[i]
     Object.assign(merged.d, att.d)

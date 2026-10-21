@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useSearchParams } from 'next/navigation'
 import { Worker, Evaluation, EvaluationRank, AuthUser } from '@/types'
@@ -84,8 +85,8 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
       try {
         const password = (() => {
           try {
-            const stored = localStorage.getItem('hibi_auth')
-            if (stored) return (JSON.parse(stored).password as string) || ''
+            const stored = readAuth()
+            if (stored) return (stored.password as string) || ''
           } catch { /* ignore */ }
           return ''
         })()

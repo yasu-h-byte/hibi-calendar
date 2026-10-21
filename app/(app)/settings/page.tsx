@@ -4,6 +4,7 @@
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
@@ -385,10 +386,10 @@ export default function SettingsPage() {
   const [usersLoading, setUsersLoading] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
       try {
-        const { password: pw } = JSON.parse(stored)
+        const { password: pw } = stored
         if (pw) setPassword(pw)
       } catch { /* ignore */ }
     }
@@ -546,8 +547,8 @@ export default function SettingsPage() {
       showMessage('error', 'タイトルと本文を入力してください')
       return null
     }
-    const userStored = localStorage.getItem('hibi_auth')
-    const publishedBy = userStored ? (JSON.parse(userStored).user?.name || '管理者') : '管理者'
+    const userStored = readAuth()
+    const publishedBy = userStored ? (userStored.user?.name || '管理者') : '管理者'
     const body = annEditId
       ? { action: 'update', id: annEditId, ...annForm }
       : { action: 'add', ...annForm, publishedBy }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { saveAuth } from '@/lib/hooks/useAuthPassword'
 import { useRouter } from 'next/navigation'
 import { AuthUser } from '@/types'
 import { DeduraWordmark, DEDURA_TAGLINE, DEDURA_BYLINE } from '@/components/Brand'
@@ -39,7 +40,7 @@ export default function LoginPage() {
         // パスワードではなくサーバーが発行した通行証を保存して API に送る（2026-09-26）
         // 通行証が無い応答は失敗扱い（旧: パスワードそのものを保存する逃げ道が残っていた・2026-10-21 総点検）
         if (!data.sessionToken) { setError('ログインに失敗しました。もう一度お試しください'); return }
-        localStorage.setItem('hibi_auth', JSON.stringify({ password: data.sessionToken, user: data.user }))
+        saveAuth(data.sessionToken, data.user)
         // 職長はダッシュボードを見られない（lib/page-guard.ts）ので、名前を選ぶログインと同じ就業カレンダーへ
         router.push(data.user?.role === 'foreman' ? '/calendar' : '/dashboard')
         return
@@ -69,7 +70,7 @@ export default function LoginPage() {
       const user: AuthUser = data.user
       // 職長は共通パスワードではなく、サーバーが発行した本人の通行証を保存して API に送る（2026-09-26）
       if (!data.sessionToken) { setError('ログインに失敗しました。もう一度お試しください'); return }
-      localStorage.setItem('hibi_auth', JSON.stringify({ password: data.sessionToken, user }))
+      saveAuth(data.sessionToken, user)
       router.push('/calendar')
     } catch {
       setError('通信エラーが発生しました')

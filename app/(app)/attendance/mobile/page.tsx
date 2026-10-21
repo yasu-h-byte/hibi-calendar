@@ -25,6 +25,7 @@
  */
 
 import RestMismatchBanner from '../components/RestMismatchBanner'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { isBreakCheckResponse, confirmBreakCheck } from '@/lib/break-check-confirm'
@@ -164,9 +165,9 @@ export default function ForemanMobilePage() {
   // ── 認証読み込み ──
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('hibi_auth')
+      const stored = readAuth()
       if (stored) {
-        const { password: pw, user } = JSON.parse(stored)
+        const { password: pw, user } = stored
         setPassword(pw)
         if (user) {
           setUserRole(user.role || '')

@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
+import { readAuth, clearAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
@@ -68,9 +69,9 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
     setFontSizeState(getFontSize())
     // 旧: 設定画面の権限（rolePermissions）を読んでいた。権限は lib/permissions.ts に一本化したので不要
     try { localStorage.removeItem('hibi_role_permissions') } catch { /* ignore */ }
-    const auth = localStorage.getItem('hibi_auth')
+    const auth = readAuth()
     if (auth) {
-      const { password } = JSON.parse(auth)
+      const { password } = auth
       // 2026-06-XX 追加 (UI #2): バッジ件数を非同期取得
       //   重い処理を含むので失敗しても他は表示されるよう catch で握り潰す
       //   ダッシュボードも同じ件数を使うので fetchSidebarBadges で1回にまとめる
@@ -108,7 +109,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('hibi_auth')
+    clearAuth()
     router.push('/')
   }
 

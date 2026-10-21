@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { orgKeyOf } from '@/lib/locks'
 import { fetchWithAuth } from '@/lib/api-client'
 import { calcGrantMonthFromHire, calcLegalPL } from '@/lib/leave-utils'
 import { calcLastUsableDayIso, todayJstIso } from '@/lib/date-utils'
@@ -122,7 +123,7 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
               aria-invalid={!!workerError}
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
               <option value="">選択してください</option>
-              {workers.map(w => <option key={w.id} value={w.id}>{w.name}（{w.org === 'hfu' ? 'HFU' : '日比'}）</option>)}
+              {workers.map(w => <option key={w.id} value={w.id}>{w.name}（{orgKeyOf(w.org) === 'hfu' ? 'HFU' : '日比'}）</option>)}
             </select>
             <FieldError>{workerError}</FieldError>
           </div>

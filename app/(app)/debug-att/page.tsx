@@ -3,6 +3,7 @@
 // 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
 
 import { useState } from 'react'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { PageHeader, ToolButton, Chip } from '@/components/ui/PageParts'
@@ -107,12 +108,12 @@ export default function DebugAttPage() {
     setRepairError(null)
     setRepairResult(null)
     try {
-      const auth = localStorage.getItem('hibi_auth')
+      const auth = readAuth()
       if (!auth) {
         setRepairError('ログイン情報が見つかりません。')
         return
       }
-      const { password } = JSON.parse(auth)
+      const { password } = auth
       const dates = repairDates.split(',').map(s => s.trim()).filter(Boolean)
       const res = await fetchWithAuth('/api/debug/repair-att-site', { password,
         method: 'POST',
@@ -148,12 +149,12 @@ export default function DebugAttPage() {
     setError(null)
     setResult(null)
     try {
-      const auth = localStorage.getItem('hibi_auth')
+      const auth = readAuth()
       if (!auth) {
         setError('ログイン情報が見つかりません。一度ログアウトしてログインし直してください。')
         return
       }
-      const { password } = JSON.parse(auth)
+      const { password } = auth
       const res = await fetchWithAuth('/api/debug/inspect-att', { password,
         method: 'POST',
         headers: {

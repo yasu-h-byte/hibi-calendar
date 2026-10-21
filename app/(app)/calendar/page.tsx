@@ -1,6 +1,7 @@
 'use client'
 
 import { siteLeaderLabel } from '@/lib/companies'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { summarizeSignStatus, buildSignRequestMessage } from '@/lib/calendar-sign-status'
@@ -177,9 +178,9 @@ export default function CalendarManagePage() {
   const [y, m] = ym.split('-').map(Number)
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
-      const { password: pw, user: u } = JSON.parse(stored)
+      const { password: pw, user: u } = stored
       setUser(u)
       setPassword(pw)
     }

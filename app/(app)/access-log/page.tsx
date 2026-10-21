@@ -2,6 +2,8 @@
 // 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
 
 import { useEffect, useState, useCallback } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { isTobiGroup } from '@/lib/jobs'
 import { PageHeader, TodoCard, Segment, Chip, type ChipTone } from '@/components/ui/PageParts'
@@ -88,9 +90,9 @@ export default function AccessLogPage() {
 
   useEffect(() => {
     try {
-      const auth = localStorage.getItem('hibi_auth')
+      const auth = readAuth()
       if (auth) {
-        const { password: pw } = JSON.parse(auth)
+        const { password: pw } = auth
         setPassword(pw || '')
       }
     } catch { /* ignore */ }
@@ -205,7 +207,7 @@ export default function AccessLogPage() {
                     <tr key={r.workerId} className="border-t border-hibi-line dark:border-gray-700 hover:bg-hibi-bg dark:hover:bg-gray-700/40">
                       <td className="px-5 py-3 font-bold text-gray-900 dark:text-white">{r.workerName}</td>
                       <td className="px-3 py-3"><Chip tone={job.tone}>{job.label}</Chip></td>
-                      <td className="px-3 py-3 text-xs text-hibi-sub dark:text-gray-400">{r.org === 'hfu' ? 'HFU' : '日比'}</td>
+                      <td className="px-3 py-3 text-xs text-hibi-sub dark:text-gray-400">{orgKeyOf(r.org) === 'hfu' ? 'HFU' : '日比'}</td>
                       <td className="px-3 py-3 tabular-nums text-xs text-gray-700 dark:text-gray-300">{formatDateTime(r.lastAccessAt)}</td>
                       <td className="px-3 py-3"><Chip tone={badge.tone}>{badge.label}</Chip></td>
                       <td className="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">{r.accessCountLast7Days}回</td>

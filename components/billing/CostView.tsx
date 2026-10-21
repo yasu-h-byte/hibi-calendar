@@ -2,6 +2,8 @@
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { useEffect, useState, useCallback } from 'react'
+import { orgKeyOf } from '@/lib/locks'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 import { notify } from '@/lib/notify'
@@ -183,8 +185,8 @@ export default function CostView({ ym: ymProp, onYmChange }: { ym: string; onYmC
   const [billingRowsVersion, setBillingRowsVersion] = useState<Record<string, number>>({})
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
-    if (stored) setPassword(JSON.parse(stored).password)
+    const stored = readAuth()
+    if (stored) setPassword(stored.password)
   }, [])
 
   // 月・期間・現場を素早く切り替えたとき、前の条件の応答をあとから画面に出さない（lib/hooks/useLatestRequest・2026-10-02）
@@ -1140,8 +1142,8 @@ function KPILineChart({
 
 /** Site member list grouped by org */
 function SiteMemberList({ members }: { members: SiteMember[] }) {
-  const hibi = members.filter(m => m.org !== 'hfu')
-  const hfu = members.filter(m => m.org === 'hfu')
+  const hibi = members.filter(m => orgKeyOf(m.org) !== 'hfu')
+  const hfu = members.filter(m => orgKeyOf(m.org) === 'hfu')
 
   const renderGroup = (label: string, workers: SiteMember[], badgeClass: string) => {
     if (workers.length === 0) return null

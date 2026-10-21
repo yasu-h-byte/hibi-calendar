@@ -18,6 +18,7 @@
  * （罫線・色を付けるため xlsx-js-style を使う。書き出しも leaveLedgerToBuffer で。lib/export.ts の XLSX では装飾が落ちる）。
  */
 import * as XLSX from 'xlsx-js-style'
+import { orgKeyOf } from './locks'
 import type { LeaveLedgerData, LeaveLedgerRecord, LeaveLedgerWorker } from './export'
 import { computePeriodUsed, computeRecordBalance, selectCurrentPeriodRecord } from './leave-compute'
 import { addMonthsSafe, addDaysIso, calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso } from './date-utils'
@@ -103,7 +104,7 @@ export interface LeaveLedgerModel {
   buyouts: LedgerBuyout[]
 }
 
-const orgOf = (o: string): 'hibi' | 'hfu' => (o === 'hfu' || o === 'HFU' ? 'hfu' : 'hibi')
+const orgOf = (o: string): 'hibi' | 'hfu' => orgKeyOf(o)
 const isJpVisa = (v?: string) => !v || v === 'none'
 
 export function visaLabel(v: string): string {

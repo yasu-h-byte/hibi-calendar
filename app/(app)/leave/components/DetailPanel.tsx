@@ -1,6 +1,7 @@
 'use client'
 
 import { PLWorker } from '../types'
+import { orgKeyOf } from '@/lib/locks'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { Icon } from '@/components/ui/Icon'
 import { SidePanel, CloseButton } from '@/components/ui/PageParts'
@@ -61,7 +62,7 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
             <div className="flex-1 min-w-0">
               <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white truncate">{w.name}</h2>
               <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">
-                {w.org === 'hfu' ? 'HFU' : '日比建設'}　{jp ? '日本人' : (VISA_LABEL[w.visa] || w.visa)}
+                {orgKeyOf(w.org) === 'hfu' ? 'HFU' : '日比建設'}　{jp ? '日本人' : (VISA_LABEL[w.visa] || w.visa)}
                 {w.hireDate && <>　入社 {slash(w.hireDate)}</>}
               </div>
               <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 tabular-nums">

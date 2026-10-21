@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx-js-style'
+import { orgKeyOf } from './locks'
 import {
   RawWorker,
   RawSite,
@@ -761,7 +762,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
 
   // 雇用区分 × 会社 でグルーピング
   const isHibi = (w: WorkerMonthly) => w.org === '日比' || w.org === 'hibi'
-  const isHfu = (w: WorkerMonthly) => w.org === 'HFU' || w.org === 'hfu'
+  const isHfu = (w: WorkerMonthly) => orgKeyOf(w.org) === 'hfu'
   const isForeign = (w: WorkerMonthly) => w.visa !== 'none'
   const isJapanese = (w: WorkerMonthly) => w.visa === 'none'
 
@@ -1262,7 +1263,7 @@ export function generatePerSiteAttendance(data: PerSiteAttendanceData): XLSX.Wor
       .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym) && (w.org === '日比' || w.org === 'hibi'))
     const hfuWorkers = Array.from(siteWorkerIds)
       .map(id => workerMap.get(id))
-      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym) && (w.org === 'HFU' || w.org === 'hfu'))
+      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym) && (orgKeyOf(w.org) === 'hfu' || orgKeyOf(w.org) === 'hfu'))
 
     if (hibiWorkers.length === 0 && hfuWorkers.length === 0) continue
 
@@ -1556,7 +1557,7 @@ export function generatePlannedShiftExcel(data: PlannedShiftData): XLSX.WorkBook
     if (!isStillActiveForMonth(w.retired, ym)) return false
     if (!isHiredByMonth(w.hireDate, ym)) return false
     if (org === 'hibi' && w.org !== 'hibi') return false
-    if (org === 'hfu' && w.org !== 'hfu') return false
+    if (org === 'hfu' && orgKeyOf(w.org) !== 'hfu') return false
     return true
   })
 
@@ -1692,7 +1693,7 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
     if (!isStillActiveForMonth(w.retired, ym)) return false
     if (!isHiredByMonth(w.hireDate, ym)) return false  // 2026-06-12 (監査): 入社前月除外の横展開
     if (org === 'hibi' && w.org !== 'hibi') return false
-    if (org === 'hfu' && w.org !== 'hfu') return false
+    if (org === 'hfu' && orgKeyOf(w.org) !== 'hfu') return false
     return true
   })
 

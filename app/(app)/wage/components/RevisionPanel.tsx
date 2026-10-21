@@ -14,6 +14,7 @@
  */
 
 import { staffLinkOrigin } from '@/lib/public-origin'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
 import { fmtYenOrDash as yen } from '@/lib/format'
 import { confirmWithReason } from '@/lib/confirm-dialog'
@@ -109,8 +110,8 @@ export default function RevisionPanel() {
   useEffect(() => {
     let password = ''
     try {
-      const raw = localStorage.getItem('hibi_auth')
-      const parsed = raw ? JSON.parse(raw) : null
+      const raw = readAuth()
+      const parsed = raw
       password = parsed?.password || ''
       const wid = parsed?.user?.workerId
       // workerId 0（代表）は falsy なので、必ず includes で判定する

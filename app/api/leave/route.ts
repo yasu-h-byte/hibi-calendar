@@ -1220,7 +1220,8 @@ export async function GET(request: NextRequest) {
     }
 
     const allAtt: Record<string, Record<string, unknown>> = {}
-    Object.assign(allAtt, (await getMultiMonthAttData(allMonths)).d)  // 並列読み（性能改善 2026-07-09・GET経路の主因）
+    // 並列読み（性能改善 2026-07-09・GET経路の主因）。一覧の表示用なので確定月は 30 分キャッシュ（2026-10-21）
+    Object.assign(allAtt, (await getMultiMonthAttData(allMonths, { cachedForClosed: true })).d)
 
     // Worker name map for calendar tooltips
     const workerNames: Record<number, string> = {}

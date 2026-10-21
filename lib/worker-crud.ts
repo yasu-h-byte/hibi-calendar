@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto'
+import { orgKeyOf } from './locks'
 import { db } from './firebase'
 import { doc, getDoc, runTransaction } from '@/lib/fsdb'
 import { invalidateMainCache } from './compute.server'
@@ -67,7 +68,7 @@ function assignWorkerId(
 ): number {
   const isForeigner = newWorker.visa !== 'none' && newWorker.visa !== ''
   const isJimu = newWorker.job === 'jimu'
-  const isHfu = newWorker.org === 'hfu'
+  const isHfu = orgKeyOf(newWorker.org) === 'hfu'
 
   let bandStart = 0
   let bandEnd = 0

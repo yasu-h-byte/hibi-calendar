@@ -6,6 +6,7 @@
 // 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { staffLinkOrigin } from '@/lib/public-origin'
+import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -156,9 +157,9 @@ export default function WorkersPage() {
   const [transferring, setTransferring] = useState<number | null>(null)
 
   useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
+    const stored = readAuth()
     if (stored) {
-      const { password: pw, user } = JSON.parse(stored)
+      const { password: pw, user } = stored
       setPassword(pw)
       if (user) setAuthUser(user as AuthUser)
     }

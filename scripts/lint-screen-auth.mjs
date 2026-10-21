@@ -30,14 +30,17 @@ for (const sub of ['app', 'components']) {
     const rel = path.relative(ROOT, file).split(path.sep).join('/')
     const lines = (await fs.readFile(file, 'utf8')).split('\n')
     lines.forEach((line, i) => {
-      if (line.includes("'x-admin-password'") && !line.includes('auth-ok')) bad.push(`${rel}:${i + 1}  ${line.trim().slice(0, 100)}`)
+      if (line.includes('auth-ok')) return
+      if (line.includes("'x-admin-password'")) bad.push(`${rel}:${i + 1}  ${line.trim().slice(0, 100)}`)
+      // localStorage の 'hibi_auth' を直接読む・書く・消す（readAuth / saveAuth / clearAuth を使う・2026-10-21）
+      if (/localStorage\.(getItem|setItem|removeItem)\(\s*['"]hibi_auth['"]/.test(line)) bad.push(`${rel}:${i + 1}  ${line.trim().slice(0, 100)}`)
     })
   }
 }
 if (bad.length) {
-  console.error('❌ 画面側で通行証のヘッダを手書きしています。lib/api-client.ts の fetchWithAuth / postJson を使ってください:')
+  console.error('❌ 画面側で通行証のヘッダの手書き、または localStorage の hibi_auth の直読みがあります。lib/api-client.ts の fetchWithAuth / postJson、lib/hooks/useAuthPassword.ts の readAuth / saveAuth / clearAuth を使ってください:')
   for (const b of bad) console.error('  ' + b)
   console.error(`合計 ${bad.length} 件。意図して書く行は同じ行に \`// auth-ok: 理由\` を書いてください。`)
   process.exit(1)
 }
-console.log('✅ lint:auth OK（画面側に通行証ヘッダの手書きはありません）')
+console.log('✅ lint:auth OK（画面側に通行証ヘッダの手書き・hibi_auth の直読みはありません）')
