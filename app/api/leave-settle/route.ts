@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser, requireCap } from '@/lib/auth'
+import { getApiAuthUser, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from '@/lib/fsdb'
 import { isAlreadyRetired } from '@/lib/workers'
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
         const reason = String(body.reason || '').trim()
         if (!reason) return NextResponse.json({ error: '却下の理由を入れてください' }, { status: 400 })
         await updateDoc(ref, { status: 'rejected', decidedAt: nowIso, decidedBy: who.actor, rejectedReason: reason.slice(0, 200) })
-        await logActivity('admin', 'leaveSettle.reject', `${label} を却下（${reason}・${who.actor}）`)
+        await logActivity(await actorLabel(request), 'leaveSettle.reject', `${label} を却下（${reason}・${who.actor}）`)
         return NextResponse.json({ success: true })
       }
 
@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
         await updateDoc(mainRef, { [`plData.${String(r.workerId)}`]: wRecords })
         invalidateMainCache()
         await updateDoc(ref, { status: 'approved', decidedAt: nowIso, decidedBy: who.actor, grantDate: target.grantDate })
-        await logActivity('admin', 'leaveSettle.approve', `${label} を承認（${who.actor}）`)
+        await logActivity(await actorLabel(request), 'leaveSettle.approve', `${label} を承認（${who.actor}）`)
         return NextResponse.json({ success: true })
       }
 
@@ -312,7 +312,7 @@ export async function POST(request: NextRequest) {
         invalidateMainCache()
       }
       await updateDoc(ref, { status: 'revoked', decidedAt: nowIso, decidedBy: who.actor })
-      await logActivity('admin', 'leaveSettle.revoke', `${label} の承認を取り消し（${who.actor}）`)
+      await logActivity(await actorLabel(request), 'leaveSettle.revoke', `${label} の承認を取り消し（${who.actor}）`)
       return NextResponse.json({ success: true })
     }
 

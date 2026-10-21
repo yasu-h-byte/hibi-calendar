@@ -20,7 +20,7 @@
 import * as XLSX from 'xlsx-js-style'
 import type { LeaveLedgerData, LeaveLedgerRecord, LeaveLedgerWorker } from './export'
 import { computePeriodUsed, computeRecordBalance, selectCurrentPeriodRecord } from './leave-compute'
-import { addMonthsSafe, calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso } from './date-utils'
+import { addMonthsSafe, addDaysIso, calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso } from './date-utils'
 import { isAlreadyRetired } from './workers'
 
 export type LedgerScope = 'all' | 'hibi' | 'hfu' | 'jp' | 'vn'
@@ -146,7 +146,7 @@ export function buildLeaveLedgerModel(
     const records = (data.plData[String(w.id)] || []) as LeaveLedgerRecord[]
     // 退職日より後の日付の付与は載せない（退職した人に次の期の付与の記録が残っていることがある・2026-10-05 本番の出力で確認）
     const dated = records.filter(r => validDate(r.grantDate) && !r._archived)
-      .filter(r => !(retiredDone && w.retired && (r.grantDate as string) > w.retired))
+      .filter(r => !(retiredDone && isAlreadyRetired(w.retired, r.grantDate as string)))
       .sort((a, b) => (a.grantDate as string).localeCompare(b.grantDate as string))
     const currentRec = selectCurrentPeriodRecord(
       dated as Parameters<typeof selectCurrentPeriodRecord>[0], todayIso,
@@ -171,7 +171,7 @@ export function buildLeaveLedgerModel(
         remaining: b.remaining, current: r === currentRec,
         expired: !!r.expiredAt || isLeaveExpiredAsOf(grantDate, todayIso),
         beforeSystem: grantDate < LEDGER_ATT_FROM,
-        retiredDuring: retiredDone && !!w.retired && w.retired <= b.periodLastDay,
+        retiredDuring: retiredDone && isAlreadyRetired(w.retired, addDaysIso(b.periodLastDay, 1)),   // 期間の最終日までに退職
         obligation: { applies, taken: b.periodUsed, met: applies && shortfall === 0, shortfall, deadline: b.periodLastDay },
       }
     })

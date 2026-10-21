@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers.server'
@@ -437,7 +437,7 @@ export async function POST(request: NextRequest) {
         }
         if (bal.remaining < 1 && body.allowOverdraft === true) {
           const { logActivity } = await import('@/lib/activity')
-          await logActivity('admin', 'leave.overdraft',
+          await logActivity(await actorLabel(request), 'leave.overdraft',
             `${data.workerName} ${data.date} 有給承認を残数超過で実行（枠 ${bal.total}日 / 消化 ${bal.used}日）`)
         }
       }
@@ -492,7 +492,7 @@ export async function POST(request: NextRequest) {
           }, { status: 409 })
         }
         if ((dayA.existingWork || dayA.dayApproval) && body.allowOverwrite === true) {
-          await logActivity('admin', 'leave.overwriteWork',
+          await logActivity(await actorLabel(request), 'leave.overwriteWork',
             `${data.workerName} ${data.date} の${dayA.existingWork ? `出勤入力（${describeWork(dayA.existingWork)}）` : ''}${dayA.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（承認）`)
         }
       }
@@ -844,7 +844,7 @@ export async function POST(request: NextRequest) {
             }, { status: 409 })
           }
           if ((dayM.existingWork || dayM.dayApproval) && body.allowOverwrite === true) {
-            await logActivity('admin', 'leave.overwriteWork',
+            await logActivity(await actorLabel(request), 'leave.overwriteWork',
               `${data.workerName} ${newDate} の${dayM.existingWork ? `出勤入力（${describeWork(dayM.existingWork)}）` : ''}${dayM.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（日付変更）`)
           }
         }

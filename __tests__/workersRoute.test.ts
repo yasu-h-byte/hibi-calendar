@@ -30,6 +30,7 @@ vi.mock('@/lib/fsdb', () => ({
 }))
 vi.mock('@/lib/activity', () => ({ logActivity: async () => {} }))
 vi.mock('@/lib/auth', () => ({
+  actorLabel: async () => 'test',
   requireCap: async (_r: unknown, cap: string) => caller.caps.has(cap) ? null : new Response(JSON.stringify({ error: `no ${cap}` }), { status: 403 }),
   callerCan: async (_r: unknown, cap: string) => caller.caps.has(cap),
   getApiAuthUser: async () => ({ authorized: true, actor: caller.actor }),

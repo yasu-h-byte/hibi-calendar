@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
         }, { status: 409 })
       }
       if (unacked.length > 0) {
-        await logActivity('admin', 'monthly.lock.unackedNotes',
+        await logActivity(actorLabel, 'monthly.lock.unackedNotes',
           `${ym} 給与チェックの注意点を確認しないまま締め（操作者: ${actorLabel}）: ${unacked.map(i => `${i.workerName}=${i.field}`).join('、')}`)
       }
       // ⑥ 本人確認（ベトナム人スタッフのスマホ）。残っていれば一覧を返し、承知のうえ（allowUnconfirmed）でだけ締める
@@ -257,7 +257,7 @@ export async function POST(request: NextRequest) {
         }, { status: 409 })
       }
       if (pending.length > 0) {
-        await logActivity('admin', 'monthly.lock.unconfirmed',
+        await logActivity(actorLabel, 'monthly.lock.unconfirmed',
           `${ym} 本人確認が済んでいないまま締め（操作者: ${actorLabel}）: ${pending.map(p => `${p.name}=${p.state}`).join('、')}`)
       }
     }
@@ -269,11 +269,11 @@ export async function POST(request: NextRequest) {
       const lockKey = `${ym}_${org}`
       await updateDoc(docRef, { [`locks.${lockKey}`]: locked ? true : false })
       const orgLabel = org === 'hibi' ? '日比建設' : 'HFU'
-      await logActivity('admin', locked ? 'monthly.lock' : 'monthly.unlock', `${ym} ${orgLabel}を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
+      await logActivity(actorLabel, locked ? 'monthly.lock' : 'monthly.unlock', `${ym} ${orgLabel}を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
     } else {
       // 後方互換: org未指定の場合は全体ロック（旧方式）
       await updateDoc(docRef, { [`locks.${ym}`]: locked ? true : false })
-      await logActivity('admin', locked ? 'monthly.lock' : 'monthly.unlock', `${ym} を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
+      await logActivity(actorLabel, locked ? 'monthly.lock' : 'monthly.unlock', `${ym} を${locked ? '締め' : '締め解除'}（操作者: ${actorLabel}）`)
     }
 
     // 締め時のみ: 支給額スナップショットを凍結保存（解除時は最後の締め時点を保持）

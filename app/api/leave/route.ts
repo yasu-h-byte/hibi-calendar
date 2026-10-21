@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { parseDKey, isDispatchedAt } from '@/lib/compute'
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
       await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
-      await logActivity('admin', 'leave.buyout', `workerId=${workerId} FY${fy} 買取 ${days}日${amount ? ` ¥${amount}` : ''}（操作者: ${actor}）`)
+      await logActivity(await actorLabel(request), 'leave.buyout', `workerId=${workerId} FY${fy} 買取 ${days}日${amount ? ` ¥${amount}` : ''}（操作者: ${actor}）`)
       return NextResponse.json({ success: true, totalBuyout })
     }
 
@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
         if (bal.remaining < dates.length && body.allowOverdraft === true) {
           const wName = (data.workers as { id: number; name?: string }[] | undefined)
             ?.find(w => w.id === Number(workerId))?.name || `ID:${workerId}`
-          await logActivity('admin', 'leave.overdraft',
+          await logActivity(await actorLabel(request), 'leave.overdraft',
             `${wName} 有給${dates.length}日を残数超過で登録（残 ${bal.remaining}日 / 枠 ${bal.total}日、操作者: ${actor}）`)
         }
       }
@@ -366,7 +366,7 @@ export async function POST(request: NextRequest) {
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
       await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
-      await logActivity('admin', 'leave.designate', `workerId=${workerId} に有給P入力 ${written.length}日 (${written.join(', ')})（操作者: ${actor}）`)
+      await logActivity(await actorLabel(request), 'leave.designate', `workerId=${workerId} に有給P入力 ${written.length}日 (${written.join(', ')})（操作者: ${actor}）`)
       return NextResponse.json({ success: true, written })
     }
 
@@ -978,7 +978,7 @@ export async function POST(request: NextRequest) {
         await updateDoc(docRef, { [`plData.${key}`]: records })
       }
 
-      await logActivity('admin', 'leave.grant', `workerId=${workerId} に有給付与/編集（操作者: ${actor}）`)
+      await logActivity(await actorLabel(request), 'leave.grant', `workerId=${workerId} に有給付与/編集（操作者: ${actor}）`)
       return NextResponse.json({ success: true })
     }
 

@@ -36,6 +36,7 @@ vi.mock('@/lib/compute.server', () => ({
   ], sites: [], mforeman: {} }),
 }))
 vi.mock('@/lib/auth', () => ({
+  actorLabel: async () => 'test',
   checkApiAuth: async () => true,
   requireCap: async () => null,
   callerCan: async (_r: unknown, cap: string) => cap === 'wage.view' ? caller.canSeeWage : false,

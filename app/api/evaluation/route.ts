@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { EVALUATOR_VIEW_KEYS } from '@/lib/evaluation-view-keys'
-import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from '@/lib/fsdb'
 import { getMainData } from '@/lib/compute.server'
@@ -304,7 +304,7 @@ export async function POST(request: NextRequest) {
       }
 
       await setDoc(doc(db, 'evaluations', evaluationId), evaluationData)
-      await logActivity('admin', 'evaluation.create', `${workerName} の評価セッションを作成`)
+      await logActivity(await actorLabel(request), 'evaluation.create', `${workerName} の評価セッションを作成`)
 
       return NextResponse.json({
         success: true,
@@ -552,7 +552,7 @@ export async function POST(request: NextRequest) {
           recalculatedAt: new Date().toISOString(),
         })
       }
-      await logActivity('admin', 'evaluation.recalculateApproved', `承認済み評価を再計算: ${results.length}件`)
+      await logActivity(await actorLabel(request), 'evaluation.recalculateApproved', `承認済み評価を再計算: ${results.length}件`)
       return NextResponse.json({ success: true, count: results.length, results })
     }
 
@@ -576,7 +576,7 @@ export async function POST(request: NextRequest) {
         evaluatorWeights,
         updatedAt: new Date().toISOString(),
       })
-      await logActivity('admin', 'evaluation.recalculateWeights', `${data.workerName} のウェイトを再計算`)
+      await logActivity(await actorLabel(request), 'evaluation.recalculateWeights', `${data.workerName} のウェイトを再計算`)
       return NextResponse.json({ success: true, evaluatorWeights })
     }
 
@@ -613,7 +613,7 @@ export async function POST(request: NextRequest) {
           errors.push(`${snap.id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
-      await logActivity('admin', 'evaluation.recalculateAllWeights', `ウェイト一括再計算: ${updated}件更新, ${skipped}件スキップ`)
+      await logActivity(await actorLabel(request), 'evaluation.recalculateAllWeights', `ウェイト一括再計算: ${updated}件更新, ${skipped}件スキップ`)
       return NextResponse.json({ success: true, updated, skipped, errors })
     }
 
@@ -641,7 +641,7 @@ export async function POST(request: NextRequest) {
         metrics,
         updatedAt: new Date().toISOString(),
       })
-      await logActivity('admin', 'evaluation.recalculateMetrics', `${data.workerName} の出勤指標を再計算`)
+      await logActivity(await actorLabel(request), 'evaluation.recalculateMetrics', `${data.workerName} の出勤指標を再計算`)
       return NextResponse.json({ success: true, metrics })
     }
 
@@ -680,7 +680,7 @@ export async function POST(request: NextRequest) {
           errors.push(`${snap.id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
-      await logActivity('admin', 'evaluation.recalculateAllMetrics', `出勤指標 一括再計算: ${updated}件更新, ${skipped}件スキップ`)
+      await logActivity(await actorLabel(request), 'evaluation.recalculateAllMetrics', `出勤指標 一括再計算: ${updated}件更新, ${skipped}件スキップ`)
       return NextResponse.json({ success: true, updated, skipped, errors })
     }
 
@@ -703,7 +703,7 @@ export async function POST(request: NextRequest) {
       await updateDoc(mainRef, {
         evaluationSettings: { raiseTable },
       })
-      await logActivity('admin', 'evaluation.saveSettings', '昇給テーブルを更新')
+      await logActivity(await actorLabel(request), 'evaluation.saveSettings', '昇給テーブルを更新')
 
       return NextResponse.json({ success: true })
     }

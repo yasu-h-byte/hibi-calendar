@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
       const sync = await syncHomeLeaveAttendance(Number(workerId), null, { startDate, endDate }, { excludeDocId: id })
 
       const endLabel = returnUndecided ? '復帰未定' : endDate
-      await logActivity('admin', 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
+      await logActivity(actorLabel, 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
 
       return NextResponse.json({ success: true, id, attendanceSync: sync })
     }
@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
       }
 
       const endLabel = newEnd >= HOME_LEAVE_SENTINEL_END ? '復帰未定' : newEnd
-      await logActivity('admin', 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${endLabel}`)
+      await logActivity(actorLabel, 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${endLabel}`)
 
       return NextResponse.json({ success: true, attendanceSync: sync })
     }
@@ -425,7 +425,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      await logActivity('admin', 'homeLeave.delete', `${data.workerName} 一時帰国削除 ${data.startDate}〜${data.endDate}`)
+      await logActivity(actorLabel, 'homeLeave.delete', `${data.workerName} 一時帰国削除 ${data.startDate}〜${data.endDate}`)
 
       return NextResponse.json({ success: true, attendanceSync: sync })
     }

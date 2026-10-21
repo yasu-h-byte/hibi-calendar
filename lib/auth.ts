@@ -57,6 +57,16 @@ export type ApiAuthResult =
   | { authorized: true; actor: number | 'super-admin' }
   | { authorized: false }
 
+/**
+ * 操作ログ（lib/activity.ts logActivity）に残す操作者（2026-10-21 総点検）。
+ * 旧は約 60 か所が固定文字列 'admin' で、誰が所定日数を変えた・人員を消したか辿れなかった。
+ * 代表の通行証 → 'super-admin'、個人・職長の通行証 → workerId。確かめられなければ 'admin'（旧と同じ）
+ */
+export async function actorLabel(request: NextRequest): Promise<string> {
+  const auth = await getApiAuthUser(request)
+  return auth.authorized ? String(auth.actor) : 'admin'
+}
+
 export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResult> {
   const authHeader = request.headers.get('x-admin-password')
   if (!authHeader) return { authorized: false }

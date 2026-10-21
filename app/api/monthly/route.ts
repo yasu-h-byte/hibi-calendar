@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { computeMonthly, parseDKey } from '@/lib/compute'
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'demmen', 'main')
       await updateDoc(docRef, { [`workDays.${ym}`]: numValue })
       const { logActivity } = await import('@/lib/activity')
-      await logActivity('admin', 'monthly.setWorkDays', `${ym} の全社所定日数を ${numValue}日 に設定`)
+      await logActivity(await actorLabel(request), 'monthly.setWorkDays', `${ym} の全社所定日数を ${numValue}日 に設定`)
       return NextResponse.json({ success: true, workDays: numValue })
     }
 
