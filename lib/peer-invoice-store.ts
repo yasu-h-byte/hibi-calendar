@@ -250,20 +250,33 @@ export const INVOICE_APPROVAL_REQUIRED_FROM_YM = FINAL_APPROVAL_REQUIRED_FROM_YM
 
 export async function invoiceApprovalGap(
   main: MainData, ym: string, detail: PeerInvoiceSiteDetail[],
+  /** fresh: 発行・承認のとき（判定を確定させる所）はキャッシュを使わず読み直す（月締め・本人確認と同じ・2026-10-21） */
+  opts?: { fresh?: boolean },
 ): Promise<{ required: boolean; gap: ApprovalGap; message: string }> {
   const empty = { foremanMissing: [], finalMissing: [] }
   if (ym < INVOICE_APPROVAL_REQUIRED_FROM_YM) return { required: false, gap: empty, message: '' }
   const sites = main.sites as unknown as HierarchySite[]
-  const famDays = detail.flatMap(sd => Object.entries(sd.dayTotals || {})
-    .filter(([, v]) => Number(v) > 0)
-    .map(([day]) => ({ familyId: calendarSiteIdOf(sites, sd.siteId), day: Number(day) })))
-  const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays)
+  const famDays = detail.flatMap(sd => invoiceDaysOf(sd).map(day => ({ familyId: calendarSiteIdOf(sites, sd.siteId), day })))
+  const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays, { fresh: !!opts?.fresh })
   const nameOf = (id: string) => main.sites.find(x => x.id === id)?.name || id
   return { required: true, gap, message: describeApprovalGap(gap, nameOf) }
 }
 
+/**
+ * 請求書に載る日（承認がそろっている必要がある日）。人工のある日に加えて、待機料（現場の都合で休ませた日・人工 0）の日も
+ * 金額になるので対象にする（2026-10-21 代表決定。旧: 人工 > 0 の日だけで、待機料だけの日は承認なしで請求できた）
+ */
+export function invoiceDaysOf(sd: PeerInvoiceSiteDetail): number[] {
+  const days = new Set<number>()
+  for (const [day, v] of Object.entries(sd.dayTotals || {})) if (Number(v) > 0) days.add(Number(day))
+  for (const row of sd.rows || []) {
+    for (const [day, cell] of Object.entries(row.cells || {})) if ((cell as { standby?: boolean } | undefined)?.standby) days.add(Number(day))
+  }
+  return [...days].sort((a, b) => a - b)
+}
+
 async function approvalError(main: MainData, ym: string, detail: PeerInvoiceSiteDetail[]): Promise<IssuePeerInvoiceError | null> {
-  const r = await invoiceApprovalGap(main, ym, detail)
+  const r = await invoiceApprovalGap(main, ym, detail, { fresh: true })
   if (!r.required || (!r.gap.foremanMissing.length && !r.gap.finalMissing.length)) return null
   return { ok: false, error: `請求する日の中に、職長承認・最終承認が済んでいない日があるため発行できません。\n${r.message}\n出面の画面で承認を済ませてから発行してください` }
 }

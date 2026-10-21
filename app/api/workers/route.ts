@@ -285,6 +285,19 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 時給・日額・月給の「この日から」を締め済みの月の途中にしない（2026-10-21 代表決定）。
+      //   按分（lib/compute.ts rateEffectiveFrom）で締めた月の支給額が変わる。号俸の改定（jp-wage/revision）と同じ判定
+      for (const f of ['rateFrom', 'hourlyRateFrom', 'salaryFrom'] as const) {
+        const v = effective[f]
+        if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v === beforeW[f]) continue
+        const { lockedMonthsFrom } = await import('@/lib/locks.server')
+        const locked = await lockedMonthsFrom(v, String(beforeW.org || beforeW.company || ''))
+        if (locked.length > 0) {
+          const label = { rateFrom: '日額', hourlyRateFrom: '時給', salaryFrom: '月給' }[f]
+          return NextResponse.json({ error: `${label}の適用開始日 ${v} 以降に締め済みの月（${locked.map(k => k.slice(0, 4) + '年' + parseInt(k.slice(4, 6)) + '月').join('・')}）があるため変えられません。先に月次集計画面で締めを解除してください` }, { status: 409 })
+        }
+      }
+
       await updateWorker(Number(id), updates as Parameters<typeof updateWorker>[1], unsetFields)
 
       // 給与系フィールドの差分を auditTrail へ（削除されない永続コレクション）。消した項目も「→ —」で残す

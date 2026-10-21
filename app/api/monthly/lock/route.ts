@@ -128,6 +128,23 @@ async function checkReadyToLock(
       return `対象月に重なる未処理の帰国申請が ${hlPendings.length}件 残っているため締められません:\n${hlPendings.slice(0, 5).join('、')}\n休暇管理画面で最終承認または却下を済ませてから締めてください`
     }
   }
+
+  // ⑥ 未処理の有給精算の申請（日数で給料に乗る）が残っていないこと（2026-10-21 代表決定）
+  //    締め後の承認は leave-settle 側で止まるので金額は狂わないが、申請が宙に浮いて本人に説明がつかない。④⑤と同じ形で先に処理してもらう
+  {
+    const lsSnap = await getDocs(query(collection(db, 'leaveSettleRequests'), where('ym', '==', ym)))
+    const lsPendings: string[] = []
+    lsSnap.forEach(s3 => {
+      const d = s3.data() as { status?: string; workerId?: number; workerName?: string; days?: number }
+      if (d.status !== 'pending') return
+      const wOrg = workerOrg.get(Number(d.workerId))
+      if (orgKey !== 'all' && wOrg !== orgKey) return
+      lsPendings.push(`${d.workerName || `ID${d.workerId}`}（${d.days ?? '?'}日）`)
+    })
+    if (lsPendings.length > 0) {
+      return `未処理の有給精算の申請が ${lsPendings.length}件 残っているため締められません:\n${lsPendings.slice(0, 10).join('、')}\n休暇管理画面の「有給精算」で承認または却下を済ませてから締めてください`
+    }
+  }
   return null
 }
 
