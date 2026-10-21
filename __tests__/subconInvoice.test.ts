@@ -72,6 +72,7 @@ describe('explainSubconDiff（差を人工・残業で言い換える）', () =>
   test('説明できないときは約◯人工分、差が無ければ null', () => {
     expect(explainSubconDiff(-15000, ex(26000, 4063))).toBe('約 −0.6人工分')
     expect(explainSubconDiff(0, ex(26000, 4063))).toBeNull()
+    expect(explainSubconDiff(-1, ex(26000, 4063))).toBeNull()        // 端数は言い換えない
     expect(explainSubconDiff(-26000, { sites: [] })).toBeNull()
     expect(explainSubconDiff(-26000, ex(0, 0))).toBeNull()
   })
