@@ -24,7 +24,8 @@ async function getAdminTier(request: NextRequest): Promise<'super-admin' | 'admi
 const HFU_INVOICE_DEFAULTS = {
   profile: {
     name: 'エイチエフユナイテッド株式会社', nameEn: '', representative: '代表取締役 日比 靖仁',
-    postal: '204-0003', address: '東京都清瀬市中里2-1620-1', tel: '042-493-9978', fax: '', email: '',
+    // 2026-10-21 紙の請求書（9月分）の記載に合わせた（旧: 日比建設と同じ清瀬の住所・電話が入っていた）
+    postal: '359-0037', address: '埼玉県所沢市くすのき台1-10-7 肥沼ビル3F', tel: '04-2000-2756', fax: '04-2909-9286', email: '',
     invoiceRegNo: 'T5012701011352',
     bank: { bankName: '青梅信用金庫', branch: '秋津', accountType: '普通', accountNo: '0086328', holder: 'エイチエフユナイテッド株式会社 代表取締役 日比 靖仁' },
     invoicePrefix: 'HFU',
