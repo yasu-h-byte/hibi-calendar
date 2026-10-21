@@ -6,12 +6,14 @@ import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {
   try {
-    const { siteId, ym: ymRaw, submittedBy } = await request.json()
+    const { siteId, ym: ymRaw } = await request.json()
     const ym = ym7(ymRaw)
 
     // 提出は「その現場の職長」または管理者・事業責任者のみ（他現場の職長やスタッフは不可）
     const role = await getApiRole(request, ym)
     if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // 誰がやったかは通行証（getApiRole）から決める。旧: 画面が送る body の値をそのまま記録していた（2026-10-21 総点検）
+    const submittedBy = role.workerId ?? 0
     const canSubmit = isManagerRole(role.role) || (role.role === 'foreman' && role.foremanSites.includes(siteId))
     if (!canSubmit) {
       return NextResponse.json({ error: '提出権限がありません（担当現場の職長または管理者のみ）' }, { status: 403 })

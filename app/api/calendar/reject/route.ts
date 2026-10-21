@@ -14,7 +14,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym: ymRaw, rejectedBy, reason } = await request.json()
+    const { siteId, ym: ymRaw, reason } = await request.json()
+    // 誰がやったかは通行証（getApiRole）から決める。旧: 画面が送る body の値をそのまま記録していた（2026-10-21 総点検）
+    const rejectedBy = role.workerId ?? 0
     const ym = ym7(ymRaw)
     const docId = `${siteId}_${ym}`
 

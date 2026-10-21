@@ -17,12 +17,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { ym, sites, approvedBy, acknowledgeWarnings } = await request.json() as {
+    const { ym, sites, acknowledgeWarnings } = await request.json() as {
       ym: string
       sites: { siteId: string; days: Record<string, DayType> }[]
-      approvedBy: number
       acknowledgeWarnings?: boolean
     }
+    // 誰がやったかは通行証（getApiRole）から決める。旧: 画面が送る body の値をそのまま記録していた（2026-10-21 総点検）
+    const approvedBy = role.workerId ?? 0
 
     if (!ym || !sites || !Array.isArray(sites) || sites.length === 0) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
