@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   const role = await getApiRole(request)
   if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isManagerRole(role.role)) {
-    return NextResponse.json({ error: '承認権限がありません（最終承認は管理者・事業責任者のみ）' }, { status: 403 })
+    return NextResponse.json({ error: '承認権限がありません（最終承認は代表・事業責任者（政仁さん）だけ）' }, { status: 403 })
   }
 
   try {

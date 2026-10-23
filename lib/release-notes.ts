@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261024_message_clarity',
+    title: '確認や断りの文をわかりやすくしました（誰の・どの日の話か、誰に頼めばよいか）',
+    content:
+      '有給を承認済みの日に上書きするときの確認に、その人のその日の出面（空欄・出勤・欠など）が出るようになりました。'
+      + '「職長済」「職長承認済み」には、実際に承認した人の名前が出ます。押したボタンだけが「処理しています」になります。'
+      + '締めた月・最終承認済みの日などで断られたときは、「事務か政仁さんに」「職長に」など、頼む相手が出ます。',
+    category: 'fix',
+    publishedAt: '2026-10-24T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20261023_bonus_profit_share_only',
     title: '賞与の表に、特定技能の2名が「利益分配のみ」で入りました',
     content:

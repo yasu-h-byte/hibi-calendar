@@ -40,6 +40,8 @@ interface LeaveRequestItem {
   requestedAt: string
   foremanApprovedAt?: string
   siteForemanName?: string
+  /** 実際に職長承認した人（2026-10-24。旧: 「職長承認済み」に現場の職長の名前を出していた） */
+  foremanApproverName?: string
 }
 
 interface HomeLongLeaveItem {
@@ -53,6 +55,8 @@ interface HomeLongLeaveItem {
   requestedAt: string
   foremanApprovedAt?: string
   siteForemanName?: string
+  /** 実際に職長承認した人（2026-10-24。旧: 「職長承認済み」に現場の職長の名前を出していた） */
+  foremanApproverName?: string
 }
 
 interface Props {
@@ -168,7 +172,9 @@ export default function AttendanceActionBar({
       for (const r of results) {
         if (!r.ok) {
           const err = await r.json().catch(() => null)
-          failed.push(err?.error || 'サーバが受け付けませんでした')
+          // 残数超え・上書きの確認がいる承認は、この画面では確認の窓を出さない。押し直しても通らないので、どこで承認するかを書く（2026-10-24）
+          const needsConfirm = err?.code === 'LEAVE_OVERDRAFT' || err?.code === 'LEAVE_OVERWRITES_WORK'
+          failed.push((err?.error || 'サーバが受け付けませんでした') + (needsConfirm ? '（確認がいるため、休暇管理の「申請」タブから承認してください）' : ''))
         }
       }
       if (failed.length > 0) {
@@ -406,6 +412,17 @@ interface LeaveCardProps {
   onReject: (ids: string[], reason: string) => void
 }
 
+/**
+ * 押したボタンだけ「処理しています」にする（2026-10-24）。processing は `${apiPath}:${action}:${先頭の申請ID}`。
+ * 旧: 処理中は全部のカードのボタンが薄くなるだけで、どれを押したか分からなかった（ほかのボタンは今までどおり押せない）
+ */
+function busyOf(processing: string | null, firstId: string): { approve: boolean; reject: boolean } {
+  if (!processing) return { approve: false, reject: false }
+  const [, action, id] = processing.split(':')
+  if (id !== firstId) return { approve: false, reject: false }
+  return { approve: action !== 'reject', reject: action === 'reject' }
+}
+
 function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject }: LeaveCardProps) {
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
@@ -414,6 +431,8 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
   const isMulti = group.items.length > 1
   const dates = group.items.map(r => r.date).sort().map(fmtDate).join('・')
   const fName = first.siteForemanName
+  const approverName = first.foremanApproverName || fName
+  const busy = busyOf(processing, ids[0])
 
   // 2026-10-01: 色の地をやめて白いカードに（段階は見出しで分かる）
   const bgClass = 'bg-white border-hibi-line dark:bg-gray-800 dark:border-gray-700'
@@ -425,8 +444,8 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
         {isMulti && (
           <Chip tone="gray">{group.items.length}件まとめて</Chip>
         )}
-        {group.status === 'foreman_approved' && fName && (
-          <Chip tone="blue">{fName} 職長承認済み</Chip>
+        {group.status === 'foreman_approved' && approverName && (
+          <Chip tone="blue">{approverName} 職長承認済み</Chip>
         )}
         {first.reason && (
           <span className="text-xs text-hibi-sub dark:text-gray-400 break-words flex-1 min-w-0">{first.reason}</span>
@@ -445,7 +464,7 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
             } text-white`}
             style={{ minHeight: 36 }}
           >
-            {actionMode === 'foreman'
+            {busy.approve ? '処理しています' : actionMode === 'foreman'
               ? (fName ? `${fName} 一括職長承認` : (isMulti ? '一括職長承認' : '職長承認'))
               : (isMulti ? '一括最終承認' : '最終承認')}
           </button>
@@ -460,7 +479,7 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
           className="px-3 py-2 border border-red-200 bg-white hover:bg-red-50 text-red-700 dark:bg-gray-800 dark:border-red-800 dark:text-red-300 rounded-lg text-xs font-bold disabled:opacity-50"
           style={{ minHeight: 36 }}
         >
-          {isMulti ? '全て却下' : '却下'}
+          {busy.reject ? '処理しています' : isMulti ? '全て却下' : '却下'}
         </button>}
       </div>
 
@@ -513,6 +532,8 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const fName = req.siteForemanName
+  const approverName = req.foremanApproverName || fName
+  const busy = busyOf(processing, req.id)
   // 2026-10-01: 色の地をやめて白いカードに（段階は見出しで分かる）
   const bgClass = 'bg-white border-hibi-line dark:bg-gray-800 dark:border-gray-700'
 
@@ -520,8 +541,8 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
     <div className={`rounded-xl border p-3 ${bgClass}`}>
       <div className="flex items-start gap-2 flex-wrap mb-1">
         <span className="font-bold text-[0.9375rem] text-gray-900 dark:text-white">{req.workerName}</span>
-        {req.status === 'foreman_approved' && fName && (
-          <Chip tone="blue">{fName} 職長承認済み</Chip>
+        {req.status === 'foreman_approved' && approverName && (
+          <Chip tone="blue">{approverName} 職長承認済み</Chip>
         )}
       </div>
       <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-gray-100 mb-1 break-words">
@@ -541,7 +562,7 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
             } text-white`}
             style={{ minHeight: 36 }}
           >
-            {actionMode === 'foreman'
+            {busy.approve ? '処理しています' : actionMode === 'foreman'
               ? (fName ? `${fName} 職長承認` : '職長承認')
               : '最終承認'}
           </button>
@@ -555,7 +576,7 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
           className="px-3 py-2 border border-red-200 bg-white hover:bg-red-50 text-red-700 dark:bg-gray-800 dark:border-red-800 dark:text-red-300 rounded-lg text-xs font-bold disabled:opacity-50"
           style={{ minHeight: 36 }}
         >
-          却下
+          {busy.reject ? '処理しています' : '却下'}
         </button>}
       </div>
 

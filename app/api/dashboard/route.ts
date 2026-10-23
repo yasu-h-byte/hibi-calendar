@@ -561,9 +561,18 @@ export async function GET(request: NextRequest) {
     const calPending = 0
     const calTotal = 0
 
+    // 実際に職長承認した人の名前（2026-10-24）。「◯◯ 職長承認済み」に現場の職長の名前を出していたので、
+    //   政仁さんが代わりに承認しても職長の名前が出ていた。承認の記録（foremanApprovedBy）から引く
+    const approverNameOf = (by: unknown): string | undefined => {
+      if (typeof by === 'number') return main.workers.find(w => w.id === by)?.name || undefined
+      if (by === 'super-admin') return '代表'
+      if (by === 'admin') return '管理者'
+      return undefined
+    }
+
     // 5. 有給申請一覧（pending + foreman_approved）をダッシュボードに返す
     //    各申請に「該当現場の職長名」を埋めて返す（UI のボタン表示用）
-    const leaveRequestItems: { id: string; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; siteForemanName?: string }[] = []
+    const leaveRequestItems: { id: string; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; siteForemanName?: string; foremanApproverName?: string }[] = []
     try {
       if (!leaveReqDocs) throw new Error('leaveRequests read failed')
       leaveReqDocs.forEach(d => {
@@ -587,6 +596,7 @@ export async function GET(request: NextRequest) {
             requestedAt: data.requestedAt || '',
             foremanApprovedAt: data.foremanApprovedAt,
             siteForemanName,
+            foremanApproverName: approverNameOf(data.foremanApprovedBy),
           })
         }
       })
@@ -646,7 +656,7 @@ export async function GET(request: NextRequest) {
     // 7. 帰国申請一覧（pending + foreman_approved）
     //    workerName は人員マスタから都度ルックアップ（改名追従のため）
     //    siteForemanName は対象スタッフの現在配置現場の職長名を引く（ボタン表示用）
-    const homeLongLeaveItems: { id: string; workerName: string; startDate: string; endDate: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; siteForemanName?: string }[] = []
+    const homeLongLeaveItems: { id: string; workerName: string; startDate: string; endDate: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; siteForemanName?: string; foremanApproverName?: string }[] = []
     const resolveWorkerForemanName = (workerId: number): string => {
       // その月の配置現場（決まりは getAssign・lib/roster.ts）の最初の現場の、その月の職長名
       // 2026-10-02 総合点検: 旧は `massign ?? assign` の自前判定と `mforeman[].wid` だけ（`.foreman` 形式を見ない）で、
@@ -674,6 +684,7 @@ export async function GET(request: NextRequest) {
             requestedAt: data.requestedAt || '',
             foremanApprovedAt: data.foremanApprovedAt,
             siteForemanName: resolveWorkerForemanName(data.workerId),
+            foremanApproverName: approverNameOf(data.foremanApprovedBy),
           })
         }
       })

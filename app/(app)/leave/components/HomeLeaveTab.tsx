@@ -216,8 +216,10 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
         return
       }
       if (res.status === 409) {
+        setHlSaving(false)   // 確認の窓を出している間は「保存しています」にしない（2026-10-24）
         const fixed = await askFixEndDate(res)
         if (!fixed) return
+        setHlSaving(true)
         const retry = await fetchWithAuth('/api/home-leave', { password,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

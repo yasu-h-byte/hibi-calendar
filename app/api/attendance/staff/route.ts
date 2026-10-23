@@ -541,7 +541,8 @@ export async function POST(request: NextRequest) {
       const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
       const lockErr = await checkMonthLockedForWorkers(ym, [worker.id])
       if (lockErr) {
-        return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể thay đổi` }, { status: 409 })
+        // スタッフ本人は締めを外せないので、頼む相手は職長にする（2026-10-24。旧: 「月次集計画面でロックを解除」と出ていた）
+        return NextResponse.json({ error: `${Number(ym.slice(4, 6))}月は締めが済んでいるため変えられません。直すときは職長に言ってください / Tháng ${Number(ym.slice(4, 6))} đã chốt sổ, không thể thay đổi. Hãy báo cho tổ trưởng` }, { status: 409 })
       }
     }
 
@@ -591,7 +592,7 @@ export async function POST(request: NextRequest) {
         const existing = attDoc[attKey(targetSiteId, worker.id, ym, day)] as { p?: number | boolean } | undefined
         if (existing?.p) {
           return NextResponse.json({
-            error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください / Ngày này đã đăng ký nghỉ phép. Vui lòng liên hệ quản lý nếu cần thay đổi',
+            error: 'この日は有給が決まっています。変えたいときは職長に言ってください / Ngày này đã được duyệt nghỉ phép. Nếu muốn thay đổi, hãy báo cho tổ trưởng',
           }, { status: 409 })
         }
       }

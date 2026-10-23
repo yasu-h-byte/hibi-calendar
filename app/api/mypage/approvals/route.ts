@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
     }
 
     // final_days: 最終承認は管理者・事業責任者だけ。職長承認済みの日だけ（PC の approve_final と同じ条件）
-    if (!manager) return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+    if (!manager) return NextResponse.json({ error: '最終承認は代表・事業責任者（政仁さん）だけができます' }, { status: 403 })
     { const r = await breakCheck(); if (r) return r }
     const approvedDays: number[] = []
     const skipped: { day: number; reason: string }[] = []

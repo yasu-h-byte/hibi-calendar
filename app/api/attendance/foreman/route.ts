@@ -296,7 +296,7 @@ export async function POST(request: NextRequest) {
       const cur = await getApprovalForDay(site.id, ym, day)
       if (cur?.final) {
         return NextResponse.json({
-          error: 'この日は最終承認済みのため取り消せません。管理者に連絡してください。',
+          error: 'この日は政仁さんの最終承認が済んでいるため取り消せません。直すときは政仁さんか代表に頼んでください',
         }, { status: 409 })
       }
       const { removeForemanApprovalForDay } = await import('@/lib/attendance.server')
@@ -459,7 +459,7 @@ export async function POST(request: NextRequest) {
       //   まま残数が黙って戻る（staff 経路には 2026-08-27 から同じ保護がある）。
       if (choice !== 'leave' && foremanPrevEntry?.p) {
         return NextResponse.json({
-          error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください',
+          error: 'この日は有給が決まっています。出勤などに変えるときは、事務か政仁さんに有給の取り消しを頼んでください',
         }, { status: 409 })
       }
       // ── 稼働日ガード（2026-09-02 追加）: 申請・スタッフ経路と同じ基準。
@@ -498,10 +498,10 @@ export async function POST(request: NextRequest) {
           if (bal.remaining <= 0) {
             return NextResponse.json({
               error: bal.noGrant
-                ? 'このスタッフは有給が付与されていません。管理者に連絡してください。'
+                ? 'このスタッフは有給が付与されていません。事務か政仁さんに頼んでください'
                 : bal.periodOver
-                  ? '有給の期が終わり、次の付与の手続きがまだです。事務所に連絡してください。'
-                  : `有給の残日数が 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）。管理者に連絡してください。`,
+                  ? '有給の期が終わり、次の付与がまだです。事務か政仁さんに付与を頼んでください'
+                  : `有給の残りが 0 日です（枠 ${bal.total}日・使った ${bal.used}日）。残りを超える有給は、事務か政仁さんに頼んでください`,
             }, { status: 409 })
           }
         } catch (chkErr) {
@@ -549,7 +549,7 @@ export async function POST(request: NextRequest) {
       const famFix = await loadSiteFamily(site.id)
       if (famFix.family.includes(fromSiteId)) {
         // 工種（鉄骨・仮設）の切り替えは現場違いではない。PC・職長スマホの出面画面の工種タグで行う
-        return NextResponse.json({ error: '自現場（工種を含む）のエントリは移動できません。工種の切り替えは出面画面の工種タグから行ってください' }, { status: 400 })
+        return NextResponse.json({ error: '同じ現場（工種を含む）の中では移動できません。工種の切り替えは、この画面の工種のタグで行ってください' }, { status: 400 })
       }
 
       // 2026-06-12 (監査 Sprint2-B): ロック済み月の現場間移動を拒否
@@ -588,7 +588,10 @@ export async function POST(request: NextRequest) {
         const apFrom = await dayApprovalOf(mainF.sites as unknown as HierarchySite[], fromSiteId, ym, dayNum)
         if (apFrom.foreman || apFrom.final) {
           const fromName = mainF.sites.find(s => s.id === fromSiteId)?.name || fromSiteId
-          return NextResponse.json({ error: `移動元の「${fromName}」のこの日は承認済みのため移動できません。先にそちらの承認を外してもらってください` }, { status: 409 })
+          // 誰の承認か・誰に外してもらうかを書く（2026-10-24。旧: 「先にそちらの承認を外してもらってください」だけで相手が分からなかった）
+          return NextResponse.json({ error: apFrom.final
+            ? `移動元の「${fromName}」のこの日は、政仁さんの最終承認が済んでいるため動かせません。先に政仁さんに承認を外してもらってください`
+            : `移動元の「${fromName}」のこの日は、その現場の職長承認が済んでいるため動かせません。先に「${fromName}」の職長に承認を外してもらってください` }, { status: 409 })
         }
         // 自現場の日が最終承認済みなら、職長からは変えられない（edit と同じ）
         const apTo = await dayApprovalOf(mainF.sites as unknown as HierarchySite[], site.id, ym, dayNum)

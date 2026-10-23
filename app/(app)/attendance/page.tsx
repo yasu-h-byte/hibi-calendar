@@ -333,6 +333,13 @@ export default function AttendanceGridPage() {
           const errData = await res.clone().json().catch(() => null)
           if (errData?.code === 'LEAVE_OVERDRAFT') {
             const b = errData.balance
+            // 期が終わって次の付与がまだの人（2026-10-24）。旧: 理由を出さず「有給残は 0 日です・残数を超えて登録しますか？」と聞いていたので、
+            //   付与すればよいのに残数超えで入れてしまえた。先に付与してもらう
+            if (b?.periodOver) {
+              notify.error(`${errData.workerName} さんは有給の期が終わり、次の付与がまだです`,
+                userRole === 'foreman' ? '事務か政仁さんに有給の付与を頼んでください。' : '休暇管理の「付与待ち」で付与してから、もう一度入れてください。')
+              return { ok: false, save: s, error: '有給の付与待ちのため登録できません', status: 409 }
+            }
             // 2026-09-14: 職長には残数超過の上書きを認めない（職長は共通パスワードのため
             //   サーバ側では管理者と区別できず、ここで止めるしかない。職長トークン画面と同じ方針）
             if (userRole === 'foreman') {
@@ -343,7 +350,7 @@ export default function AttendanceGridPage() {
                 (b?.noGrant ? '' : `付与枠 ${b?.total}日 ／ 消化済み ${b?.used}日。`)
                   + '残数を超える有給は登録できません。事務か政仁さんに頼んでください。',
               )
-              return { ok: false, save: s, error: '有給残数の超過のため登録できません（管理者へ）', status: 409 }
+              return { ok: false, save: s, error: '有給の残りが無いため登録できません（事務か政仁さんへ）', status: 409 }
             }
             const okOverdraft = b?.noGrant
               ? await confirmDialog({

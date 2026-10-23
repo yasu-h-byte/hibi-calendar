@@ -15,7 +15,7 @@ import { isMonthLockedInLocks, isMonthLockedForWorkers, orgKeyOf } from './locks
 
 /** 締めのメッセージ（締め済みのときに API が返す文言） */
 export function lockedMessage(ym: string): string {
-  return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月は月次締め（ロック）済みのため変更できません。変更が必要な場合は月次集計画面でロックを解除してください`
+  return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月は締めが済んでいるため変えられません。直すときは、事務か政仁さんに締めを外してもらってください（月次集計・締めの画面）`
 }
 
 /**
