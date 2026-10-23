@@ -16,11 +16,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '@/lib/fsdb'
-import { isAlreadyRetired, effectiveRateForYm } from '@/lib/workers'
+import { effectiveRateForYm } from '@/lib/workers'
 import { getWorkers } from '@/lib/workers.server'
 import { fiveDayReserve } from '@/lib/leave-settle'
-import { allocateBonus, nextRevisionDate, lastRevisionDate, FIXED_BONUS_STEP_DOWN, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
+import { allocateBonus, nextRevisionDate, lastRevisionDate, FIXED_BONUS_STEP_DOWN, type BonusMember, type Hyogo } from '@/lib/jp-wage'
 import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
+import { bonusTargets } from '@/lib/bonus-members.server'
 import { todayJstIso } from '@/lib/date-utils'
 import { getEndedPeriodBalance } from '@/lib/leave-balance'
 import { logActivity } from '@/lib/activity'
@@ -61,6 +62,8 @@ interface BonusLine {
   points: number
   /** 処遇固定のため点数を何段下げて数えたか（0 / 省略 = 下げていない） */
   stepDown?: number
+  /** 利益分配だけの人（特定技能のフウ・トゥアン。②〜④は 0 円・lib/bonus-members.server.ts） */
+  profitShareOnly?: boolean
   /** ① 利益分配賞与（点数配分の額。代表が個別に上書きすることがある） */
   amount: number
   /** ② 精勤賞与（有給の買取） */
@@ -125,11 +128,8 @@ export async function GET(request: NextRequest) {
   // 賞与の手当を画面で自動計算するための材料（2026-08-31 追加）。
   //   有給残は買取（精勤賞与）の日数、children/nonSmoker は手当の判定に使う。
   const workers = await getWorkers()
-  // 退職「予定」（退職日が未来）の人は対象に残す（2026-10-02 総合点検。旧: !w.retired で予定の人も表から消えていた）
-  const targets = workers
-    .filter(w => !isAlreadyRetired(w.retired, today))
-    .filter(w => !w.visaType || w.visaType === 'none')
-    .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
+  // 対象は POST と同じ関数（日本人の号俸制の人＋利益分配だけの人。2026-10-23）
+  const targets = bonusTargets(workers, today)
   // ── 精勤賞与の買い取る期（2026-10-02 総合点検で見直し）──
   //   精勤賞与は「終わった期の最後の日に残った有給」の買取（docs/paid-leave.md: 期末買取）。
   //   買い取る期 = 支給日の時点で終わっている直近の期（getEndedPeriodBalance）。休暇管理の「前の期の残り
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
   //   支給日は画面の入力（?paidOn=）に合わせる（既定は今日）
   const paidOnParam = request.nextUrl.searchParams.get('paidOn') || ''
   const bonusAsOf = /^\d{4}-\d{2}-\d{2}$/.test(paidOnParam) ? paidOnParam : today
-  const memberInfo = await Promise.all(targets.map(async w => {
+  const memberInfo = await Promise.all(targets.map(async ({ w, grade, profitShareOnly }) => {
     let leaveRemaining = 0
     let leaveGrantDate = ''
     let leavePeriodEnd = ''
@@ -150,7 +150,8 @@ export async function GET(request: NextRequest) {
     // 年5日に足りない分（買取から除く日数）。2026-10-01 付与期から（有給精算と同じ式・2026-10-08）
     let leaveFiveDayReserve = 0
     try {
-      const b = await getEndedPeriodBalance(w.id, bonusAsOf)
+      // 利益分配だけの人は有給を買い取らない（外国籍の人は期末買取をしない）ので読まない
+      const b = profitShareOnly ? null : await getEndedPeriodBalance(w.id, bonusAsOf)
       if (b) {
         leaveGrantDate = b.grantDate
         leavePeriodEnd = b.periodLastDay
@@ -162,12 +163,13 @@ export async function GET(request: NextRequest) {
     return {
       workerId: w.id,
       name: w.name,
-      grade: w.jpGrade || '',
+      grade,
+      profitShareOnly,
       // 精勤賞与の日額（買い取る期の最後の日の日額・2026-10-07）
-      rate: buyoutDailyRate(w, leavePeriodEnd),
+      rate: profitShareOnly ? 0 : buyoutDailyRate(w, leavePeriodEnd),
       stepDown: bonusStepDownOf(w.id),
-      nonSmoker: w.nonSmoker === true,
-      children: w.children || [],
+      nonSmoker: !profitShareOnly && w.nonSmoker === true,
+      children: profitShareOnly ? [] : (w.children || []),
       dispatchTo: w.dispatchTo || '',
       leaveRemaining,
       leaveGrantDate,
@@ -195,17 +197,15 @@ export async function POST(request: NextRequest) {
 
   const workers = await getWorkers()
   // GET（表）と同じ対象（退職「予定」の人は残す・2026-10-02 総合点検）
-  const targets = workers
-    .filter(w => !isAlreadyRetired(w.retired, todayJstIso()))
-    .filter(w => !w.visaType || w.visaType === 'none')
-    .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
-    .filter(w => w.jpGrade)
+  const picked = bonusTargets(workers, todayJstIso())
+  const targets = picked.map(t => t.w)
+  const profitOnlyIds = new Set(picked.filter(t => t.profitShareOnly).map(t => t.w.id))
 
   if (targets.length === 0) return NextResponse.json({ error: '対象者がいません' }, { status: 409 })
 
-  const members: BonusMember[] = targets.map(w => ({
+  const members: BonusMember[] = picked.map(({ w, grade }) => ({
     workerId: w.id,
-    grade: w.jpGrade as JpGrade,
+    grade,
     hyogo: hyogoMap[String(w.id)] || 'A',
     stepDown: bonusStepDownOf(w.id),
   }))
@@ -218,20 +218,23 @@ export async function POST(request: NextRequest) {
     const sent = linesIn?.find(l => Number(l.workerId) === a.workerId)
     const num = (v: unknown) => Math.max(0, Math.round(Number(v) || 0))
     const profit = sent && sent.amount !== undefined ? num(sent.amount) : a.amount
-    const attendanceAmount = num(sent?.attendanceAmount)
-    const nonSmokerAmount = num(sent?.nonSmokerAmount)
-    const childAmount = num(sent?.childAmount)
+    // 利益分配だけの人は②〜④を付けない（画面から金額が来ても載せない・2026-10-23）
+    const only = profitOnlyIds.has(a.workerId)
+    const attendanceAmount = only ? 0 : num(sent?.attendanceAmount)
+    const nonSmokerAmount = only ? 0 : num(sent?.nonSmokerAmount)
+    const childAmount = only ? 0 : num(sent?.childAmount)
     return {
       workerId: a.workerId,
       name: w?.name || '',
       grade: a.grade, hyogo: a.hyogo, points: a.points,
       ...(a.stepDown ? { stepDown: a.stepDown } : {}),
+      ...(only ? { profitShareOnly: true } : {}),
       amount: profit,
-      attendanceDays: num(sent?.attendanceDays),
-      attendanceRate: num(sent?.attendanceRate),
+      attendanceDays: only ? 0 : num(sent?.attendanceDays),
+      attendanceRate: only ? 0 : num(sent?.attendanceRate),
       attendanceAmount,
       nonSmokerAmount,
-      childCount: num(sent?.childCount),
+      childCount: only ? 0 : num(sent?.childCount),
       childAmount,
       totalAmount: profit + attendanceAmount + nonSmokerAmount + childAmount,
       payMethod: sent?.payMethod === 'cash' ? 'cash' : 'transfer',
