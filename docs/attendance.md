@@ -305,6 +305,8 @@ API は `/api/mypage/approvals`、判定は `lib/foreman-todo.ts`（トークン
 - **休憩短縮（旧契約の毎日20分・2026-09-30）**: 出面には記録せず給与計算で「出勤日数×分」を足している分を、本人に見せる。
   確認カードに「休憩短縮（毎日20分）○時間○分・出勤○日×20分・残業と同じ単価」（`summary.breakShorten`・日数は給与計算の actualWorkDays と同じ数え方）。
   毎日の画面にも、実働時間の枠・確認済みの今日・最近5日に「＋20分 休憩短縮」（staff GET の `breakShorten`）。対象は人員マスタの breakShortenMin がある人（フン・フォン・タン・ホアン）
+  帳票（2026-10-23）: 実労働時間明細に「休憩短縮(分)」列と合計、計算根拠に「出勤日数 × 分 × 単価（breakShortenUnitRate・breakShortenUnitNote）」。
+  付く日の判定は `lib/attendance-confirm.ts` の `isBreakShortenEntry`（給与計算の actualWorkDays と同じ条件）に一本化し、`__tests__/breakShortenDaily.test.ts` が明細と給与計算の日数の一致を確かめる。
 
 ### 承認がそろってから進める処理（2026-09-30 代表決定）
 

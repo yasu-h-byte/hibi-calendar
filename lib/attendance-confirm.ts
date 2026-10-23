@@ -161,7 +161,7 @@ export function summarizeWorkerMonth(args: {
     if (beforeIso && isoOf(day) >= beforeIso) continue
     const kind = kindOf(entry)
     if (kind === 'work') otHours += Number(entry.o || 0)
-    if ((entry.w || 0) > 0 && entry.w !== 0.6) bsDaySet.add(day)
+    if (isBreakShortenEntry(entry)) bsDaySet.add(day)
     const cur = perDay.get(day)
     if (!cur || PRIORITY.indexOf(kind) < PRIORITY.indexOf(cur.kind)) perDay.set(day, { kind, entry })
   }
@@ -269,4 +269,14 @@ export function breakShortenMinFor(w: { breakShortenMin?: number; breakShortenFr
   const min = w.breakShortenMin ?? 0
   const from = w.breakShortenFrom
   return min > 0 && from && ym.replace('-', '') >= from ? min : 0
+}
+
+/**
+ * 休憩短縮（分/日）が付く出面の記録か。給与計算（lib/compute-monthly.ts の actualWorkDays）と同じ条件:
+ * 有給・試験・帰国中・欠勤・現場休み・現場都合休（0.6）を除いた w>0 の記録。同じ日に複数現場ある日も1日に数える（呼ぶ側で日ごとにまとめる）。
+ * 本人確認の画面・実労働時間明細（lib/export-labor.ts）が使う（2026-10-23）。
+ */
+export function isBreakShortenEntry(entry: AttendanceEntry): boolean {
+  if (entry.p || entry.exam || entry.hk || entry.r || entry.h) return false
+  return (entry.w || 0) > 0 && entry.w !== 0.6
 }
