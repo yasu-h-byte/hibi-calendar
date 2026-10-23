@@ -368,6 +368,17 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 </td>
               </tr>
             )}
+            {(w.rateChangeAllowance || 0) !== 0 && (
+              <tr>
+                <td>時給改定差額<br/><span className="text-3xs text-gray-500">(月の途中の時給改定。この月は旧時給で計算し、改定後の分の差を足す)</span></td>
+                <td className="font-mono">
+                  <div className="text-3xs text-gray-500">
+                    {`(新 ${fmtYen(w.rateChangeCur ?? 0)} − 旧 ${fmtYen(w.rateChangePrev ?? 0)}) × (${w.rateChangeFrom ? `${Number(w.rateChangeFrom.slice(5, 7))}/${Number(w.rateChangeFrom.slice(8, 10))}〜 ` : ''}働いた時間 ${Math.round((w.rateChangeHours || 0) * 100) / 100}h${(w.rateChangeCompDays || 0) > 0 ? ` ＋ 0.6補 ${w.rateChangeCompDays}日 × 7h × 0.6` : ''})・円未満切上`}
+                  </div>
+                  <div className="font-bold">{fmtYen(w.rateChangeAllowance || 0)}</div>
+                </td>
+              </tr>
+            )}
             {(w.leaveSettleAllowance || 0) > 0 && (
               <tr>
                 <td>有給精算手当<br/><span className="text-3xs text-gray-500">(有給の残りを給料に回した分)</span></td>

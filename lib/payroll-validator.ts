@@ -88,6 +88,13 @@ export interface PayrollSnapshot {
   leaveSettleDays?: number
   /** 休憩短縮手当（2026-09 施行）。同じく salaryNetPay に加算済み */
   breakShortenAllowance?: number
+  /** 時給改定差額（月の途中の時給改定・2026-10 分〜。lib/compute-monthly.ts）と式の材料 */
+  rateChangeAllowance?: number
+  rateChangeHours?: number
+  rateChangeCompDays?: number
+  rateChangeFrom?: string
+  rateChangePrev?: number
+  rateChangeCur?: number
   /** 給与チェックの注意点（lib/compute.ts computeMonthly が付ける。支給額は変えない・2026-10-02） */
   payNotes?: { code: string; message: string; amount?: number }[]
 }
@@ -159,6 +166,7 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
     + (w.driveAllowance || 0)
     + (w.leaveSettleAllowance || 0)
     + (w.breakShortenAllowance || 0)
+    + (w.rateChangeAllowance || 0)
     - (w.absentDeduction || 0)
   if (Math.abs(components - salaryNet) > 2) {
     push('critical', 'salaryNetPay', '構成要素の合計が支給額と一致しません',
@@ -318,6 +326,13 @@ export interface PayrollAuditWorker {
   // 休憩短縮手当（2026-09 施行。支給額に加算済み）
   breakShortenHours?: number
   breakShortenAllowance?: number
+  /** 時給改定差額（月の途中の時給改定・2026-10 分〜。lib/compute-monthly.ts）と式の材料 */
+  rateChangeAllowance?: number
+  rateChangeHours?: number
+  rateChangeCompDays?: number
+  rateChangeFrom?: string
+  rateChangePrev?: number
+  rateChangeCur?: number
   /** 休憩短縮の式（出勤日数 × 分 × 単価）。lib/compute-monthly.ts が付ける（2026-10-23） */
   breakShortenDays?: number
   breakShortenMinPerDay?: number
@@ -467,6 +482,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.legalHolidayAllowance || 0)
       + (w.otAllowance || 0)
       + (w.breakShortenAllowance || 0)
+      + (w.rateChangeAllowance || 0)
       + (w.siteAllowance || 0)
       + (w.driveAllowance || 0)
       + (w.leaveSettleAllowance || 0)
@@ -482,6 +498,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.nightAllowance || 0)
       + (w.compAllowance || 0)
       + (w.breakShortenAllowance || 0)
+      + (w.rateChangeAllowance || 0)
       + (w.siteAllowance || 0)
       + (w.driveAllowance || 0)
       + (w.leaveSettleAllowance || 0)

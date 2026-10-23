@@ -44,6 +44,7 @@ export interface OverviewWorker {
   nightAllowance?: number
   compAllowance?: number
   breakShortenAllowance?: number
+  rateChangeAllowance?: number
   siteAllowance?: number
   driveAllowance?: number
   leaveSettleDays?: number
@@ -270,6 +271,7 @@ function payChips(w: OverviewWorker, ym: string): { label: string; amount: numbe
   if (foreign && (w.nightAllowance || 0) > 0) out.push({ label: `深夜${(w.nightHours || 0) > 0 ? ` ${num(w.nightHours!)}h` : ''}`, amount: w.nightAllowance! })
   if (foreign && (w.compAllowance || 0) > 0) out.push({ label: '休業手当', amount: w.compAllowance! })
   if ((w.breakShortenAllowance || 0) > 0) out.push({ label: '休憩短縮', amount: w.breakShortenAllowance! })
+  if ((w.rateChangeAllowance || 0) > 0) out.push({ label: '時給改定差額', amount: w.rateChangeAllowance! })
   if ((w.siteAllowance || 0) > 0) out.push({ label: '日当', amount: w.siteAllowance! })
   if ((w.driveAllowance || 0) > 0) out.push({ label: `運転手当${(w.driveLegs || 0) > 0 ? ` ${w.driveLegs}便` : ''}`, amount: w.driveAllowance! })
   if (foreign && (w.absentDeduction || 0) > 0) out.push({ label: `欠勤控除${w.useOldRules && (w.absence || 0) > 0 ? ` ${num(w.absence!)}日` : ''}`, amount: w.absentDeduction!, neg: true })
