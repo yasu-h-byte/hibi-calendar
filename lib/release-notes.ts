@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261023_bonus_profit_share_only',
+    title: '賞与の表に、特定技能の2名が「利益分配のみ」で入りました',
+    content:
+      '賃金制度 → 賞与 の表に、特定技能の2名が「2G相当・利益分配のみ」で並びます。日本人と同じ原資から点数で分けます（評語の初期値は A・表で変えられます）。'
+      + '精勤賞与（有給の買取）・禁煙手当・子ども手当は付きません。',
+    category: 'new',
+    publishedAt: '2026-10-23T22:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['approver', 'owner'],
+  },
+  {
     id: 'rn_20261023_midmonth_rate',
     title: '月の途中で時給が変わった月の計算を、監理団体の方式に合わせました（10月分から）',
     content:

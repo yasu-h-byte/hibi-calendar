@@ -8,6 +8,7 @@
  * 2026-10-03: ブラウザ標準の confirm を共通部品（confirmDialog）に置き換え
  * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  * 2026-10-07: 処遇固定の人は点数を1段下で数える・精勤賞与の日額は前の期の最後の日の日額・確定の取り消し
+ * 2026-10-23: 特定技能のフウ・トゥアンを「利益分配だけ（2G相当）」で対象に加えた。対象者は API が決める（lib/bonus-members.server.ts）
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -23,14 +24,13 @@ import {
   NON_SMOKER_ALLOWANCE, FIXED_BONUS_STEP_DOWN,
   type JpGrade, type Hyogo, type BonusMember,
 } from '@/lib/jp-wage'
-import { isAlreadyRetired } from '@/lib/workers'
 
 interface BonusRecord {
   id: string; label: string; paidOn: string; pool: number
   totalPoints: number; unit: number; total: number; grandTotal?: number
   allocations: Array<{
     workerId: number; name: string; grade: string; hyogo: Hyogo; points: number; amount: number
-    stepDown?: number
+    stepDown?: number; profitShareOnly?: boolean
     attendanceDays?: number; attendanceRate?: number; attendanceAmount?: number
     nonSmokerAmount?: number; childCount?: number; childAmount?: number
     totalAmount?: number; payMethod?: 'transfer' | 'cash'; paidBy?: string
@@ -46,6 +46,8 @@ interface MemberInfo {
   rate: number
   /** 処遇固定のため賞与の点数を何段下げて数えるか（API が決める） */
   stepDown?: number
+  /** 利益分配だけの人（特定技能。②精勤賞与・③禁煙・④子ども手当は付けない。API が決める） */
+  profitShareOnly?: boolean
   nonSmoker: boolean
   children: string[]
   dispatchTo: string
@@ -87,27 +89,22 @@ export default function BonusTable() {
     try {
       // 買い取る有給の期は支給日で決まる（支給日の時点で終わっている直近の期）ので支給日を渡す（2026-10-02 総合点検）
       const q = paidOnIso && /^\d{4}-\d{2}-\d{2}$/.test(paidOnIso) ? `?paidOn=${paidOnIso}` : ''
-      const [wr, br] = await Promise.all([
-        fetchWithAuth('/api/workers', { password }),
-        fetchWithAuth(`/api/jp-wage/bonus${q}`, { password }),
-      ])
+      const br = await fetchWithAuth(`/api/jp-wage/bonus${q}`, { password })
       // 評語は年次改定で決めたものを初期値にする（賞与と昇給で別の評価を付けない）
       const bj = br.ok ? await br.json() : { records: [], hyogo: {}, members: [] }
       setRecords(bj.records || [])
       const infoById: Record<number, MemberInfo> = Object.fromEntries(((bj.members || []) as MemberInfo[]).map(m => [m.workerId, m]))
       setInfo(infoById)
-      if (wr.ok) {
-        const j = await wr.json()
-        // 退職「予定」（退職日が未来）の人は対象に残す。API（GET/POST）と同じ判定（2026-10-02 総合点検。旧: !w.retired）
-        setMembers((j.workers as Record<string, unknown>[])
-          .filter(w => !isAlreadyRetired(w.retired as string | undefined) && w.jpGrade && Number(w.id) !== 1)
-          .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
-          .map(w => ({
-            workerId: Number(w.id), name: String(w.name),
-            grade: String(w.jpGrade) as JpGrade,
-            hyogo: (bj.hyogo?.[String(w.id)] as Hyogo) || 'A',
+      // 対象者と等級は確定する API と同じ関数で決めたものを使う（2026-10-23。旧: 画面が人員マスタを自分で絞っていた）
+      if (br.ok) {
+        setMembers(((bj.members || []) as MemberInfo[])
+          .filter(m => m.grade)
+          .map(m => ({
+            workerId: m.workerId, name: m.name,
+            grade: m.grade as JpGrade,
+            hyogo: (bj.hyogo?.[String(m.workerId)] as Hyogo) || 'A',
             // 処遇固定の人は点数を下げて数える（確定する API と同じ値を API から受け取る）
-            stepDown: infoById[Number(w.id)]?.stepDown || 0,
+            stepDown: m.stepDown || 0,
           })))
       }
     } catch { /* 試算が出せなくても表は見られる */ }
@@ -145,16 +142,18 @@ export default function BonusTable() {
     // 買い取る期は「支給日の時点で終わっている直近の期」（API が支給日で出す・2026-10-02 総合点検）。
     //   終わった期が無い（期の途中）・期末買取が記録済みなら leaveRemaining=0 で、自動では買い取らない。
     //   旧: 支給日が 10/1 以降かどうか（9/30 期末の固定）で決めていた
-    const days = o.days !== undefined
+    const only = inf?.profitShareOnly === true
+    const days = only ? 0 : o.days !== undefined
       ? o.days
       : attendanceBonusDays(inf?.leaveRemaining || 0, { reserveDays: reserve })
     const attendanceAmount = attendanceBonusAmount(days, rate)
     const nonSmokerAmount = inf?.nonSmoker ? NON_SMOKER_ALLOWANCE : 0
-    const child = childAllowance(inf?.children || [], paidOn)
+    const child = childAllowance(only ? [] : (inf?.children || []), paidOn)
     const profit = o.profit !== undefined ? o.profit : a.amount
     return {
       workerId: a.workerId, name: m.name, grade: a.grade, hyogo: a.hyogo, points: a.points,
       stepDown: a.stepDown || 0,
+      profitShareOnly: only,
       amount: profit,
       attendanceDays: days, attendanceRate: rate, attendanceAmount,
       nonSmokerAmount,
@@ -365,7 +364,10 @@ export default function BonusTable() {
                         {l.name}
                         {l.paidBy && <span className="block text-3xs text-gray-400">{l.paidBy} から支給</span>}
                       </td>
-                      <td className="px-2.5 py-2 text-gray-500">{l.grade === 'doko' ? '土工' : l.grade}</td>
+                      <td className="px-2.5 py-2 text-gray-500">
+                        {l.grade === 'doko' ? '土工' : l.grade}{l.profitShareOnly ? '相当' : ''}
+                        {l.profitShareOnly && <span className="block text-3xs text-gray-400">利益分配のみ</span>}
+                      </td>
                       <td className="px-2.5 py-1.5">
                         <select
                           value={l.hyogo} disabled={busy}
@@ -388,6 +390,7 @@ export default function BonusTable() {
                         />
                       </td>
                       <td className={td}>
+                        {l.profitShareOnly ? <span className="text-gray-400">—</span> : <>
                         <input
                           type="text" inputMode="numeric" disabled={busy}
                           value={String(l.attendanceDays)}
@@ -404,6 +407,7 @@ export default function BonusTable() {
                         ) : (
                           <span className="block text-3xs text-gray-400">終わった期なし</span>
                         )}
+                        </>}
                       </td>
                       <td className={`${td} text-gray-500`}>{l.attendanceRate ? yen(l.attendanceRate) : '—'}</td>
                       <td className={td}>{yen(l.attendanceAmount)}</td>
