@@ -76,6 +76,8 @@ export async function GET() {
     // Vercel が動かしている Node の版（2026-10-23・eMudhra 認証局事件の対応確認用。
     // 偽の証明書を弾く修正は Node 22.23.4 / 24.22.1 / 26.12.1 以上。これより古ければ再デプロイで取り込む）
     node: process.version,
+    // 起動時に内蔵の信頼ルートから外した数（instrumentation.ts）。Node が修正版なら 0・古い版なら 2。未設定（null）なら起動処理が走っていない
+    caRootsRemoved: (globalThis as { __caRootsRemoved?: number }).__caRootsRemoved ?? null,
     time: new Date().toISOString(),
   })
 }
