@@ -364,7 +364,7 @@ export default function BonusTable() {
                         {l.name}
                         {l.paidBy && <span className="block text-3xs text-gray-400">{l.paidBy} から支給</span>}
                       </td>
-                      <td className="px-2.5 py-2 text-gray-500">
+                      <td className="px-2.5 py-2 text-gray-500 whitespace-nowrap">
                         {l.grade === 'doko' ? '土工' : l.grade}{l.profitShareOnly ? '相当' : ''}
                         {l.profitShareOnly && <span className="block text-3xs text-gray-400">利益分配のみ</span>}
                       </td>
