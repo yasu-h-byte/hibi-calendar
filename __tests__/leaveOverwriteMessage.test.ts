@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { overwriteConfirmMessage } from '@/lib/leave-overwrite'
+import { overwriteConfirmMessage, needsOverwriteConfirm } from '@/lib/leave-overwrite'
 import type { AttendanceEntry } from '@/types'
 
 /**
@@ -36,5 +36,25 @@ describe('有給で上書きする前の確認の文', () => {
   test('日付の変更では「変更先の」日と書く・職長承認だけの日', () => {
     const m = overwriteConfirmMessage('2026-10-21', 'A', null, { foreman: { by: 2 } }, '変更先の')
     expect(m).toContain('変更先のこの日は、現場の出面の職長承認が済んでいます')
+  })
+})
+
+describe('確認の窓を出すか（2026-10-24 案A: 承認済みの日でも本人が空欄なら出さない）', () => {
+  test('承認済みの日・本人は空欄 → 出さない', () => {
+    expect(needsOverwriteConfirm(null, null, final)).toBe(false)
+    expect(needsOverwriteConfirm(e({}), null, final)).toBe(false)
+  })
+  test('承認済みの日・本人に欠／0.6補／帰国 → 出す', () => {
+    expect(needsOverwriteConfirm(e({ w: 0, r: 1 }), null, final)).toBe(true)
+    expect(needsOverwriteConfirm(e({ w: 0.6 }), null, final)).toBe(true)
+    expect(needsOverwriteConfirm(e({ w: 0, hk: 1 }), null, final)).toBe(true)
+  })
+  test('出勤の入力がある → 承認の有無にかかわらず出す', () => {
+    const work = e({ w: 1, st: '07:30', et: '16:30' })
+    expect(needsOverwriteConfirm(work, work, null)).toBe(true)
+    expect(needsOverwriteConfirm(work, work, final)).toBe(true)
+  })
+  test('承認なし・空欄 → 出さない', () => {
+    expect(needsOverwriteConfirm(null, null, null)).toBe(false)
   })
 })

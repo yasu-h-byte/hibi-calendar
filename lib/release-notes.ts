@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261024_leave_blank_day',
+    title: '有給の承認: 締めた日でも、本人の欄が空欄なら確認なしで承認できます',
+    content:
+      '出面を最終承認したあとの日の有給を承認するとき、本人のその日の出面が空欄なら「上書きしますか？」の確認を出さずに承認するようにしました（消える記録がないため）。'
+      + '出勤・欠・0.6補などが入っているときは、これまでどおり中身を見せて確認します。',
+    category: 'fix',
+    publishedAt: '2026-10-24T15:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261024_message_clarity',
     title: '確認や断りの文をわかりやすくしました（誰の・どの日の話か、誰に頼めばよいか）',
     content:
