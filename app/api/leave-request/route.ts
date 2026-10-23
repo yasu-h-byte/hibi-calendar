@@ -5,7 +5,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers.server'
 import { ymKey, createsWork, attKey } from '@/lib/attendance'
-import { describeWork, overwriteConfirmMessage } from '@/lib/leave-overwrite'
+import { describeWork, overwriteConfirmMessage, needsOverwriteConfirm } from '@/lib/leave-overwrite'
 import { getStaffSites, isScheduledWorkDay, getApprovalForDay, clearHomeLeaveStubs } from '@/lib/attendance.server'
 import { writeAttendanceEntry, finalApprovedEditError } from '@/lib/attendance-save'
 import { getMainData } from '@/lib/compute.server'
@@ -474,7 +474,9 @@ export async function POST(request: NextRequest) {
           }, { status: 409 })
         }
         // 同じ現場に本人の出勤入力がある／その日の承認が済んでいる → 確認つきでだけ上書き（2026-10-02 総合点検）
-        if ((dayA.existingWork || dayA.dayApproval) && body.allowOverwrite !== true) {
+        //   2026-10-24（代表・案A）: 承認済みの日でも本人の欄が空欄なら確認しない（消える記録が無い）。記録は下の操作ログに残す
+        const confirmA = needsOverwriteConfirm(prevEntryA, dayA.existingWork, dayA.dayApproval)
+        if (confirmA && body.allowOverwrite !== true) {
           return NextResponse.json({
             error: overwriteConfirmMessage(data.date, data.workerName, prevEntryA, dayA.dayApproval, ''),
             code: 'LEAVE_OVERWRITES_WORK',
@@ -482,9 +484,12 @@ export async function POST(request: NextRequest) {
             dayApproved: !!dayA.dayApproval,
           }, { status: 409 })
         }
-        if ((dayA.existingWork || dayA.dayApproval) && body.allowOverwrite === true) {
+        if (confirmA && body.allowOverwrite === true) {
           await logActivity(await actorLabel(request), 'leave.overwriteWork',
             `${data.workerName} ${data.date} の${dayA.existingWork ? `出勤入力（${describeWork(dayA.existingWork)}）` : ''}${dayA.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（承認）`)
+        } else if (dayA.dayApproval) {
+          await logActivity(await actorLabel(request), 'leave.overwriteWork',
+            `${data.workerName} ${data.date} の承認済みの日（本人の欄は空欄）に有給を記録（承認）`)
         }
       }
       // 共通の入口（変更履歴＋残骸の掃除＋繰越の再計算・lib/attendance-save.ts）。旧は setAttendanceEntry を直接呼び、履歴に残らなかった
@@ -823,7 +828,8 @@ export async function POST(request: NextRequest) {
               error: `変更先の日付は「${cName}」に同日の出面が既にあるため変更できません`,
             }, { status: 409 })
           }
-          if ((dayM.existingWork || dayM.dayApproval) && body.allowOverwrite !== true) {
+          const confirmM = needsOverwriteConfirm(prevEntryM, dayM.existingWork, dayM.dayApproval)
+          if (confirmM && body.allowOverwrite !== true) {
             return NextResponse.json({
               error: overwriteConfirmMessage(newDate, data.workerName, prevEntryM, dayM.dayApproval, '変更先の'),
               code: 'LEAVE_OVERWRITES_WORK',
@@ -831,9 +837,12 @@ export async function POST(request: NextRequest) {
               dayApproved: !!dayM.dayApproval,
             }, { status: 409 })
           }
-          if ((dayM.existingWork || dayM.dayApproval) && body.allowOverwrite === true) {
+          if (confirmM && body.allowOverwrite === true) {
             await logActivity(await actorLabel(request), 'leave.overwriteWork',
               `${data.workerName} ${newDate} の${dayM.existingWork ? `出勤入力（${describeWork(dayM.existingWork)}）` : ''}${dayM.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（日付変更）`)
+          } else if (dayM.dayApproval) {
+            await logActivity(await actorLabel(request), 'leave.overwriteWork',
+              `${data.workerName} ${newDate} の承認済みの日（本人の欄は空欄）に有給を記録（日付変更）`)
           }
         }
         // 新日付に p=1 を書込（残骸掃除つき・approve と同方式・2026-08-27）
