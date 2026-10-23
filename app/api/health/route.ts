@@ -73,6 +73,9 @@ export async function GET() {
     backupOk: backup.ok,
     backupHoursAgo: backup.hoursAgo,
     backupErrorCount: backup.errorCount,
+    // Vercel が動かしている Node の版（2026-10-23・eMudhra 認証局事件の対応確認用。
+    // 偽の証明書を弾く修正は Node 22.23.4 / 24.22.1 / 26.12.1 以上。これより古ければ再デプロイで取り込む）
+    node: process.version,
     time: new Date().toISOString(),
   })
 }
