@@ -10,6 +10,7 @@ import { type WorkerAllowanceMonthly } from './allowance'
 import { withWorkTypeSiteCalendars } from './site-hierarchy'
 import { effectiveHourlyRateForYm, effectiveRateForYm, effectiveSalaryForYm, isHiredByMonth, isStillActiveForMonth } from './workers'
 import { isSuspectCompanyRest } from './attendance-confirm'
+import { oldContractUnpaidDays } from './old-contract'
 import { type VietnameseSalaryResult, calcLegalHolidayAllowance, calcNightMinutes, calcNightShiftLegalRequiredPay, calculateVietnameseSalary } from './compute-vn-salary'
 import { detectRestMismatches } from './rest-mismatch'
 import { isWorkingDay } from './attendance'
@@ -32,7 +33,7 @@ import { LEAVE_SETTLE_FROM_YM, LEAVE_SETTLE_LABEL, LEAVE_SETTLE_MONTH_CAP_DAYS, 
  * 過去の締め済み月の見え方を変えないため、PAY_NOTES_FROM_YM（2026年9月分）より前の月には付けない。
  */
 export interface PayNote {
-  code: 'belowWorkedDays' | 'jpWeekOver40' | 'crossSiteCalendar' | 'midMonthRateOt' | 'blankDays' | 'oldRuleExtraWork' | 'jpMonthlyOffDayWork' | 'leaveSettleOverCap' | 'leaveSettleNotDaily'
+  code: 'belowWorkedDays' | 'jpWeekOver40' | 'crossSiteCalendar' | 'midMonthRateOt' | 'blankDays' | 'oldRuleExtraWork' | 'jpMonthlyOffDayWork' | 'leaveSettleOverCap' | 'leaveSettleNotDaily' | 'oldRuleUnpaidDays'
   message: string
   /** 目安の金額（円）。無い注意点もある */
   amount?: number
@@ -1458,6 +1459,22 @@ export function computeMonthly(
         if (parts.length > 0) {
           note(wm, 'oldRuleExtraWork',
             `${parts.join('・')} があります。旧契約（固定月給・所定日数）の計算では、日曜の割増（1.35倍）・深夜の割増（0.25倍）・夜勤の時間・所定を超えた日の賃金は支給額に入っていません。手計算で足すか代表に確認してください`)
+        }
+        // 旧契約の所定の日（日曜以外）なのに、空欄・「現場休み」だけの日（2026-10-23 タン 9/21・22 の補償漏れ）。
+        //   旧契約は全社の所定日数で計算するので、現場カレンダーが休みの日も欠勤（日給100%控除）になる。
+        //   会社都合の休みなら 0.6補（60%補償）。支給額は変えず、締める前に気づけるようにする（lib/old-contract.ts）
+        const ud = oldContractUnpaidDays({ attD, workerId: wm.id, ym, hireDate: raw?.hireDate, retired: raw?.retired, todayIso: todayJstIso() })
+        const unpaid = [...ud.blank, ...ud.siteOff].sort((a, b) => a - b)
+        if (unpaid.length > 0) {
+          wm.calendarBlankDays = Math.max(wm.calendarBlankDays || 0, unpaid.length)
+          const lost = wm._oldRuleDayRate ? ceilYen(wm._oldRuleDayRate * 0.6 * unpaid.length) : undefined
+          const kinds = [
+            ud.blank.length > 0 ? `記録が空欄 ${ud.blank.join('・')}日` : '',
+            ud.siteOff.length > 0 ? `「現場休み」 ${ud.siteOff.join('・')}日` : '',
+          ].filter(Boolean).join('／')
+          note(wm, 'oldRuleUnpaidDays',
+            `旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が ${unpaid.length}日 あります（${kinds}）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償${lost ? `・${lost.toLocaleString()}円` : ''}）、本人の都合なら「欠」を入れてください`,
+            lost)
         }
       }
 

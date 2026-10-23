@@ -189,7 +189,15 @@
    "otAllowance": 0,
    "absentDeduction": 75000,
    "compBaseDeduction": 15000,
-   "salaryNetPay": 172334
+   "salaryNetPay": 172334,
+   "calendarBlankDays": 15,
+   "payNotes": [
+    {
+     "code": "oldRuleUnpaidDays",
+     "message": "旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が 15日 あります（記録が空欄 1・2・3・4・5・7・8・9・10・12・19・21・22・23・26日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・135,000円）、本人の都合なら「欠」を入れてください",
+     "amount": 135000
+    }
+   ]
   },
   {
    "id": 201,
@@ -369,7 +377,15 @@
    "otAllowance": 6452,
    "absentDeduction": 9030,
    "compBaseDeduction": 0,
-   "salaryNetPay": 226939
+   "salaryNetPay": 226939,
+   "calendarBlankDays": 3,
+   "payNotes": [
+    {
+     "code": "oldRuleUnpaidDays",
+     "message": "旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が 3日 あります（記録が空欄 21・22・23日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・16,254円）、本人の都合なら「欠」を入れてください",
+     "amount": 16254
+    }
+   ]
   }
  ],
  "sites": [

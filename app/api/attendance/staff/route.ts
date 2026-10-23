@@ -669,9 +669,10 @@ export async function POST(request: NextRequest) {
         //   以前はスマホに選択肢が無く、本人が「その他」＋メモ「60%」で出して欠勤扱いになっていた
         //   （201・2026-08-26）。本人の入力 → 職長の確認、の流れは出勤と同じ。
         //   カレンダーの休みの日は給料の対象外なので入れさせない
-        const { isScheduledWorkDay } = await import('@/lib/attendance.server')
+        //   旧契約の人は日曜以外ならよい（isCompAllowedDay・2026-10-23）
+        const { isCompAllowedDay } = await import('@/lib/attendance.server')
         const compDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-        if (!await isScheduledWorkDay(siteId, compDate)) {
+        if (!await isCompAllowedDay(siteId, compDate, worker.id)) {
           return NextResponse.json(
             { error: 'この日はカレンダーで休みの日です。「会社の都合の休み」は仕事の日だけ選べます / Ngày này là ngày nghỉ theo lịch. Chỉ chọn "nghỉ do công ty" cho ngày làm việc' },
             { status: 400 }
