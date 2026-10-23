@@ -318,6 +318,11 @@ export interface PayrollAuditWorker {
   // 休憩短縮手当（2026-09 施行。支給額に加算済み）
   breakShortenHours?: number
   breakShortenAllowance?: number
+  /** 休憩短縮の式（出勤日数 × 分 × 単価）。lib/compute-monthly.ts が付ける（2026-10-23） */
+  breakShortenDays?: number
+  breakShortenMinPerDay?: number
+  breakShortenUnitRate?: number
+  breakShortenUnitNote?: string
   // 遠方現場日当・運転手当（2026-10 施行。支給額に加算済み）
   siteAllowance?: number
   allowanceDays?: number

@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261023_break_shorten_daily',
+    title: '休憩短縮（旧契約の毎日20分）が、日ごとに帳票で確かめられるようになりました',
+    content:
+      '帳票出力の「実労働時間明細」に「休憩短縮(分)」の列ができ、付いた日ごとに 20 が入ります。下に「休憩短縮 合計（○日 × 20分）」も出ます。'
+      + '計算根拠（月次集計で人の行を押す・計算根拠PDF）には「出勤 ○日 × 20分 = ○時間○分 × 単価（時給×1.25）」の式が出ます。'
+      + 'これまで「割増なし・通常時給」と書いていましたが、実際は残業と同じ単価で計算しています（金額は変わりません）。',
+    category: 'fix',
+    publishedAt: '2026-10-23T14:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261022_calendar_trail',
     title: '就業カレンダーに「いつ・誰が」提出し、承認したかが出るようになりました',
     content:

@@ -35,6 +35,12 @@ interface Props {
 // 本体コンポーネント
 // ─────────────────────────────────────────
 
+/** 分 → 「5時間40分」 */
+function fmtHM(min: number): string {
+  const h = Math.floor(min / 60), m = min % 60
+  return h > 0 ? `${h}時間${m > 0 ? `${m}分` : ''}` : `${m}分`
+}
+
 export default function PayrollAuditContent({ worker: w, ym, prescribedDays, baseDays }: Props) {
   const mode = getEmploymentMode(w, ym)
   const legalLimit = calcLegalMonthlyLimit(ym)
@@ -350,11 +356,14 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {(w.breakShortenAllowance || 0) > 0 && (
               <tr>
-                <td>休憩短縮手当 <span className="text-3xs text-gray-500">(所定外・法定内のため割増なし)</span></td>
+                <td>休憩短縮手当<br/><span className="text-3xs text-gray-500">(契約の休憩と現場の休憩の差・所定外。残業と同じ単価＝所定超25%)</span></td>
                 <td className="font-mono">
                   <div className="text-3xs text-gray-500">
-                    {fmtNum(w.breakShortenHours || 0)}h（出勤日 × 短縮分）× 通常時給
+                    {(w.breakShortenDays ?? 0) > 0 && (w.breakShortenMinPerDay ?? 0) > 0 && (w.breakShortenUnitRate ?? 0) > 0
+                      ? `出勤 ${w.breakShortenDays}日 × ${w.breakShortenMinPerDay}分 = ${fmtHM((w.breakShortenDays ?? 0) * (w.breakShortenMinPerDay ?? 0))}（${Math.round((w.breakShortenHours || 0) * 100) / 100}h）× 単価 ${fmtYen(w.breakShortenUnitRate ?? 0)}${w.breakShortenUnitNote ? `（${w.breakShortenUnitNote}）` : ''}・円未満切上`
+                      : `${fmtNum(w.breakShortenHours || 0)}h（出勤日 × 短縮分）× 残業単価`}
                   </div>
+                  <div className="text-3xs text-gray-500">日ごとの内訳は「実労働時間明細」の「休憩短縮(分)」列</div>
                   <div className="font-bold">{fmtYen(w.breakShortenAllowance || 0)}</div>
                 </td>
               </tr>

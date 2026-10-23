@@ -179,9 +179,13 @@ export interface WorkerMonthly {
   //   施行前の月（ALLOWANCE_FROM_YM 未満）ではフィールド自体が付かない。
   // ── 2026-09 追加: 休憩短縮に伴う定例の所定外労働（フン 104 の個別契約）──
   //   休憩を40分×2 → 30分×2 に揃えた分（20分/日）を、出勤日ごとに所定外労働として
-  //   **割増なし（通常賃金1.0倍）** で支払う。法定内（1日8時間以内）のため割増不要。
+  //   法定内（1日8時間以内）だが、雇用契約書の割増率「所定超 25%」に合わせて残業と同じ単価で支払う（2026-09-15 代表決定）。
   breakShortenHours?: number      // 加算した時間（出勤日数 × 分 ÷ 60）
-  breakShortenAllowance?: number  // 休憩短縮手当 = 通常時給 × breakShortenHours
+  breakShortenAllowance?: number  // 休憩短縮手当 = 切上(残業単価 × breakShortenHours)
+  breakShortenDays?: number       // 対象の出勤日数（計算根拠の式に出す・2026-10-23）
+  breakShortenMinPerDay?: number  // 1日あたりの分（同上）
+  breakShortenUnitRate?: number   // 使った単価（残業単価・円。同上）
+  breakShortenUnitNote?: string   // 単価の出し方（例「時給 ¥1,280 × 1.25・切上」。同上）
   siteAllowance?: number   // 遠方現場日当（非課税・実費弁償）。長期従事の逓減適用後
   allowanceDays?: number   // 日当の対象日数
   driveAllowance?: number  // 運転手当（課税。割増賃金基礎への算入は社労士レビュー後）
@@ -634,7 +638,8 @@ export function computeMonthly(
 
   // ── 休憩短縮に伴う定例の所定外労働（2026-09 施行・フン 104 の個別契約）──
   //   出勤した日にだけ加算する（有給・休み・補償日・帰国中は対象外＝actualWorkDays が
-  //   ちょうどその条件）。金額は下の給与ブランチで「通常時給 × 時間」（割増なし）で計算する。
+  //   ちょうどその条件＝lib/attendance-confirm.ts isBreakShortenEntry）。金額は下の給与ブランチで
+  //   「残業単価（時給×1.25・切上）× 時間」で計算する（2026-09-15 代表決定）。
   //   ⚠️ 給与計算ループより前に確定させること（後ろに置くと各ブランチが読めない）
   for (const wm of workerMap.values()) {
     const src = main.workers.find(w => w.id === wm.id)
@@ -643,6 +648,8 @@ export function computeMonthly(
     if (min > 0 && from && ym >= from && wm.actualWorkDays > 0) {
       // 金額は丸めない正確な時間から算出する（3桁で丸めると1円ズレる）。表示側で丸める
       wm.breakShortenHours = wm.actualWorkDays * min / 60
+      wm.breakShortenDays = wm.actualWorkDays
+      wm.breakShortenMinPerDay = min
     }
   }
 
@@ -1040,8 +1047,13 @@ export function computeMonthly(
       // 2026-09-13: 休憩短縮手当（20分/日）。旧ルール固定月給ブランチと同じく所定超25%（2026-09-15）
       //   単価はこのブランチの時給（契約時給。未登録なら月給÷140h）× 1.25（円未満切上）
       const bsHours = wm.breakShortenHours || 0
-      const breakShortenAllowance = bsHours > 0 ? ceilYen(ceilYen(derivedHourlyRate * 1.25) * bsHours) : 0
-      if (breakShortenAllowance > 0) wm.breakShortenAllowance = breakShortenAllowance
+      const bsUnitRate = ceilYen(derivedHourlyRate * 1.25)
+      const breakShortenAllowance = bsHours > 0 ? ceilYen(bsUnitRate * bsHours) : 0
+      if (breakShortenAllowance > 0) {
+        wm.breakShortenAllowance = breakShortenAllowance
+        wm.breakShortenUnitRate = bsUnitRate
+        wm.breakShortenUnitNote = `時給 ¥${derivedHourlyRate.toLocaleString('ja-JP', { maximumFractionDigits: 2 })} × 1.25・切上`
+      }
       // 2026-06-XX 修正: 所定外労働手当 (nonStatutoryOTAllowance) も加算
       // 2026-06-12 修正 (監査C1): 有給日給 (paidLeaveAllowance) の加算漏れを是正。
       //   時給ブランチは v.salaryNet（有給日給込み）を使うが、本ブランチは合算を
@@ -1135,7 +1147,15 @@ export function computeMonthly(
       //   **残業と同じ単価（時給×1.25・円未満切上）** で支払う（2026-09-15 代表決定・旧ルール3名の暫定措置）
       const bsHours = wm.breakShortenHours || 0
       const breakShortenAllowance = bsHours > 0 ? ceilYen(otUnitRate * bsHours) : 0
-      if (breakShortenAllowance > 0) wm.breakShortenAllowance = breakShortenAllowance
+      if (breakShortenAllowance > 0) {
+        wm.breakShortenAllowance = breakShortenAllowance
+        wm.breakShortenUnitRate = otUnitRate
+        wm.breakShortenUnitNote = isSevenHourContract
+          ? `契約時給 ¥${hourlyRate.toLocaleString()} × ${otMul}・切上`
+          : (wm.rate && wm.rate > 0)
+            ? `日給 ¥${wm.rate.toLocaleString()} ÷ 6時間40分 × ${otMul}・切上`
+            : `月給 ÷ 所定 ${Math.round(fullPrescribedH * 10) / 10}h × ${otMul}・切上`
+      }
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours + bsHours
       const salaryNet = basePay + compAllowance + otAllowance + breakShortenAllowance - absentDeduction - compBaseDeduction
       wm._oldRuleDayRate = hourlyRate * dailyHoursOld

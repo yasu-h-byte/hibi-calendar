@@ -8,6 +8,7 @@ import { isHiredByMonth, isStillActiveForMonth } from './workers'
 import { orgKeyOf } from './locks'
 import { setColWidths, ymLabel } from './export'
 import { AttendanceEntry, calcActualHours } from '@/types'
+import { breakShortenMinFor, isBreakShortenEntry } from './attendance-confirm'
 
 // ────────────────────────────────────────
 //  社労士提出用: 勤務予定シフト表 / 実労働時間明細 (2026-06-XX 追加)
@@ -262,14 +263,22 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
   const siteMap = new Map(sites.map(s => [s.id, s]))
 
   for (const w of foreignWorkers) {
+    // 休憩短縮（旧契約の毎日20分など・人員マスタの設定）。出勤した日ごとに所定外として給与で払う分を、
+    //   日ごとに見えるようにする（2026-10-23 代表: 帳票で毎日どう足されているか確かめられなかった）。
+    //   数え方は給与計算と同じ isBreakShortenEntry・同じ日に複数現場でも1日1回
+    const bsMin = breakShortenMinFor(w, ym)
+    const bsDaySeen = new Set<number>()
     const rows: unknown[][] = []
     rows.push([`実労働時間明細 ${ymLabel(ym)} - ${w.name}`])
     rows.push([`スタッフ ID: ${w.id}  /  従業員番号: ${(w as { payrollNo?: string }).payrollNo || '—'}  /  雇用区分: ${w.visa}`])
     rows.push([`※ 実労働(h) = 始業〜終業 − 実際に取得した休憩。給与計算と完全に同一の算出方法です`])
     rows.push([`※ 休憩(分)は実際に取得した分のみ。現場・作業内容により休憩を取れなかった場合は労働時間に算入されます`])
     rows.push([`※ 所定外(h) = 実労働 − 当日所定時間。始業/終業に「(推定)」がある日は時刻未記録のため標準時刻で推定`])
+    if (bsMin > 0) {
+      rows.push([`※ 休憩短縮(分) = 雇用契約の休憩と現場の休憩の差。出勤した日ごとに ${bsMin}分 を所定外労働として給与で支払う（有給・休み・補償日・帰国中は付かない）。実労働(h)には含めていない`])
+    }
     rows.push([])
-    rows.push(['日', '曜', '状態', '現場', '始業', '終業', '休憩(分)', '実労働(h)', '所定外(h)', '備考'])
+    rows.push(['日', '曜', '状態', '現場', '始業', '終業', '休憩(分)', '実労働(h)', '所定外(h)', '休憩短縮(分)', '備考'])
 
     let totalActual = 0
     let totalOT = 0
@@ -289,7 +298,7 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
       }
 
       if (entriesForDay.length === 0) {
-        rows.push([d, dowLabel, '-', '', '', '', '', '', '', ''])
+        rows.push([d, dowLabel, '-', '', '', '', '', '', '', '', ''])
         continue
       }
 
@@ -351,6 +360,11 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
           totalActual += actualH
           totalOT += nonStatOT
         }
+        let bsCell: number | string = ''
+        if (bsMin > 0 && isBreakShortenEntry(entry) && !bsDaySeen.has(d)) {
+          bsDaySeen.add(d)
+          bsCell = bsMin
+        }
 
         rows.push([
           d, dowLabel, status,
@@ -360,6 +374,7 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
           breakMin || '-',
           actualH > 0 ? actualH : '-',
           nonStatOT > 0 ? nonStatOT : '-',
+          bsCell,
           isEstimated ? '時刻未記録（標準時刻で推定）'
             : (breakMin < schedule.breakMin && actualH > prescribedH ? '休憩未取得分を労働時間に算入' : ''),
         ])
@@ -368,22 +383,23 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
 
     // 合計
     rows.push([])
-    rows.push(['', '', '出勤実日数', '', '', '', '', '', workDays + '日', ''])
-    rows.push(['', '', '有給日数', '', '', '', '', '', pDays + '日', ''])
-    if (rDays > 0) rows.push(['', '', '欠勤日数', '', '', '', '', '', rDays + '日', ''])
-    rows.push(['', '', '実労働時間 合計', '', '', '', '', Math.round(totalActual * 10) / 10 + 'h', '', ''])
-    rows.push(['', '', '所定外 合計', '', '', '', '', '', Math.round(totalOT * 10) / 10 + 'h', ''])
+    rows.push(['', '', '出勤実日数', '', '', '', '', '', workDays + '日', '', ''])
+    rows.push(['', '', '有給日数', '', '', '', '', '', pDays + '日', '', ''])
+    if (rDays > 0) rows.push(['', '', '欠勤日数', '', '', '', '', '', rDays + '日', '', ''])
+    rows.push(['', '', '実労働時間 合計', '', '', '', '', Math.round(totalActual * 10) / 10 + 'h', '', '', ''])
+    rows.push(['', '', '所定外 合計', '', '', '', '', '', Math.round(totalOT * 10) / 10 + 'h', '', ''])
+    if (bsMin > 0) {
+      const bsTotalMin = bsDaySeen.size * bsMin
+      const hm = `${Math.floor(bsTotalMin / 60)}時間${bsTotalMin % 60 > 0 ? `${bsTotalMin % 60}分` : ''}`
+      rows.push(['', '', '休憩短縮 合計', '', '', '', '', '', '', bsTotalMin + '分',
+        `${bsDaySeen.size}日 × ${bsMin}分 = ${hm}（${Math.round(bsTotalMin / 60 * 100) / 100}h）。手当の金額は計算根拠PDF`])
+    }
 
     const sheetName = w.name.slice(0, 28) + (w.name.length > 28 ? '..' : '')
     const sheet = XLSX.utils.aoa_to_sheet(rows)
-    sheet['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },
-      { s: { r: 2, c: 0 }, e: { r: 2, c: 9 } },
-      { s: { r: 3, c: 0 }, e: { r: 3, c: 9 } },
-      { s: { r: 4, c: 0 }, e: { r: 4, c: 9 } },
-    ]
-    setColWidths(sheet, [5, 5, 8, 14, 12, 12, 8, 9, 8, 22])
+    const noteRows = bsMin > 0 ? 6 : 5
+    sheet['!merges'] = Array.from({ length: noteRows }, (_, r) => ({ s: { r, c: 0 }, e: { r, c: 10 } }))
+    setColWidths(sheet, [5, 5, 8, 14, 12, 12, 8, 9, 8, 10, 22])
     XLSX.utils.book_append_sheet(wb, sheet, sheetName)
   }
 
