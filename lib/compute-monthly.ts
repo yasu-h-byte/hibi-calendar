@@ -8,7 +8,7 @@ import { AttendanceEntry, NIGHT_SHIFT_MANDAYS, calcActualHours, calcDayShiftHour
 import { type HomeLeaveEntry } from './homeLeave'
 import { type WorkerAllowanceMonthly } from './allowance'
 import { withWorkTypeSiteCalendars } from './site-hierarchy'
-import { effectiveHourlyRateForYm, effectiveRateForYm, effectiveSalaryForYm, isHiredByMonth, isStillActiveForMonth } from './workers'
+import { effectiveHourlyRateForYm, effectiveRateForYm, effectiveSalaryForYm, isHiredByMonth, isStillActiveForMonth, midMonthRateChangeOf } from './workers'
 import { isSuspectCompanyRest } from './attendance-confirm'
 import { oldContractUnpaidDays } from './old-contract'
 import { type VietnameseSalaryResult, calcLegalHolidayAllowance, calcNightMinutes, calcNightShiftLegalRequiredPay, calculateVietnameseSalary } from './compute-vn-salary'
@@ -187,6 +187,15 @@ export interface WorkerMonthly {
   breakShortenMinPerDay?: number  // 1日あたりの分（同上）
   breakShortenUnitRate?: number   // 使った単価（残業単価・円。同上）
   breakShortenUnitNote?: string   // 単価の出し方（例「時給 ¥1,280 × 1.25・切上」。同上）
+  // ── 2026-10 分〜: 月の途中の時給改定（lib/workers.ts midMonthRateChangeOf）──
+  //   その月は旧時給で1か月を計算し、改定後の分をここで足す（エムテックの従来の方式・2026-10-23 代表決定）。
+  //   salaryNetPay / netPay には加算済み
+  rateChangeAllowance?: number    // 時給改定差額 = 切上(時給の差 ×（rateChangeHours ＋ rateChangeCompDays × 7h × 0.6）)
+  rateChangeHours?: number        // 適用開始日以降に働いた時間（実労働・残業を含む）
+  rateChangeCompDays?: number     // 適用開始日以降の 0.6補 の日数
+  rateChangeFrom?: string         // 適用開始日 'YYYY-MM-DD'
+  rateChangePrev?: number         // 旧時給
+  rateChangeCur?: number          // 新時給
   siteAllowance?: number   // 遠方現場日当（非課税・実費弁償）。長期従事の逓減適用後
   allowanceDays?: number   // 日当の対象日数
   driveAllowance?: number  // 運転手当（課税。割増賃金基礎への算入は社労士レビュー後）
@@ -849,8 +858,9 @@ export function computeMonthly(
       const from = workerWm?.hourlyRateFrom
       const prev = workerWm?.prevHourlyRate
       const cur = workerWm?.hourlyRate
+      //   2026-10 分からは差額を別に足すので出さない（midMonthRateChangeOf）
       if (from && prev != null && cur != null && cur !== prev && /^\d{4}-\d{2}-\d{2}$/.test(from)
-        && from.slice(0, 4) + from.slice(5, 7) === ym && Number(from.slice(8, 10)) > 1) {
+        && from.slice(0, 4) + from.slice(5, 7) === ym && Number(from.slice(8, 10)) > 1 && !midMonthRateChangeOf(workerWm || {}, ym)) {
         const fromD = Number(from.slice(8, 10))
         let before = 0, after = 0
         for (const [key, e] of Object.entries(attD)) {
@@ -967,9 +977,35 @@ export function computeMonthly(
       wm.absence = v.absentDays
       wm.absentCost = v.absentDeduction
       wm.netPay = v.salaryNet
+      // 月の途中の時給改定（2026-10 分〜）: 旧時給で計算した上に、改定後の分の差額を足す
+      //   時給の差 ×（適用開始日以降に働いた時間 ＋ 0.6補の日 × 7h × 0.6）。エムテックの従来の方式（2026-10-23 代表決定）
+      const mrc = midMonthRateChangeOf(workerWm || {}, ym)
+      if (mrc) {
+        let hours = 0
+        const compDaySeen = new Set<string>()
+        for (const [key, e] of Object.entries(attD)) {
+          const pk2 = parseDKey(key)
+          if (pk2.ym !== ym || pk2.wid !== String(wm.id) || !e || Number(pk2.day) < mrc.fromDay) continue
+          if (e.w === 0.6 && !e.p && !e.hk && !e.r && !e.h && !e.exam) { compDaySeen.add(pk2.day); continue }
+          if (!isWorkingDay(e) || !e.w || e.p) continue
+          hours += calcActualHours(e, siteScheduleMap.get(pk2.sid) as Parameters<typeof calcActualHours>[1])
+        }
+        hours = Math.round(hours * 100) / 100
+        const allowance = ceilYen((mrc.cur - mrc.prev) * (hours + compDaySeen.size * 7 * 0.6))
+        if (allowance !== 0) {
+          wm.rateChangeAllowance = allowance
+          wm.rateChangeHours = hours
+          wm.rateChangeCompDays = compDaySeen.size
+          wm.rateChangeFrom = workerWm!.hourlyRateFrom
+          wm.rateChangePrev = mrc.prev
+          wm.rateChangeCur = mrc.cur
+          wm.salaryNetPay = (wm.salaryNetPay || 0) + allowance
+          wm.netPay = wm.salaryNetPay
+        }
+      }
       // 2026-06-XX 修正 (I-10): 出向控除を実支給額ベースに置換
       //   旧: totalCost (rate×days の粗い原価) → 実支給額と乖離 → 出向先請求と不整合
-      if (wm.isDispatched) wm.dispatchDeduction = v.salaryNet
+      if (wm.isDispatched) wm.dispatchDeduction = wm.salaryNetPay
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0 && !(wm.salary && wm.salary > 0)) {
       // ── 4月以前 / 旧ルール継続: 時給ベース ──
       // ※ salary（固定月給）が設定されている場合はこのブランチをスキップし、

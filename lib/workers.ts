@@ -435,12 +435,39 @@ export function effectiveRateForYm(
 }
 
 /**
+ * 月の途中で時給が変わった月を「旧時給で1か月 ＋ 改定後の差額」で計算する最初の月（2026-10-23 代表決定）。
+ * エムテック協同組合（監理団体）の従来の方式に合わせた:
+ *   その月は旧時給（prevHourlyRate）で1か月分を計算し、
+ *   時給の差 ×（適用開始日以降に働いた時間 ＋ 0.6補の日 × 7h × 0.6）を「時給改定差額」として足す（lib/compute-monthly.ts）。
+ * この月より前（2026-09 のゴック 205・サン 206）は暦日按分のまま（支払い済み。差は払いすぎだったが引かない・代表決定）。
+ */
+export const MID_MONTH_RATE_DIFF_FROM_YM = '202610'
+
+/**
+ * その月に「月の途中の時給改定」があるか（適用開始日が2日以降で、MID_MONTH_RATE_DIFF_FROM_YM 以降の月）。
+ * ある月は fromDay（適用開始日の日）と旧・新の時給を返す。
+ */
+export function midMonthRateChangeOf(
+  w: { hourlyRate?: number; hourlyRateFrom?: string; prevHourlyRate?: number },
+  ym: string,
+): { fromDay: number; prev: number; cur: number } | null {
+  const ymN = ym.replace('-', '')
+  if (ymN < MID_MONTH_RATE_DIFF_FROM_YM) return null
+  if (!w.hourlyRateFrom || w.prevHourlyRate == null || w.hourlyRate == null || !/^\d{4}-\d{2}-\d{2}$/.test(w.hourlyRateFrom)) return null
+  if (w.hourlyRateFrom.slice(0, 4) + w.hourlyRateFrom.slice(5, 7) !== ymN) return null
+  const fromDay = Number(w.hourlyRateFrom.slice(8, 10))
+  if (fromDay <= 1 || w.hourlyRate === w.prevHourlyRate) return null
+  return { fromDay, prev: w.prevHourlyRate, cur: w.hourlyRate }
+}
+
+/**
  * その月の給与計算に使う時給（2026-09-10 追加・時給の適用開始日対応）。
  *
  * - 適用開始日より前の月 … prevHourlyRate
- * - 適用開始日を含む月 … **暦日按分**した時給（中途入退社の日割りと同じ考え方。
- *   基本給が「時給×20日×7h」の月額固定なので日単位では分けられない）
- *   例: 9/21 に 1,425→1,585 なら (1,425×20日 + 1,585×10日) ÷ 30日 = 1,478.33
+ * - 適用開始日を含む月（2日以降に変わる月）
+ *   - 2026-10 分から … **旧時給**（prevHourlyRate）。改定後の分は「時給改定差額」で足す（midMonthRateChangeOf）
+ *   - 2026-09 分まで … 暦日按分した時給
+ *     例: 9/21 に 1,425→1,585 なら (1,425×20日 + 1,585×10日) ÷ 30日 = 1,478.33
  * - 適用開始日以降の月 … hourlyRate
  * hourlyRateFrom が無い人は従来どおり hourlyRate。
  */
@@ -454,7 +481,8 @@ export function effectiveHourlyRateForYm(
   const fromY = Number(w.hourlyRateFrom.slice(0, 4)); const fromM = Number(w.hourlyRateFrom.slice(5, 7)); const fromD = Number(w.hourlyRateFrom.slice(8, 10))
   if (y < fromY || (y === fromY && m < fromM)) return w.prevHourlyRate
   if (y > fromY || (y === fromY && m > fromM)) return cur
-  // 同じ月: 暦日按分
+  // 同じ月: 2026-10 分からは旧時給（差額は compute-monthly が別に足す）、それより前は暦日按分
+  if (midMonthRateChangeOf(w, ym)) return w.prevHourlyRate
   const dim = new Date(y, m, 0).getDate()
   const daysBefore = Math.max(0, Math.min(dim, fromD - 1))
   const blended = ((w.prevHourlyRate * daysBefore) + ((cur || 0) * (dim - daysBefore))) / dim

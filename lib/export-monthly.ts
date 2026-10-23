@@ -77,6 +77,8 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const withAllowance = workers.some(w => (w.siteAllowance || 0) > 0 || (w.driveAllowance || 0) > 0)
   // 休憩短縮手当（2026-09〜）: 該当者がいる月だけ列を出す（現状フンさんのみ）
   const withBreakShorten = workers.some(w => ((w as { breakShortenAllowance?: number }).breakShortenAllowance || 0) > 0)
+  // 時給改定差額（月の途中の時給改定・2026-10 分〜）: 該当者がいる月だけ列を出す
+  const withRateChange = workers.some(w => (w.rateChangeAllowance || 0) !== 0)
   const isWorkerOldRules = (w: WorkerMonthly): boolean => {
     if (!useNewRulesByMonth) return true  // 月全体が旧ルール
     return (w as { useOldRules?: boolean }).useOldRules === true
@@ -301,6 +303,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     '実労働h', '所定外労働h', '法定残業h(新)／残業h(旧)', '法休労働h', '深夜労働h',
     '基本給', '追加所定手当', '有給日給', '所定外労働手当', '法定外残業手当', '残業手当(旧・1.25倍)',
     '法定休日手当', '深夜手当', '休業手当', '休憩短縮手当',
+    ...(withRateChange ? ['時給改定差額'] : []),
     ...(withAllowance ? ['遠方日当', '運転手当'] : []),
     '欠勤日数', '欠勤控除', '補償日控除(旧)', '支給額合計']
   function buildUnifiedVnSheet(sheetName: string, ws: WorkerMonthly[]): XLSX.WorkSheet | null {
@@ -348,6 +351,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         old ? null : (w.nightAllowance || 0),
         compAllow,
         wext.breakShortenAllowance || 0,
+        ...(withRateChange ? [w.rateChangeAllowance || 0] : []),
         ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
         w.absence || 0, w.absentDeduction || 0,
         old ? (w.compBaseDeduction || 0) : null,
@@ -359,7 +363,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       const parts = basePay + (old ? 0 : (w.additionalAllowance || 0)) + (old ? 0 : (w.paidLeaveAllowance || 0))
         + (old ? 0 : (wext.nonStatutoryOTAllowance || 0)) + (w.otAllowance || 0)
         + (old ? 0 : (w.legalHolidayAllowance || 0)) + (old ? 0 : (w.nightAllowance || 0))
-        + compAllow + (wext.breakShortenAllowance || 0) + (w.siteAllowance || 0) + (w.driveAllowance || 0)
+        + compAllow + (wext.breakShortenAllowance || 0) + (w.rateChangeAllowance || 0) + (w.siteAllowance || 0) + (w.driveAllowance || 0)
         - (w.absentDeduction || 0) - (old ? (w.compBaseDeduction || 0) : 0)
       if (parts !== (w.salaryNetPay || 0)) mismatches.push(w.name)
     }
@@ -375,6 +379,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     // 新ルールの割増率チェック（validatePayrolls は内部で新ルールだけを判定する）
     const newOnes = ws.filter(w => !isWorkerOldRules(w))
     if (newOnes.length > 0) appendValidation(rows, newOnes, unifiedHeaders.length)
+    if (withRateChange) rows.push(['※ 時給改定差額 ＝ 月の途中で時給が変わった人は、その月を旧時給で計算し、時給の差 ×（適用開始日以降に働いた時間 ＋ 0.6補の日 × 7h × 0.6）を足す（2026年10月分〜）。'])
     rows.push(['※ 契約「新」＝変形労働時間制（時給×20日×7hの固定基本給＋各手当）。「旧」＝固定月給の旧契約（残業1.25倍・現場都合休は補償日控除＋休業手当60%）。空欄はその契約に無い項目。'])
     rows.push(['※ 新契約の欠勤日数 = min(本人の欠勤 ＋ max(0, (保証枠 − 本人の欠勤) − 算入日数), 20 − 算入日数)。算入日数 = 通常出勤 ＋ 有給 ＋ 試験 ＋ 枠内補償日。保証枠 = min(20, カレンダー所定日数)。枠内補償日は100%支給で、休業手当（60%）は 補償日 − 枠内補償日 の分。帰国日数は在籍日数から除外（無給・欠勤に数えない・基本給と所定を日割り）。'])
     const sheet = XLSX.utils.aoa_to_sheet(rows)
@@ -383,7 +388,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       if (i > 2 && r.length === 1 && typeof r[0] === 'string') merges.push({ s: { r: i, c: 0 }, e: { r: i, c: unifiedHeaders.length - 1 } })
     })
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, 9, 5, 14, 8, 10, 8, 12, 8, 8, 8, 9, 8, 7, 8, 7, 9, 9, 10, 12, 9, 9, 11, 11, 11, 12, 12, 12, 11, 10, 10, 11, ...(withAllowance ? [10, 10] : []), 8, 11, 12, 14])
+    setColWidths(sheet, [14, 9, 5, 14, 8, 10, 8, 12, 8, 8, 8, 9, 8, 7, 8, 7, 9, 9, 10, 12, 9, 9, 11, 11, 11, 12, 12, 12, 11, 10, 10, 11, ...(withRateChange ? [11] : []), ...(withAllowance ? [10, 10] : []), 8, 11, 12, 14])
     return sheet
   }
 

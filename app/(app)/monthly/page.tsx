@@ -84,6 +84,8 @@ interface WorkerMonthly {
   // 遠方現場日当・運転手当（2026-10 施行。支給額合計には加算済み、ここは内訳表示用）
   breakShortenHours?: number
   breakShortenAllowance?: number
+  rateChangeAllowance?: number
+  rateChangeHours?: number
   siteAllowance?: number
   allowanceDays?: number
   driveAllowance?: number
@@ -1589,6 +1591,8 @@ function MonthlyPageInner() {
                               lines.push(`休業手当:      ¥${(w.compAllowance || 0).toLocaleString()}`)
                             if ((w.breakShortenAllowance || 0) > 0)
                               lines.push(`休憩短縮手当:  ¥${(w.breakShortenAllowance || 0).toLocaleString()}（${w.breakShortenHours}h・25%割増）`)
+                            if ((w.rateChangeAllowance || 0) > 0)
+                              lines.push(`時給改定差額:  ¥${(w.rateChangeAllowance || 0).toLocaleString()}（月の途中の時給改定・改定後 ${w.rateChangeHours}h ほか）`)
                             if ((w.siteAllowance || 0) > 0)
                               lines.push(`遠方現場日当:  ¥${(w.siteAllowance || 0).toLocaleString()}（${w.allowanceDays || 0}日・非課税）`)
                             if ((w.driveAllowance || 0) > 0)

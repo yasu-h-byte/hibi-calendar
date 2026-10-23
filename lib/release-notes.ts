@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261023_midmonth_rate',
+    title: '月の途中で時給が変わった月の計算を、監理団体の方式に合わせました（10月分から）',
+    content:
+      '月の途中で時給が上がった人は、その月を前の時給で計算し、「時給改定差額」（時給の差 × 上がった日からあとに働いた時間・0.6補の日は60%分）を足します。'
+      + '月次集計の内訳・計算根拠・月次集計Excel（ベトナム人シート）に「時給改定差額」が出ます。9月分までの計算は変えていません。',
+    category: 'info',
+    publishedAt: '2026-10-23T21:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261023_old_contract_comp',
     title: '旧契約の人は、現場が休みの土曜・祝日にも「0.6補」を入れられるようになりました',
     content:
