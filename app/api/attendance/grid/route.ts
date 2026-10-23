@@ -1006,7 +1006,7 @@ export async function POST(request: NextRequest) {
         const cur = await getApprovalForDay(siteId, ym, day)
         const role = await getApiRole(request)
         if (cur?.final && !(role && isManagerRole(role.role))) {
-          return NextResponse.json({ error: 'この日は最終承認済みのため取り消せません。管理者に連絡してください。' }, { status: 409 })
+          return NextResponse.json({ error: 'この日は政仁さんの最終承認が済んでいるため取り消せません。直すときは政仁さんか代表に頼んでください' }, { status: 409 })
         }
       }
       const { removeForemanApprovalForDay } = await import('@/lib/attendance.server')
@@ -1019,7 +1019,7 @@ export async function POST(request: NextRequest) {
       //   サーバ側でロール強制する（監査: checkApiAuth のみで事務・他現場職長が最終承認できた穴を塞ぐ）。
       const role = await getApiRole(request)
       if (!role || !isManagerRole(role.role)) {
-        return NextResponse.json({ error: '最終承認の権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
+        return NextResponse.json({ error: '最終承認の権限がありません（代表・事業責任者（政仁さん）だけ）' }, { status: 403 })
       }
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -1049,7 +1049,7 @@ export async function POST(request: NextRequest) {
       // 最終承認の解除も管理者・事業責任者のみ
       const role = await getApiRole(request)
       if (!role || !isManagerRole(role.role)) {
-        return NextResponse.json({ error: '最終承認解除の権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
+        return NextResponse.json({ error: '最終承認解除の権限がありません（代表・事業責任者（政仁さん）だけ）' }, { status: 403 })
       }
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })

@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
       {
         const lockedYm = await findLockedMonthInRanges(Number(workerId), [{ startDate, endDate }])
         if (lockedYm) {
-          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は月次締め済みのため、この期間の帰国は登録できません。先にロックを解除してください` }, { status: 409 })
+          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は締めが済んでいるため、この期間の帰国は登録できません。先に、事務か政仁さんに締めを外してもらってください（月次集計・締めの画面）` }, { status: 409 })
         }
       }
 
@@ -311,7 +311,7 @@ export async function POST(request: NextRequest) {
           { startDate: newStart, endDate: newEnd },
         ])
         if (lockedYm) {
-          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は月次締め済みのため変更できません。先にロックを解除してください` }, { status: 409 })
+          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は締めが済んでいるため変更できません。先に、事務か政仁さんに締めを外してもらってください（月次集計・締めの画面）` }, { status: 409 })
         }
       }
 
@@ -406,7 +406,7 @@ export async function POST(request: NextRequest) {
           { startDate: data.startDate, endDate: data.endDate },
         ])
         if (lockedYm) {
-          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は月次締め済みのため削除できません。先にロックを解除してください` }, { status: 409 })
+          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は締めが済んでいるため削除できません。先に、事務か政仁さんに締めを外してもらってください（月次集計・締めの画面）` }, { status: 409 })
         }
       }
       await deleteDoc(ref)

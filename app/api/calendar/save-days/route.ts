@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     //   旧: 画面は管理者だけに修正モードを出していたが、サーバーは担当現場の職長にも保存を許し、
     //   承認済みのまま days が書き換わって所定日数（給与）が変わった。法令チェックも承認時にしか無かった
     if (wasApproved && !isManagerRole(role.role)) {
-      return NextResponse.json({ error: '承認済みのカレンダーを修正できるのは管理者・事業責任者だけです。職長は管理者に連絡してください' }, { status: 403 })
+      return NextResponse.json({ error: '承認済みのカレンダーを直せるのは政仁さんと代表だけです。直したいところを政仁さんに伝えてください' }, { status: 403 })
     }
 
     // 承認後修正時の差分計算（監査用）+ 変更なし判定

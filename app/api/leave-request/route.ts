@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers.server'
 import { ymKey, createsWork, attKey } from '@/lib/attendance'
+import { describeWork, overwriteConfirmMessage } from '@/lib/leave-overwrite'
 import { getStaffSites, isScheduledWorkDay, getApprovalForDay, clearHomeLeaveStubs } from '@/lib/attendance.server'
 import { writeAttendanceEntry, finalApprovedEditError } from '@/lib/attendance-save'
 import { getMainData } from '@/lib/compute.server'
@@ -66,11 +67,6 @@ async function findActiveRequestOnDate(workerId: number, dateIso: string, exclud
   return snap.docs.some(d => d.id !== excludeDocId && ['pending', 'foreman_approved', 'approved'].includes((d.data() as LeaveRequest).status))
 }
 
-function describeWork(e: AttendanceEntry): string {
-  const times = e.st && e.et ? `${e.st}〜${e.et}` : `出勤 ${e.w ?? ''}`
-  return `${times}${e.o ? ` 残業${e.o}h` : ''}`
-}
-
 interface LeaveRequest {
   workerId: number
   workerName: string
@@ -92,7 +88,7 @@ interface LeaveRequest {
   cancelledAt?: string
 }
 
-const SELF_APPROVE_ERROR = '自分の有給申請は自分で職長承認できません。管理者・事業責任者に依頼してください'
+const SELF_APPROVE_ERROR = '自分の有給申請は自分で職長承認できません。政仁さんか代表に頼んでください'
 
 export async function POST(request: NextRequest) {
   try {
@@ -288,7 +284,7 @@ export async function POST(request: NextRequest) {
       }
       const data = snap.data() as LeaveRequest
       if (data.status !== 'pending') {
-        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+        return NextResponse.json({ error: 'この申請は、もうほかの人が承認か却下をしています。画面を読み込み直してください' }, { status: 409 })
       }
 
       // 現場の foreman 一覧を取得（権限判定用）
@@ -363,7 +359,7 @@ export async function POST(request: NextRequest) {
       if (body.token) {
         const { managerByToken } = await import('@/lib/foreman-todo')
         const mgr = await managerByToken(body.token)
-        if (!mgr) return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+        if (!mgr) return NextResponse.json({ error: '最終承認は代表・事業責任者（政仁さん）だけができます' }, { status: 403 })
         authForApprove = { authorized: true, actor: mgr.id }
       } else {
         authForApprove = await getApiAuthUser(request)
@@ -374,7 +370,7 @@ export async function POST(request: NextRequest) {
         //   旧は admin パスワード or actor===1 のみで、役員の個人ログインは UI にボタンが出るのに 403 だった）
         const apRole = await getApiRole(request)
         if (!apRole || !isManagerRole(apRole.role)) {
-          return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+          return NextResponse.json({ error: '最終承認は代表・事業責任者（政仁さん）だけができます' }, { status: 403 })
         }
       }
 
@@ -393,7 +389,7 @@ export async function POST(request: NextRequest) {
       if (data.status !== 'foreman_approved') {
         // 後方互換: pending から直接承認も許可（管理者権限）
         if (data.status !== 'pending') {
-          return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+          return NextResponse.json({ error: 'この申請は、もうほかの人が承認か却下をしています。画面を読み込み直してください' }, { status: 409 })
         }
       }
 
@@ -403,7 +399,7 @@ export async function POST(request: NextRequest) {
       {
         const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         if (await checkMonthLockedForWorkers(data.ym, [data.workerId])) {
-          return NextResponse.json({ error: `${data.ym.slice(0, 4)}年${parseInt(data.ym.slice(4, 6))}月は月次締め済みのため承認できません。先に月次集計画面でロックを解除してください`, status: 409 }, { status: 409 })
+          return NextResponse.json({ error: `${data.ym.slice(0, 4)}年${parseInt(data.ym.slice(4, 6))}月は締めが済んでいるため承認できません。先に、事務か政仁さんに締めを外してもらってください（月次集計・締めの画面）`, status: 409 }, { status: 409 })
         }
       }
 
@@ -479,11 +475,8 @@ export async function POST(request: NextRequest) {
         }
         // 同じ現場に本人の出勤入力がある／その日の承認が済んでいる → 確認つきでだけ上書き（2026-10-02 総合点検）
         if ((dayA.existingWork || dayA.dayApproval) && body.allowOverwrite !== true) {
-          const parts: string[] = []
-          if (dayA.existingWork) parts.push(`この日は出勤の入力があります（${describeWork(dayA.existingWork)}）。有給にすると出勤の記録が消えます`)
-          if (dayA.dayApproval) parts.push(`この日は${dayA.dayApproval.final ? '最終承認' : '職長承認'}が済んでいます`)
           return NextResponse.json({
-            error: `${data.date}: ${parts.join('。')}。休暇管理の申請一覧から内容を確認のうえ承認してください`,
+            error: overwriteConfirmMessage(data.date, data.workerName, prevEntryA, dayA.dayApproval, ''),
             code: 'LEAVE_OVERWRITES_WORK',
             existingWork: dayA.existingWork,
             dayApproved: !!dayA.dayApproval,
@@ -531,7 +524,7 @@ export async function POST(request: NextRequest) {
       // 2026-09-02 修正: 却下できるのは pending / foreman_approved のみ
       //   （旧は approved/rejected だけ除外 → cancelled・revoked を却下でき履歴が「取消→却下」に化けた）
       if (data.status !== 'pending' && data.status !== 'foreman_approved') {
-        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+        return NextResponse.json({ error: 'この申請は、もうほかの人が承認か却下をしています。画面を読み込み直してください' }, { status: 409 })
       }
 
       // 権限判定: 申請現場の職長 or 管理者・事業責任者
@@ -666,7 +659,7 @@ export async function POST(request: NextRequest) {
       {
         const { checkMonthLockedForWorkers } = await import('@/lib/locks.server')
         if (await checkMonthLockedForWorkers(attYm, [data.workerId])) {
-          return NextResponse.json({ error: `${attYm.slice(0, 4)}年${parseInt(attYm.slice(4, 6))}月は月次締め済みのため取消できません。先にロックを解除してください` }, { status: 409 })
+          return NextResponse.json({ error: `${attYm.slice(0, 4)}年${parseInt(attYm.slice(4, 6))}月は締めが済んでいるため取消できません。先に、事務か政仁さんに締めを外してもらってください（月次集計・締めの画面）` }, { status: 409 })
         }
       }
       // att から p=1 をピンポイント削除（IM-11 と同じく他フィールドは温存）
@@ -719,7 +712,7 @@ export async function POST(request: NextRequest) {
       }
       const mdRole = await getApiRole(request)
       if (!mdRole || !isManagerRole(mdRole.role)) {
-        return NextResponse.json({ error: '日付変更は管理者・事業責任者のみ実行できます' }, { status: 403 })
+        return NextResponse.json({ error: '日付変更は代表・事業責任者（政仁さん）だけができます' }, { status: 403 })
       }
 
       const { requestId, newDate, modifiedBy } = body
@@ -767,7 +760,7 @@ export async function POST(request: NextRequest) {
         const lockCtx = await loadLockContext()
         for (const checkYm of [data.ym, newYm]) {
           if (lockCtx.isLocked(checkYm, data.workerId)) {
-            return NextResponse.json({ error: `${checkYm.slice(0, 4)}年${parseInt(checkYm.slice(4, 6))}月は月次締め済みのため日付変更できません。先にロックを解除してください` }, { status: 409 })
+            return NextResponse.json({ error: `${checkYm.slice(0, 4)}年${parseInt(checkYm.slice(4, 6))}月は締めが済んでいるため日付変更できません。先に、事務か政仁さんに締めを外してもらってください（月次集計・締めの画面）` }, { status: 409 })
           }
         }
       }
@@ -831,11 +824,8 @@ export async function POST(request: NextRequest) {
             }, { status: 409 })
           }
           if ((dayM.existingWork || dayM.dayApproval) && body.allowOverwrite !== true) {
-            const parts: string[] = []
-            if (dayM.existingWork) parts.push(`変更先の日は出勤の入力があります（${describeWork(dayM.existingWork)}）。有給にすると出勤の記録が消えます`)
-            if (dayM.dayApproval) parts.push(`変更先の日は${dayM.dayApproval.final ? '最終承認' : '職長承認'}が済んでいます`)
             return NextResponse.json({
-              error: `${newDate}: ${parts.join('。')}`,
+              error: overwriteConfirmMessage(newDate, data.workerName, prevEntryM, dayM.dayApproval, '変更先の'),
               code: 'LEAVE_OVERWRITES_WORK',
               existingWork: dayM.existingWork,
               dayApproved: !!dayM.dayApproval,

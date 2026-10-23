@@ -245,6 +245,12 @@ export default function ForemanMobilePage() {
           })
         } else if (errData?.code === 'LEAVE_OVERDRAFT') {
           const b = errData.balance
+          // 期が終わって次の付与がまだの人（2026-10-24・PC 出面画面と同じ）: 残数超えで入れず、先に付与してもらう
+          if (b?.periodOver) {
+            notify.error(`${errData.workerName} さんは有給の期が終わり、次の付与がまだです`,
+              userRole === 'foreman' ? '事務か政仁さんに有給の付与を頼んでください。' : '休暇管理の「付与待ち」で付与してから、もう一度入れてください。')
+            fetchGrid(); return false
+          }
           // 2026-09-14: 職長には残数超過の上書きを認めない（PC 出面画面・職長トークン画面と同じ）
           if (userRole === 'foreman') {
             notify.error(
@@ -1290,7 +1296,7 @@ export default function ForemanMobilePage() {
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 p-4 text-sm text-gray-500">
-                スマホ用トークンが未発行のため表示できません。管理者に「人員マスタ → スマホURL発行」を依頼してください。
+                スマホ用トークンが未発行のため表示できません。事務（森田さん）か代表に「人員マスタ → スマホURL発行」を頼んでください。
               </div>
             )
           ) : !myData ? (

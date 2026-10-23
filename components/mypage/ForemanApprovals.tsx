@@ -85,13 +85,16 @@ export default function ForemanApprovals({ token, canApprove }: {
       let j = await res.json().catch(() => null)
       // 休憩チェックの打刻ミスの疑い（2026-10-15）。確認したら送り直す
       if (res.status === 409 && isBreakCheckResponse(j)) {
+        setBusy('')   // 確認の窓を出している間は「承認中...」にしない（2026-10-24）
         if (!(await confirmBreakCheck(j.issues, Number(ym.slice(4, 6))))) return
+        setBusy(`${action}_${siteId}_${ym}`)
         res = await send(true)
         j = await res.json().catch(() => null)
       }
       if (!res.ok) { notify.failed(verb, j?.error || 'サーバが受け付けませんでした'); return }
       const skipped = (j?.skipped || []) as { day: number; reason: string }[]
-      flash(`${j?.approvedDays?.length ?? 0}日分を${verb}しました${skipped.length ? `（${skipped.length}日は条件がそろっていないため承認していません）` : ''}`)
+      // 承認しなかった日と理由も出す（2026-10-24。旧: 「◯日は条件がそろっていないため承認していません」だけで、どの日か分からなかった）
+      flash(`${j?.approvedDays?.length ?? 0}日分を${verb}しました${skipped.length ? `（承認していない日: ${skipped.map(x => `${x.day}日 ${x.reason}`).join('・')}）` : ''}`)
       load()
     } catch (e) { notify.failed(verb, e) } finally { setBusy('') }
   }
@@ -129,7 +132,10 @@ export default function ForemanApprovals({ token, canApprove }: {
       if (!res.ok) {
         // 理由の文（message）を優先して出す（帰国申請の期間内に出勤がある 409 は error がコード名だけ・2026-10-01）
         const j = await res.json().catch(() => null)
-        notify.failed(approve ? '承認' : '却下', j?.message ?? j?.error ?? 'サーバが受け付けませんでした')
+        // 有給で上書きの確認がいる日（2026-10-24）: マイページでは確認の窓を出さないので、どこで承認するかを添える
+        const hint = j?.code === 'LEAVE_OVERWRITES_WORK' || j?.code === 'LEAVE_OVERDRAFT'
+          ? '\n確認がいるため、ここでは承認できません。PCの「休暇管理」→「申請」タブから承認してください' : ''
+        notify.failed(approve ? '承認' : '却下', (j?.message ?? j?.error ?? 'サーバが受け付けませんでした') + hint)
         return
       }
       flash(!approve ? '却下しました。' : stage === 'foreman' ? '承認しました。政仁さんの最終承認を待ちます。' : '承認しました。')

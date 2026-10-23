@@ -101,8 +101,26 @@ export default function RequestsTab({
     if (foremanId == null) return ''
     return workerNames[foremanId] || ''
   }
+  // 実際に職長承認した人の名前（2026-10-24）。旧: 「職長済」に現場の職長の名前を出していたので、
+  //   政仁さんが代わりに職長承認しても「白戸寛之 職長済」と出ていた。承認した記録（foremanApprovedBy）から出す
+  const foremanApproverName = (req: { foremanApprovedBy?: number | string; siteId: string; date: string }): string => {
+    const by = req.foremanApprovedBy
+    if (typeof by === 'number') return workerNames[by] || ''
+    if (by === 'super-admin') return '代表'
+    if (by === 'admin') return '管理者'
+    return resolveForemanName(req.siteId, req.date)   // 古い記録（承認者が残っていない）は現場の職長
+  }
+  // 押したボタンだけ「処理しています」にする（2026-10-24）。旧: 1つの行で最終承認を押すと却下まで「処理しています」になった。
+  //   processingReq は `${申請ID}#${操作}`。同じ行のほかのボタンは押せないようにだけする
+  // 「◯◯さん 10/20（火）」— 確認の窓・失敗の一覧で、どの申請の話かを書く（2026-10-24）
+  const reqLabel = (id: string) => {
+    const r = leaveRequests.find(x => x.id === id)
+    return r ? `${r.workerName}さん ${fmtDate(r.date)}` : id
+  }
+  const busyAct = (id: string, act: string) => processingReq === `${id}#${act}`
+  const rowLocked = (id: string) => !!processingReq && processingReq.startsWith(`${id}#`)
   const handleForemanApprove = async (id: string) => {
-    patchUi({ processingReq: id })
+    patchUi({ processingReq: `${id}#foreman` })
     try {
       const stored = readAuth()
       const { user } = stored ? stored : { user: null }
@@ -119,7 +137,7 @@ export default function RequestsTab({
     } catch (e) { notify.failed('職長承認', e) } finally { patchUi({ processingReq: null }) }
   }
   const handleApprove = async (id: string) => {
-    patchUi({ processingReq: id })
+    patchUi({ processingReq: `${id}#approve` })
     try {
       const stored = readAuth()
       const { user } = stored ? stored : { user: null }
@@ -137,21 +155,25 @@ export default function RequestsTab({
         const err = await res.clone().json().catch(() => null)
         if (err?.code === 'LEAVE_OVERDRAFT' && !extra.allowOverdraft) {
           const b = err.balance
+          patchUi({ processingReq: null })   // 確認の窓を出している間は「処理しています」にしない
           const over = await confirmDialog({
             title: '残数を超えて承認しますか？',
-            description: `有給残が足りません（枠 ${b?.total}日 / 消化 ${b?.used}日 / 残 ${b?.remaining ?? 0}日）。\n超えて承認した記録は残ります。`,
+            description: `${reqLabel(id)}: 有給の残りが足りません（枠 ${b?.total}日・使った ${b?.used}日・残り ${b?.remaining ?? 0}日）。\n超えて承認した記録は残ります。`,
             confirmLabel: '超えて承認する',
           })
-          if (!over) { patchUi({ processingReq: null }); return }
+          if (!over) return
+          patchUi({ processingReq: `${id}#approve` })
           extra.allowOverdraft = true
           res = await post(extra)
         } else if (err?.code === 'LEAVE_OVERWRITES_WORK' && !extra.allowOverwrite) {
+          patchUi({ processingReq: null })   // 確認の窓を出している間は「処理しています」にしない
           const over = await confirmDialog({
             title: 'それでも有給で上書きしますか？',
             description: `${err.error}\n上書きした記録は残ります。`,
             confirmLabel: '上書きする',
           })
-          if (!over) { patchUi({ processingReq: null }); return }
+          if (!over) return
+          patchUi({ processingReq: `${id}#approve` })
           extra.allowOverwrite = true
           res = await post(extra)
         } else break
@@ -175,7 +197,7 @@ export default function RequestsTab({
       reason: { label: '取り消す理由', placeholder: '例: 本人の申し出で出勤に変更' },
     })
     if (reason === null) return
-    patchUi({ processingReq: id })
+    patchUi({ processingReq: `${id}#revoke` })
     try {
       const res = await fetchWithAuth('/api/leave-request', { password,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -189,7 +211,7 @@ export default function RequestsTab({
     } catch (e) { notify.failed('取り消し', e) } finally { patchUi({ processingReq: null }) }
   }
   const handleReject = async (id: string) => {
-    patchUi({ processingReq: id })
+    patchUi({ processingReq: `${id}#reject` })
     try {
       const stored = readAuth()
       const { user } = stored ? stored : { user: null }
@@ -210,7 +232,7 @@ export default function RequestsTab({
   // 承認済み有給の日付変更（誤申請修正用、admin/approver のみ）
   const handleModifyDate = async (id: string, newDate: string) => {
     if (!newDate) { patchUi({ modifyDateError: '新しい日付を選択してください' }); return }
-    patchUi({ processingReq: id })
+    patchUi({ processingReq: `${id}#modify` })
     try {
       const stored = readAuth()
       const { user } = stored ? stored : { user: null }
@@ -223,11 +245,13 @@ export default function RequestsTab({
       if (res.status === 409) {
         const d = await res.clone().json().catch(() => null)
         if (d?.code === 'LEAVE_OVERWRITES_WORK') {
+          patchUi({ processingReq: null })   // 確認の窓を出している間は「処理しています」にしない
           if (!(await confirmDialog({
             title: 'それでも有給で上書きしますか？',
             description: `${d.error}\n上書きした記録は残ります。`,
             confirmLabel: '上書きする',
           }))) return
+          patchUi({ processingReq: `${id}#modify` })
           res = await postMod({ allowOverwrite: true })
         }
       }
@@ -291,12 +315,14 @@ export default function RequestsTab({
       }
       // 出勤入力・承認済みの日の上書き（2026-10-02 総合点検）: 内容を見せて確認のうえでだけ上書き承認
       if (overwrites.length > 0 && action === 'approve') {
+        patchUi({ processingReq: null })   // 確認の窓を出している間は「処理しています」にしない（2026-10-24）
         const over = await confirmDialog({
           title: 'それでも有給で上書きしますか？',
-          description: `${overwrites.length}件は出勤の入力か日の承認がある日です。\n${overwrites.map(o => o.error).join('\n')}\n上書きした記録は残ります。`,
+          description: `${overwrites.length}件は、出面に入力があるか、その日の承認が済んでいる日です。\n${overwrites.map(o => o.error).join('\n')}\n上書きした記録は残ります。`,
           confirmLabel: '上書きする',
         })
         if (over) {
+          patchUi({ processingReq: bulkKey })
           const retry = await Promise.all(overwrites.map(async o => ({ id: o.id, res: await post(o.id, { allowOverwrite: true }) })))
           for (const { id, res } of retry) {
             if (res.ok) continue
@@ -305,17 +331,19 @@ export default function RequestsTab({
             else failures.push({ id, error: err?.error || '理由が返ってきませんでした' })
           }
         } else {
-          for (const o of overwrites) failures.push({ id: o.id, error: '上書きしなかった' })
+          for (const o of overwrites) failures.push({ id: o.id, error: '上書きをやめたので承認していません' })
         }
       }
       // 残数超過は個別承認と同じく、確認のうえ超過承認で再実行できる
       if (overdrafts.length > 0 && action === 'approve') {
+        patchUi({ processingReq: null })
         const over = await confirmDialog({
           title: '残数を超えて承認しますか？',
-          description: `${overdrafts.length}件が有給残の不足で承認できませんでした。\n超えて承認した記録は残ります。`,
+          description: `${overdrafts.length}件が有給の残り不足で承認できませんでした（${overdrafts.map(reqLabel).join('・')}）。\n超えて承認した記録は残ります。`,
           confirmLabel: '超えて承認する',
         })
         if (over) {
+          patchUi({ processingReq: bulkKey })
           const retry = await Promise.all(overdrafts.map(async id => ({ id, res: await post(id, { allowOverdraft: true }) })))
           for (const { id, res } of retry) {
             if (!res.ok) {
@@ -324,14 +352,14 @@ export default function RequestsTab({
             }
           }
         } else {
-          failures.push(...overdrafts.map(id => ({ id, error: '残数不足のためスキップ' })))
+          failures.push(...overdrafts.map(id => ({ id, error: '有給の残りが足りないため承認していません' })))
         }
       } else if (overdrafts.length > 0) {
-        failures.push(...overdrafts.map(id => ({ id, error: '残数不足' })))
+        failures.push(...overdrafts.map(id => ({ id, error: '有給の残りが足りません' })))
       }
       if (failures.length > 0) {
         notify.error(`${ids.length}件中 ${failures.length}件を${actionLabel}できませんでした`,
-          failures.slice(0, 5).map(f => `・${f.error}`).join('\n') +
+          failures.slice(0, 5).map(f => `・${reqLabel(f.id)}: ${f.error}`).join('\n') +
           (failures.length > 5 ? `\n…他${failures.length - 5}件` : ''))
       }
       if (action === 'reject' && failures.length === 0) { patchUi({ rejectingId: null, rejectReason: '' }) }
@@ -431,24 +459,24 @@ export default function RequestsTab({
                             return (
                             <>
                               {canFA && (
-                                <RowButton tone="approve" busy={processingReq === req.id} onClick={() => handleForemanApprove(req.id)}>{fName ? `${fName} 職長承認する` : '職長承認する'}</RowButton>
+                                <RowButton tone="approve" busy={busyAct(req.id, 'foreman')} disabled={rowLocked(req.id)} onClick={() => handleForemanApprove(req.id)}>{fName ? `${fName} 職長承認する` : '職長承認する'}</RowButton>
                               )}
-                              <RowButton tone="danger" busy={processingReq === req.id}
+                              <RowButton tone="danger" busy={busyAct(req.id, 'reject')} disabled={rowLocked(req.id)}
                                 onClick={() => rejectingId === req.id ? handleReject(req.id) : patchUi({ rejectingId: req.id, rejectReason: '' })}>却下する</RowButton>
                             </>
                             )
                           })()}
                           {req.status === 'foreman_approved' && (() => {
                             const canFinal = userRole === 'admin' || userRole === 'approver'
-                            const fName = resolveForemanName(req.siteId, req.date)
+                            const approver = foremanApproverName(req)
                             return (
                             <>
-                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-3xs font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-3xs font-bold">{approver ? `${approver} 職長済` : '職長済'}</span>
                               {canFinal && (
-                                <RowButton tone="approve" busy={processingReq === req.id} onClick={() => handleApprove(req.id)}>最終承認する</RowButton>
+                                <RowButton tone="approve" busy={busyAct(req.id, 'approve')} disabled={rowLocked(req.id)} onClick={() => handleApprove(req.id)}>最終承認する</RowButton>
                               )}
                               {canFinal && (
-                                <RowButton tone="danger" busy={processingReq === req.id}
+                                <RowButton tone="danger" busy={busyAct(req.id, 'reject')} disabled={rowLocked(req.id)}
                                   onClick={() => rejectingId === req.id ? handleReject(req.id) : patchUi({ rejectingId: req.id, rejectReason: '' })}>却下する</RowButton>
                               )}
                             </>
@@ -458,12 +486,12 @@ export default function RequestsTab({
                             <>
                               <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">承認済</span>
                               {(userRole === 'admin' || userRole === 'approver') && (
-                                <RowButton tone="ghost" disabled={processingReq === req.id}
+                                <RowButton tone="ghost" disabled={rowLocked(req.id)}
                                   onClick={() => patchUi({ modifyingId: req.id, modifyNewDate: req.date })}
                                   title="承認済み有給の日付を変更（誤申請修正）">日付を変更する</RowButton>
                               )}
                               {(userRole === 'admin' || userRole === 'approver') && (
-                                <RowButton tone="danger" busy={processingReq === req.id}
+                                <RowButton tone="danger" busy={busyAct(req.id, 'revoke')} disabled={rowLocked(req.id)}
                                   onClick={() => handleRevoke(req.id)}
                                   title="承認済み有給を取り消す（出面の「有」も消えて残数が戻る）">取り消す</RowButton>
                               )}
@@ -494,7 +522,7 @@ export default function RequestsTab({
                               onChange={e => patchUi({ modifyNewDate: e.target.value, modifyDateError: null })}
                               className="border border-amber-300 rounded-lg px-3 py-1.5 text-sm bg-white"
                             />
-                            <RowButton tone="main" busy={processingReq === req.id}
+                            <RowButton tone="main" busy={busyAct(req.id, 'modify')}
                               disabled={!modifyNewDate || modifyNewDate === req.date}
                               onClick={() => handleModifyDate(req.id, modifyNewDate)}>この日付に変更する</RowButton>
                             <RowButton tone="ghost" onClick={() => patchUi({ modifyingId: null, modifyNewDate: '', modifyDateError: null })}>やめる</RowButton>
@@ -506,7 +534,7 @@ export default function RequestsTab({
                         <div className="mt-3 flex items-center gap-2 border-t pt-3">
                           <input type="text" value={rejectReason} onChange={e => patchUi({ rejectReason: e.target.value })} placeholder="却下理由（任意）"
                             className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-3 py-1.5 text-sm" />
-                          <RowButton tone="danger" busy={processingReq === req.id} onClick={() => handleReject(req.id)}>却下する</RowButton>
+                          <RowButton tone="danger" busy={busyAct(req.id, 'reject')} disabled={rowLocked(req.id)} onClick={() => handleReject(req.id)}>却下する</RowButton>
                           <RowButton tone="ghost" onClick={() => patchUi({ rejectingId: null })}>やめる</RowButton>
                         </div>
                       )}
@@ -544,7 +572,7 @@ export default function RequestsTab({
                       <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-bold">{items.length}件</span>
                       <span className="text-xs text-gray-400">{getSiteName(first.siteId)}</span>
                       {first.status === 'foreman_approved' && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-3xs font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-3xs font-bold">{(() => { const a = foremanApproverName(first); return a ? `${a} 職長済` : '職長済' })()}</span>
                       )}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 break-words">

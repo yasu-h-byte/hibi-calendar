@@ -62,6 +62,8 @@ export default function BulkEntryModal({
   const plan = useMemo(() => {
     const items: BulkItem[] = []
     let skipLocked = 0, skipExisting = 0, skipForeignWork = 0, skipAbsent = 0, skipProtected = 0, overwriteStaff = 0, skipRestDay = 0
+    // 本人がスマホで入れたマスを上書きする人と日（確認の窓で、誰のどの日かを見せる・2026-10-24）
+    const overwriteStaffList: { name: string; days: number[] }[] = []
     const isoOf = (d: number) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
     for (const w of workers) {
       if (!who.has(String(w.id))) continue
@@ -77,7 +79,11 @@ export default function BulkEntryModal({
         // 有給・帰国・試験のマスは「入力済みを変えない」を外しても上書きしない（有給の取り消しは申請の画面から）
         if (cur && (cur.p || cur.hk || cur.exam)) { skipProtected++; continue }
         if (keepExisting && cur && kind !== 'clear') { skipExisting++; continue }
-        if (cur && cur.s === 'staff') overwriteStaff++
+        if (cur && cur.s === 'staff' && kind !== 'clear') {
+          overwriteStaff++
+          const row = overwriteStaffList.find(x => x.name === w.name) ?? (overwriteStaffList.push({ name: w.name, days: [] }), overwriteStaffList[overwriteStaffList.length - 1])
+          row.days.push(d)
+        } else if (cur && cur.s === 'staff') overwriteStaff++
         if (kind === 'clear') { if (cur) items.push({ workerId: String(w.id), day: d, entry: null }); continue }
         if (kind === 'rest') { items.push({ workerId: String(w.id), day: d, entry: { w: 0, r: 1, s: 'admin' } }); continue }
         // 0.6補（会社都合の休み）はカレンダーの仕事の日だけ（スタッフのスマホ・サーバと同じ決まり・2026-10-02 総合点検。
@@ -102,7 +108,7 @@ export default function BulkEntryModal({
         items.push({ workerId: String(w.id), day: d, entry })
       }
     }
-    return { items, skipLocked, skipExisting, skipForeignWork, skipAbsent, skipProtected, overwriteStaff, skipRestDay }
+    return { items, skipLocked, skipExisting, skipForeignWork, skipAbsent, skipProtected, overwriteStaff, overwriteStaffList, skipRestDay }
   }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor, homeLeaves, ym, workSchedule, isWorkDay])
 
   if (!open) return null
@@ -123,7 +129,7 @@ export default function BulkEntryModal({
     }))) return
     if (kind !== 'clear' && plan.overwriteStaff > 0 && !(await confirmDialog({
       title: `本人がスマホで入れた ${plan.overwriteStaff}マスを上書きしますか？`,
-      description: '始業・終業の時刻も置き換わります。',
+      description: `${plan.overwriteStaffList.slice(0, 6).map(x => `${x.name}さん ${x.days.map(d => `${d}日`).join('・')}`).join('\n')}${plan.overwriteStaffList.length > 6 ? `\nほか${plan.overwriteStaffList.length - 6}人` : ''}\n始業・終業の時刻も置き換わります。`,
       confirmLabel: '上書きする',
     }))) return
     if (plan.items.length > 150 && !(await confirmDialog({

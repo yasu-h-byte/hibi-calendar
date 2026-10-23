@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
 
       const data = snap.data() as HomeLongLeave
       if (data.status !== 'pending') {
-        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+        return NextResponse.json({ error: 'この申請は、もうほかの人が承認か却下をしています。画面を読み込み直してください' }, { status: 409 })
       }
 
       // 申請者の配置現場の職長一覧（権限判定用）
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
       if (data.status !== 'foreman_approved') {
         // 後方互換: pending から直接承認も許可（管理者権限）
         if (data.status !== 'pending') {
-          return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+          return NextResponse.json({ error: 'この申請は、もうほかの人が承認か却下をしています。画面を読み込み直してください' }, { status: 409 })
         }
       }
 
@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
       //   旧: approved / rejected 以外を全部通していたため、本人が取り消した申請（cancelled）を却下でき、
       //   履歴が「取消→却下」になった
       if (data.status !== 'pending' && data.status !== 'foreman_approved') {
-        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+        return NextResponse.json({ error: 'この申請は、もうほかの人が承認か却下をしています。画面を読み込み直してください' }, { status: 409 })
       }
 
       // 2026-06-12 (監査 Sprint2-B): token 却下は「申請者の配置現場の職長」のみ。
