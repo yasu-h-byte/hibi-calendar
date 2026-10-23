@@ -473,9 +473,11 @@ export async function POST(request: NextRequest) {
       }
       // 有給・0.6補（会社都合の休み）は、カレンダーの仕事の日だけ（スタッフのスマホと同じ決まり・2026-10-02 総合点検）
       //   旧: 0.6補は職長・PC・一括入力から休みの日にも入れられ、休業手当（60%）の過払いになりえた
+      //   0.6補は旧契約の人なら日曜以外でよい（isCompAllowedDay・2026-10-23）
       if (choice === 'leave' || (choice === 'comp' && foremanPrevEntry?.w !== 0.6)) {
-        const { isScheduledWorkDay: iswd } = await import('@/lib/attendance.server')
-        if (!await iswd(site.id, dayIso)) {
+        const { isScheduledWorkDay: iswd, isCompAllowedDay } = await import('@/lib/attendance.server')
+        const okDay = choice === 'comp' ? await isCompAllowedDay(site.id, dayIso, Number(workerId)) : await iswd(site.id, dayIso)
+        if (!okDay) {
           return NextResponse.json({
             error: choice === 'leave'
               ? 'この日は現場の非稼働日のため有給にできません（休日・所定休は対象外）'

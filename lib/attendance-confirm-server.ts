@@ -15,9 +15,11 @@ import {
   type AttConfirmDoc, type StaffMonthSummary,
 } from './attendance-confirm'
 import type { AttendanceEntry } from '@/types'
+import { isOldContractWorker } from './old-contract'
 
 export type ConfirmWorker = {
   id: number; hireDate?: string; retired?: string; breakShortenMin?: number; breakShortenFrom?: string
+  visa?: string; visaType?: string; useOldRules?: boolean
 }
 
 export interface ConfirmReadiness {
@@ -53,7 +55,10 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
 
   const summarize = async (worker: ConfirmWorker, todayIso: string, beforeIso?: string): Promise<StaffMonthSummary> =>
     summarizeWorkerMonth({
-      d, workerId: worker.id, ym, calDays: await calOfWorker(worker.id),
+      // 旧契約の人は所定が全社の日曜以外なので、現場カレンダーが休みの日の空欄も「未入力」に数える
+      //   （calDays: null = 日曜以外を仕事の日とみなす。lib/old-contract.ts・2026-10-23 タン 9/21・22）。
+      //   承認が要る日（下の requiredFamilyDays）は現場カレンダーのまま（休みの日は職長の承認が無いため）
+      d, workerId: worker.id, ym, calDays: isOldContractWorker(worker) ? null : await calOfWorker(worker.id),
       hireDate: worker.hireDate, retired: worker.retired, todayIso, beforeIso,
       breakShortenMin: breakShortenMinFor(worker, ym) || undefined,
     })

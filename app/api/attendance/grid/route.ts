@@ -1136,9 +1136,10 @@ export async function POST(request: NextRequest) {
             }
             // 0.6補（会社都合の休み）はカレンダーの仕事の日だけ（スタッフのスマホと同じ決まり・2026-10-02 総合点検）。
             //   旧: PC・一括入力からは休みの日にも入れられ、休業手当（60%）の過払いになりえた。すでに 0.6補の日の保存し直しは止めない
+            //   旧契約の人は日曜以外ならよい（isCompAllowedDay・2026-10-23）
             if ((entry as AttendanceEntry).w === 0.6 && existing?.w !== 0.6) {
-              const { isScheduledWorkDay } = await import('@/lib/attendance.server')
-              if (!await isScheduledWorkDay(String(siteId), dayIso)) {
+              const { isCompAllowedDay } = await import('@/lib/attendance.server')
+              if (!await isCompAllowedDay(String(siteId), dayIso, Number(workerId))) {
                 return NextResponse.json({ error: COMP_NON_WORKING_DAY_MESSAGE, code: 'COMP_NON_WORKING_DAY' }, { status: 400 })
               }
             }

@@ -135,7 +135,7 @@ UI と集計でロジックが分離されているため、両者を改修す�
 
 ロックは `lib/locks.ts`、在籍は `lib/workers.ts` の `isEmployedOn`、多現場は `lib/attendance.ts` の `detectMultiSiteConflict`（それぞれ1つだけの決まり）。
 
-- **0.6補（会社の都合の休み）はカレンダーの仕事の日だけ**（`COMP_NON_WORKING_DAY_MESSAGE`）。2026-09-30 にスタッフのスマホに入れた決まりを、
+- **0.6補（会社の都合の休み）はカレンダーの仕事の日だけ**（`COMP_NON_WORKING_DAY_MESSAGE`）。**例外: 旧契約の人は日曜以外ならよい**（`isCompAllowedDay`・`lib/old-contract.ts`・2026-10-23。旧契約の所定は全社の日曜以外なので、現場の休みの日に入れられないと空欄＝欠勤 100%控除になる）。2026-09-30 にスタッフのスマホに入れた決まりを、
   PC・一括入力・職長スマホ・トークン版の全経路に横展開した。有給も同じ
 - **「前月コピー」は廃止**（2026-10-02・月次集計から外した。前月の出面を丸ごと当月へ写す保守用で、押し間違いの害が大きかった）
 - **「未入力」の数え方は純関数 `lib/attendance-missing.ts`**（`isWorkDayOf`・`evaluateDayInputs`）に一本化。職長の一覧（`lib/foreman-todo.ts`）・

@@ -51,6 +51,19 @@ export async function isScheduledWorkDay(siteId: string, dateIso: string): Promi
   return resolveDayType(days, y, m, d) === 'work'
 }
 
+/**
+ * 0.6補（会社都合の休み）を入れられる日か（PC の出面・職長スマホ・本人スマホの共通・2026-10-23）。
+ * ふつうは現場カレンダーの仕事の日だけ（休みの日に入れると休業手当60%の過払い・2026-10-02）。
+ * 旧契約の人（lib/old-contract.ts）は所定が全社の日曜以外なので、現場カレンダーが休みの日も入れられる
+ * （入れられないと空欄＝欠勤 100%控除のままになる。タン 208 の 9/21・22）。
+ */
+export async function isCompAllowedDay(siteId: string, dateIso: string, workerId: number): Promise<boolean> {
+  const { isOldContractWorker, isOldContractPrescribedDay } = await import('./old-contract')
+  const w = (await getMainData()).workers.find(x => x.id === Number(workerId))
+  if (isOldContractWorker(w)) return isOldContractPrescribedDay(dateIso)
+  return isScheduledWorkDay(siteId, dateIso)
+}
+
 // ────────────────────────────────────────
 //  Firestore読み書き: att_YYYYMM
 // ────────────────────────────────────────
