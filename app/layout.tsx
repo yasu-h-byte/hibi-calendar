@@ -36,11 +36,15 @@ export const metadata: Metadata = {
   },
 }
 
-// Next 14 では viewport は metadata と別に書く（2026-10-21 総点検。旧: metadata.viewport で非推奨の警告）
+// Next 14 以降、viewport は metadata と別に書く（2026-10-21 総点検。旧: metadata.viewport で非推奨の警告）
+// viewportFit（cover）は付けない（2026-10-26 大川さん「左上のメニューが反応しない・ログアウトもできない」）。
+//   旧 metadata.viewport は Next 14 に無視されていて、cover は一度も効いていなかった。10/21 に書き方を直して初めて効き、
+//   ホーム画面から開いた iPhone（status-bar-style: black-translucent）で画面が時計・Dynamic Island の帯の裏まで広がり、
+//   左上のメニューボタン（top-3）が帯に重なって押せなくなった。付けるなら全画面の上下に env(safe-area-inset-*) の余白が要る。
+//   __tests__/viewportSafeArea.test.ts が落とす
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  viewportFit: 'cover',
   themeColor: '#1B2A4A',
 }
 

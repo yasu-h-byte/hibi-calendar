@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261026_iphone_menu',
+    title: 'iPhone で左上のメニューが押せなかったのを直しました',
+    content:
+      '10/21 から、iPhone のホーム画面のアイコンから開くと、左上のメニューボタンが画面上の時計の帯に重なって押せず、出面入力へ移ることもログアウトもできなくなっていました。'
+      + '画面が時計の帯の下から始まる、もとの表示に戻しました。アプリを一度閉じて開き直すと直ります。',
+    category: 'fix',
+    publishedAt: '2026-10-26T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20261024_leave_blank_day',
     title: '有給の承認: 締めた日でも、本人の欄が空欄なら確認なしで承認できます',
     content:
