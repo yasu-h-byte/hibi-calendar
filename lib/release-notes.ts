@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261102_staff_confirm_gate',
+    title: 'スタッフの出面の本人確認は、事務所のチェックが全部終わってから出るようにしました（10月分から）',
+    content:
+      'これまでは、その人の出面の承認がそろうとすぐにスマホに確認が出ていたため、空欄の日が欠勤のまま本人に見えることがありました。'
+      + '10月分からは、会社の全現場の承認（職長・最終）がそろい、その人の空欄の日も埋まってから出ます。'
+      + '月次集計で「承認待ち」の人は、バッジにのせると足りないもの（承認・空欄の日）が出ます。',
+    category: 'info',
+    publishedAt: '2026-11-02T22:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261102_own_site_calendar_ot',
     title: '外国人の残業は本人の現場のカレンダーで判定するようにしました（10月分から）',
     content:
