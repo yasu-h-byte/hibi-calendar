@@ -48,7 +48,13 @@ export const COMP_FULL_WITHIN_GUARANTEE_FROM_YM = '202608'
  *   （例: 稼働21日に欠勤1日でも20日分）。自己都合の欠勤が控除されないのはおかしい、との判断で改めた。
  * オブジェクトにしているのは、影響の試算（過去月に当てはめたら）で書き換えられるようにするため。本番では変えない。
  */
-export const PAYROLL_RULES = { personalAbsenceReducesGuaranteeFromYm: '202609' }
+export const PAYROLL_RULES = {
+  personalAbsenceReducesGuaranteeFromYm: '202609',
+  /** 週の残業の基準（週所定）を本人の現場のカレンダーだけで決める月（2026-11-02 代表・10月分から）。lib/compute-overtime.ts workerSiteCalendarDays */
+  ownSiteCalendarOtFromYm: '202610',
+  /** 役員（政仁さん・共同代表）に残業代・法定休日手当を付けない月（2026-11-02 代表・10月分から）。役員報酬は労働時間の対価ではない */
+  yakuinNoOvertimeFromYm: '202610',
+}
 
 /**
  * 日本人の1日所定労働時間。割増賃金の算定基礎（日額 ÷ 所定時間）の分母。

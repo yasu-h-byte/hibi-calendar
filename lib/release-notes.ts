@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261102_own_site_calendar_ot',
+    title: '外国人の残業は本人の現場のカレンダーで判定するようにしました（10月分から）',
+    content:
+      '週の残業の基準に、本人がいない現場のカレンダーまで入っていたため、本人の現場が休みの土曜に出勤した週の残業が少なく出ていました。'
+      + '10月分からは本人の現場のカレンダーだけで判定します。月次集計の「ほかの現場のカレンダーが週の所定時間を押し上げ…」の注意点は、これで出なくなります。9月分までの締めた月は変わりません。',
+    category: 'fix',
+    publishedAt: '2026-11-02T21:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261026_iphone_menu',
     title: 'iPhone で左上のメニューが押せなかったのを直しました',
     content:

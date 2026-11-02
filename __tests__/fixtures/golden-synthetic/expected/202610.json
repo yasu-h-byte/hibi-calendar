@@ -194,12 +194,12 @@
    "absentDeduction": 90000,
    "compBaseDeduction": 0,
    "salaryNetPay": 290000,
-   "calendarBlankDays": 4,
+   "calendarBlankDays": 6,
    "payNotes": [
     {
      "code": "oldRuleUnpaidDays",
-     "message": "旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が 4日 あります（記録が空欄 3・10・12・17日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・36,000円）、本人の都合なら「欠」を入れてください",
-     "amount": 36000
+     "message": "旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が 6日 あります（記録が空欄 3・10・12・17・24・31日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・54,000円）、本人の都合なら「欠」を入れてください",
+     "amount": 54000
     }
    ]
   },
@@ -225,12 +225,12 @@
    "restDays": 1,
    "siteOffDays": 0,
    "examDays": 0,
-   "cost": 253600,
+   "cost": 254400,
    "otCost": 0,
-   "totalCost": 253600,
+   "totalCost": 254400,
    "absence": 0,
    "absentCost": 0,
-   "netPay": 253600,
+   "netPay": 254400,
    "isDispatched": false,
    "dispatchTo": "",
    "dispatchDeduction": 0,
@@ -238,20 +238,13 @@
    "personalAbsenceDays": 1,
    "workerPrescribedDays": 21,
    "guaranteeDays": 20,
-   "payNotes": [
-    {
-     "code": "crossSiteCalendar",
-     "message": "ほかの現場のカレンダーが週の所定時間を押し上げ、法定外残業が 2h 少なく出ています（本人の現場のカレンダーだけなら 8h）。割増の差 約800円。代表に確認してください",
-     "amount": 800
-    }
-   ],
    "fixedBasePay": 224000,
    "additionalAllowance": 11200,
    "paidLeaveDays": 0,
    "paidLeaveAllowance": 0,
    "nonStatutoryOTHours": 10,
    "nonStatutoryOTAllowance": 16000,
-   "otAllowance": 2400,
+   "otAllowance": 3200,
    "legalHolidayHours": 0,
    "legalHolidayDays": 0,
    "legalHolidayAllowance": 0,
@@ -259,15 +252,15 @@
    "nightAllowance": 0,
    "compAllowance": 0,
    "absentDeduction": 0,
-   "salaryNetPay": 253600,
+   "salaryNetPay": 254400,
    "regularWorkDays": 21,
    "dailyStatutoryOT": 5,
-   "weeklyStatutoryOT": 1,
+   "weeklyStatutoryOT": 3,
    "monthlyStatutoryOT": 0,
    "legalLimit": 177.1,
    "prescribedHours": 140,
    "actualWorkHours": 157,
-   "legalOtHours": 6,
+   "legalOtHours": 8,
    "dailyOtHours": 10,
    "basePay": 224000
   },
@@ -479,20 +472,20 @@
    "workDays": 83,
    "subWorkDays": 0,
    "otHours": 10,
-   "cost": 1664464,
+   "cost": 1665264,
    "subCost": 0,
    "billing": 0,
-   "profit": -1664464,
+   "profit": -1665264,
    "profitRate": 0
   }
  ],
  "totals": {
   "workDays": 167,
   "subWorkDays": 0,
-  "cost": 2914234,
+  "cost": 2915034,
   "subCost": 0,
   "billing": 0,
-  "profit": -2914234,
+  "profit": -2915034,
   "otHours": 27
  }
 }

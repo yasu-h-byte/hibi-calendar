@@ -21,6 +21,7 @@ import {
   OLD_RULE_BELOW_WORKED_DAYS_NOTE_FROM_YM,
   type MainData,
 } from '@/lib/compute'
+import { overtimeCalendarDays, workerSiteCalendarDays } from '@/lib/compute-overtime'
 import { validatePayrolls, buildAuditChecks, type PayrollSnapshot, type PayrollAuditWorker } from '@/lib/payroll-validator'
 import type { AttendanceEntry } from '@/types'
 
@@ -183,6 +184,20 @@ describe('給与チェックの注意点（payNotes・支給額は変えない�
     expect(n?.message).toContain('日曜の出勤 1日')
     expect(n?.message).toContain('夜勤 1回')
   })
+  it('役員（共同代表）は10月分から残業代・日曜の法定休日手当なし（月給だけ）。9月分までは変えない', () => {
+    const run = (YM: string) => {
+      const att: Record<string, AttendanceEntry> = {}
+      for (let d = 1; d <= dim(YM); d++) att[`s_12_${YM}_${d}`] = { ...E, o: 2 } as AttendanceEntry   // 日曜も含め毎日2h残業
+      return computeMonthly(mk([{ ...JP_MONTHLY, job: 'yakuin', hireDate: '2020-01-01' }]), att, {}, YM, 0, undefined, 20, {}).workers[0]
+    }
+    const oct = run('202610')
+    expect(oct.otAllowance).toBe(0)
+    expect(oct.legalHolidayAllowance).toBe(0)
+    expect(oct.dailyOtHours).toBe(0)
+    expect(oct.salaryNetPay).toBe(232000)
+    const sep = run('202609')
+    expect(sep.otAllowance).toBeGreaterThan(0)
+  })
   describe('新ルールの外国人', () => {
     const YM = '202609'
     const cal = (sat: boolean) => { const c: Record<string, string> = {}; let n = 0; for (let d = 1; d <= 30; d++) { const w = dow(YM, d); const work = w !== 0 && (sat || w !== 6); c[d] = work ? 'work' : 'off'; if (work) n++ } return { c, n } }
@@ -201,6 +216,33 @@ describe('給与チェックの注意点（payNotes・支給額は変えない�
       const own = computeMonthly(main, att, {}, YM, 0, { b: B.n }, 20, { b: B.c }).workers[0]
       expect(own.legalOtHours).toBe(2)
       expect(own.payNotes?.some(x => x.code === 'crossSiteCalendar')).toBeFalsy()
+    })
+    it('10月分から: 週所定は本人の現場のカレンダーだけで決める（ほかの現場の土曜出勤日で残業が減らない・注意点も出ない）', () => {
+      const Y10 = '202610'
+      const cal10 = (sat: boolean) => { const c: Record<string, string> = {}; let n = 0; for (let d = 1; d <= 31; d++) { const w = dow(Y10, d); const work = w !== 0 && (sat || w !== 6); c[d] = work ? 'work' : 'off'; if (work) n++ } return { c, n } }
+      const A10 = cal10(true), B10 = cal10(false)
+      const att: Record<string, AttendanceEntry> = {}
+      for (let d = 1; d <= 31; d++) if (dow(Y10, d) >= 1 && dow(Y10, d) <= 5) att[`b_201_${Y10}_${d}`] = E
+      att[`b_201_${Y10}_10`] = E   // 10/10(土) に臨時出勤 → 週42h
+      const main = mk([VN], { sites: [{ id: 'b', name: 'B' }, { id: 'a', name: 'A' }] })
+      const w = computeMonthly(main, att, {}, Y10, 0, { a: A10.n, b: B10.n }, 20, { a: A10.c, b: B10.c }).workers[0]
+      const own = computeMonthly(main, att, {}, Y10, 0, { b: B10.n }, 20, { b: B10.c }).workers[0]
+      expect(w.legalOtHours).toBe(own.legalOtHours)
+      expect(w.legalOtHours).toBeGreaterThanOrEqual(2)
+      expect(w.payNotes?.some(x => x.code === 'crossSiteCalendar')).toBeFalsy()
+    })
+    it('workerSiteCalendarDays: 本人の出面がある現場だけ（帰国中だけの現場は除く）。無ければ全現場のまま', () => {
+      const all = { a: { '1': 'work' }, b: { '1': 'off' }, c: { '1': 'work' } }
+      const att: Record<string, AttendanceEntry> = {
+        [`b_201_202610_1`]: E,
+        [`c_201_202610_2`]: { hk: 1 } as unknown as AttendanceEntry,
+        [`a_202_202610_1`]: E,          // 別の人
+        [`a_201_202609_30`]: E,         // 別の月
+      }
+      expect(workerSiteCalendarDays(all, att, 201, '202610')).toEqual({ b: all.b })
+      expect(workerSiteCalendarDays(all, att, 999, '202610')).toBe(all)
+      expect(overtimeCalendarDays(all, att, 201, '202609')).toBe(all)   // 9月分までは全現場のまま
+      expect(overtimeCalendarDays(all, att, 201, '202610')).toEqual({ b: all.b })
     })
     it('月途中の時給改定で改定後の残業が平均時給で計算される → 注意点（目安つき）', () => {
       const att: Record<string, AttendanceEntry> = {}

@@ -9,7 +9,7 @@ import { dayLabel, daysInMonth, setColWidths, timesheetDayHours, ymLabel } from 
 import { isWorkingDay } from './attendance'
 import { WorkerMonthly } from './compute-monthly'
 import { effectiveHourlyRateForYm, isHiredByMonth, isStillActiveForMonth } from './workers'
-import { calculateOvertimeSummary } from './compute-overtime'
+import { calculateOvertimeSummary, overtimeCalendarDays } from './compute-overtime'
 
 // ────────────────────────────────────────
 //  1. 日比建設向け出面一覧
@@ -228,7 +228,8 @@ function appendOvertimeSummarySheet(
   for (const w of foreignWorkers) {
     // 時給はその月の適用額（月途中の改定は暦日按分）。給与計算本体（compute.ts の worker map）と揃える
     const hr = effectiveHourlyRateForYm(w, ym) || 0
-    const summary = calculateOvertimeSummary(ym, w.id, hr, baseDays, attD, sites, calendarDays)
+    // 週の所定は本人の現場のカレンダーで決める（10月分から・給与計算と同じ関数・2026-11-02）
+    const summary = calculateOvertimeSummary(ym, w.id, hr, baseDays, attD, sites, overtimeCalendarDays(calendarDays, attD, w.id, ym))
     const m = monthlyById.get(w.id)
     const basePay = m ? (m.fixedBasePay ?? m.basePay ?? summary.fixedBasePay) : summary.fixedBasePay
     if (m && basePay !== summary.fixedBasePay) proratedNames.push(`${w.name}（${(m.hkDays || 0) > 0 ? `帰国中 ${m.hkDays}日` : (m.salary || 0) > 0 ? '固定月給' : '月途中の入社・退職'}）`)

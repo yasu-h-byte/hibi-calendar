@@ -3,13 +3,49 @@
  * 2026-10-21 総点検で lib/compute.ts から分離。計算の中身は変えていない。
  */
 import { AttendanceEntry, calcActualHours, calcNightShiftHours } from '@/types'
-import { RawSite, ceilYen } from './compute'
+import { PAYROLL_RULES, RawSite, ceilYen, parseDKey } from './compute'
 import { isWorkingDay } from './attendance'
 
 // ────────────────────────────────────────
 //  3段階残業判定（1ヶ月単位の変形労働時間制）
 //  キャシュモ向け: 日→週→月の段階的法定外労働時間計算
 // ────────────────────────────────────────
+
+/**
+ * 本人の現場のカレンダーだけを取り出す（2026-11-02 代表・10月分から）。
+ *   週の残業の基準（週所定 = その週の予定日の所定時間の合計）を決めるのに使う。
+ *   旧: 全現場のカレンダーを渡していたため、本人の現場が休みでも「ほかの現場が出勤日」の日が
+ *   予定日に数えられ、週所定が 40h→42h に上がって法定外残業が少なく出ていた。
+ *   変形労働時間制の所定は、本人に前もって示したカレンダーで決まる。
+ * 本人の現場 = その月に本人の出面がある現場（応援先も含む。帰国中だけの記録は除く）。
+ * 本人の現場にカレンダーが1つも無いときは全現場のカレンダーのまま（予定日が0になって所定が消えるのを防ぐ）。
+ * 給与計算（compute-monthly）と社労士の勤怠サマリー（export-attendance）は必ずこの関数を通す（数字をそろえる）。
+ */
+export function workerSiteCalendarDays(
+  calendarDays: Record<string, Record<string, string>>,
+  attD: Record<string, AttendanceEntry>,
+  workerId: number | string,
+  ym: string,
+): Record<string, Record<string, string>> {
+  const own: Record<string, Record<string, string>> = {}
+  for (const [key, e] of Object.entries(attD)) {
+    if (!e || e.hk) continue
+    const pk = parseDKey(key)
+    if (pk.ym !== ym || pk.wid !== String(workerId)) continue
+    if (calendarDays[pk.sid] && !own[pk.sid]) own[pk.sid] = calendarDays[pk.sid]
+  }
+  return Object.keys(own).length > 0 ? own : calendarDays
+}
+
+/** 残業の判定に使うカレンダー。10月分より前は全現場のまま（締めた月を変えない） */
+export function overtimeCalendarDays(
+  calendarDays: Record<string, Record<string, string>>,
+  attD: Record<string, AttendanceEntry>,
+  workerId: number | string,
+  ym: string,
+): Record<string, Record<string, string>> {
+  return ym >= PAYROLL_RULES.ownSiteCalendarOtFromYm ? workerSiteCalendarDays(calendarDays, attD, workerId, ym) : calendarDays
+}
 
 export interface DailyWorkRecord {
   day: number             // 日（1〜31）
