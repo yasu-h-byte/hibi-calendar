@@ -16,11 +16,25 @@ import {
 } from './attendance-confirm'
 import type { AttendanceEntry } from '@/types'
 import { isOldContractWorker } from './old-contract'
+import { orgKeyOf } from './locks'
+import { todayJstIso } from '@/lib/date-utils'
+
+/**
+ * 本人確認を出す条件を厳しくする月（2026-11-02 代表決定・10月分から）。
+ *   ① 本人の出面の承認だけでなく、その会社の全現場の承認（職長・最終）がそろってから（月締めと同じ範囲・lib/month-approval-status.ts）
+ *   ② 本人の出面に空欄の仕事の日（給与で欠勤などに数えられる日）が残っていない
+ * 旧（9月分まで）: 本人の出面の承認だけ。旧契約の「現場は休みだが所定の日」の空欄が残ったまま確認が出て、
+ *   本人が欠勤として数えられた数字を見せられ「まちがいがある」と連絡してきた（10月分 フン・フォン）
+ */
+export const STAFF_CONFIRM_FULL_GATE_FROM_YM = '202610'
 
 export type ConfirmWorker = {
   id: number; hireDate?: string; retired?: string; breakShortenMin?: number; breakShortenFrom?: string
   visa?: string; visaType?: string; useOldRules?: boolean
 }
+
+/** 会社の全現場の承認を数えるのに使う人員マスタ・現場（10月分から・STAFF_CONFIRM_FULL_GATE_FROM_YM） */
+export type ConfirmMain = { workers?: unknown[]; sites?: unknown[] }
 
 export interface ConfirmReadiness {
   /** その月の記録が1件も無い（確認を出さない） */
@@ -29,14 +43,21 @@ export interface ConfirmReadiness {
   foremanMissing: number
   /** 最終承認（事業責任者）が無い「現場×日」の数 */
   finalMissing: number
+  /** その会社のほかの人の分も含め、承認（職長・最終）が無い「現場×日」の数（10月分から） */
+  companyMissing: number
+  /** 本人の出面で空欄の仕事の日（10月分から。埋まるまで確認を出さない） */
+  blankDays: number[]
   /** 全部そろった＝本人確認を出してよい */
   ready: boolean
   /** 全部そろった日時（ISO・ready のときだけ。日時の無い古い承認だけなら無い）。催促の「そろってから3日」の起点 */
   readyAt?: string
 }
 
-/** 1か月分の文脈（出面・カレンダー）を持って、人ごとの数え方・承認のそろい具合・古くなったかを出す */
-export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Record<string, AttendanceEntry | null>) {
+/**
+ * 1か月分の文脈（出面・カレンダー）を持って、人ごとの数え方・承認のそろい具合・古くなったかを出す。
+ * main を渡すと、会社の全現場の承認も確かめる（本人確認を出すかの判定。月締めの集計からは渡さない）
+ */
+export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Record<string, AttendanceEntry | null>, main?: ConfirmMain) {
   const calCache = new Map<string, Promise<Record<string, string> | null>>()
   const calOfSite = (siteId: string) => {
     const calId = `${calendarSiteIdOf(sites, siteId)}_${ym.slice(0, 4)}-${ym.slice(4, 6)}`
@@ -77,16 +98,48 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
     return keys.map(k => { const i = k.lastIndexOf(sep); return { familyId: k.slice(0, i), day: Number(k.slice(i + sep.length)) } })
   }
 
+  // 会社の全現場の承認（会社ごとに1回だけ数える。月締めと同じ lib/month-approval-status.ts）
+  const companyCache = new Map<string, ReturnType<typeof companyStatusOf>>()
+  const companyStatusOf = async (org: 'hibi' | 'hfu', fresh?: boolean) => {
+    // 循環 import を避けて動的に読む（month-approval-status はこのファイルの confirmMonthContext を使う）
+    const { monthApprovalStatus } = await import('./month-approval-status')
+    return monthApprovalStatus(
+      { workers: (main?.workers || []) as { id: number; org?: string }[], sites: (main?.sites || sites) as unknown[] },
+      d as Record<string, unknown>, ym, org, { fresh })
+  }
+  const companyStatus = (org: 'hibi' | 'hfu', fresh?: boolean) => {
+    const key = `${org}|${fresh ? 1 : 0}`
+    if (!companyCache.has(key)) companyCache.set(key, companyStatusOf(org, fresh))
+    return companyCache.get(key)!
+  }
+  const orgOfWorker = (workerId: number): 'hibi' | 'hfu' => {
+    const raw = (main?.workers || []).find(w => (w as { id?: unknown }).id === workerId) as { org?: string } | undefined
+    return orgKeyOf(raw?.org) === 'hfu' ? 'hfu' : 'hibi'
+  }
+
   /** fresh: 承認をキャッシュを使わず読み直す（本人の確認を記録するとき・月締めで使う・2026-10-02） */
   const readiness = async (worker: ConfirmWorker, opts?: { fresh?: boolean }): Promise<ConfirmReadiness> => {
     const famDays = await requiredFamilyDays(worker)
-    if (famDays.length === 0) return { noEntries: true, foremanMissing: 0, finalMissing: 0, ready: false }
+    if (famDays.length === 0) return { noEntries: true, foremanMissing: 0, finalMissing: 0, companyMissing: 0, blankDays: [], ready: false }
     // 承認の判定は請求書と共通（lib/approval-gap.ts。工種サイトの子で承認した記録も数える・2分キャッシュ）
     const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays, opts)
     const foremanMissing = gap.foremanMissing.length
     const finalMissing = gap.finalMissing.length
-    const ready = foremanMissing === 0 && finalMissing === 0
-    return { noEntries: false, foremanMissing, finalMissing, ready, ...(ready && gap.latestAt ? { readyAt: gap.latestAt } : {}) }
+    let companyMissing = 0
+    let blankDays: number[] = []
+    let latestAt = gap.latestAt
+    if (ym >= STAFF_CONFIRM_FULL_GATE_FROM_YM) {
+      // ② 本人の空欄の仕事の日（スマホの「記録が無い日」と同じ数え方。今日より前だけ）
+      blankDays = (await summarize(worker, todayJstIso())).missingDays
+      // ① 会社の全現場（main が無い呼び出し＝月締めの集計の中では見ない）
+      if (main) {
+        const st = await companyStatus(orgOfWorker(worker.id), opts?.fresh)
+        companyMissing = Math.max(0, st.gap.foremanMissing.length + st.gap.finalMissing.length - foremanMissing - finalMissing)
+        if (st.gap.latestAt && (!latestAt || st.gap.latestAt > latestAt)) latestAt = st.gap.latestAt
+      }
+    }
+    const ready = foremanMissing === 0 && finalMissing === 0 && companyMissing === 0 && blankDays.length === 0
+    return { noEntries: false, foremanMissing, finalMissing, companyMissing, blankDays, ready, ...(ready && latestAt ? { readyAt: latestAt } : {}) }
   }
 
   /**
@@ -130,7 +183,7 @@ export const STAFF_CONFIRM_STATE_LABEL: Record<StaffConfirmState, string> = {
   early: '未確認（承認前に確認しただけ）',
   stale: '要再確認（確認のあとで出面が変わった）',
   issue: '本人から「まちがいがある」の連絡（未対応）',
-  waiting: '承認待ち（職長・最終承認がそろっていないため、スマホに確認が出ていない）',
+  waiting: '承認待ち（職長・最終承認がそろっていない、または出面に空欄の日があるため、スマホに確認が出ていない）',
   outside: 'スマホ確認の期間外（スマホで確認できるのは前の月だけ）',
 }
 
@@ -161,7 +214,7 @@ export async function evalStaffConfirm(
   const openIssue = !!c && c.status === 'issue' && !c.resolvedAt
   // 進行中の月（来月になると確認の月になる）は、まだ来ていない日の承認まで読むことになるので承認を数えない（2026-10-02 点検・読み取り削減）
   if (opts.ym > confirmTargetYm(opts.todayIso) && !isValidConfirmation(c) && !openIssue) {
-    return { state: 'waiting', readiness: { noEntries: false, foremanMissing: 0, finalMissing: 0, ready: false }, stale: false }
+    return { state: 'waiting', readiness: { noEntries: false, foremanMissing: 0, finalMissing: 0, companyMissing: 0, blankDays: [], ready: false }, stale: false }
   }
   const readiness = await ctx.readiness(worker, { fresh: opts.fresh })
   if (isValidConfirmation(c)) {
@@ -216,6 +269,9 @@ export interface StaffConfirmRow {
   /** その人の承認で足りない「現場×日」の数（waiting のときの説明用） */
   foremanMissing: number
   finalMissing: number
+  /** 会社のほかの人の分で承認が足りない「現場×日」の数・本人の空欄の日（10月分から・waiting の説明用） */
+  companyMissing: number
+  blankDays: number[]
   /** 確認の記録（あれば）。画面のバッジと連絡の中身に使う */
   confirmation: AttConfirmDoc | null
   /**
@@ -243,7 +299,7 @@ export async function staffConfirmRows(args: {
   const targets = staffConfirmTargets(mapRawWorkers((main.workers || []) as unknown[]), d, ym, org)
   if (targets.length === 0) return []
   const confs = new Map(args.confirmations.map(c => [c.workerId, c] as const))
-  const ctx = confirmMonthContext((main.sites || []) as unknown as HierarchySite[], ym, d)
+  const ctx = confirmMonthContext((main.sites || []) as unknown as HierarchySite[], ym, d, main)
   const rows = await Promise.all(targets.map(async w => {
     const o: 'hibi' | 'hfu' = w.company === 'HFU' ? 'hfu' : 'hibi'
     const c = confs.get(w.id) || null
@@ -259,6 +315,7 @@ export async function staffConfirmRows(args: {
     return {
       workerId: w.id, name: w.name, nameVi: w.nameVi || '', org: o, state: ev.state,
       foremanMissing: ev.readiness.foremanMissing, finalMissing: ev.readiness.finalMissing,
+      companyMissing: ev.readiness.companyMissing, blankDays: ev.readiness.blankDays,
       confirmation: c,
       ...(since ? { since } : {}),
     } satisfies StaffConfirmRow

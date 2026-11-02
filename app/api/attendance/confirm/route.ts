@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         getAttendanceDoc(ym) as Promise<Record<string, AttendanceEntry | null>>,
         getDoc(doc(db, 'attConfirm', `${ym}_${worker.id}`)),
       ])
-      const ctx = confirmMonthContext(sites, ym, d)
+      const ctx = confirmMonthContext(sites, ym, d, main)
       const ready = await ctx.readiness(worker)
       if (ready.noEntries) return NextResponse.json({ ym: null })
       // 承認前にした確認（2026-09-30 の初日分など）は数えない＝もう一度確認してもらう
@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
     const items = rows.map(r => ({
       workerId: r.workerId, name: r.name, nameVi: r.nameVi, org: r.org, state: r.state,
       foremanMissing: r.foremanMissing, finalMissing: r.finalMissing,
+      companyMissing: r.companyMissing, blankDays: r.blankDays,
       ...(r.since ? { since: r.since } : {}),
       ...(r.confirmation ? {
         status: r.confirmation.status, note: r.confirmation.note, at: r.confirmation.at,
@@ -162,11 +163,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'いまは確認できない月です / Hiện không thể xác nhận tháng này' }, { status: 400 })
     }
     const d = (await getAttendanceDoc(ym)) as Record<string, AttendanceEntry | null>
-    const ctx = confirmMonthContext(sites, ym, d)
+    const ctx = confirmMonthContext(sites, ym, d, main)
     const ready = await ctx.readiness(worker, { fresh: true })   // 記録する前はキャッシュを使わない（承認を外した直後に「承認後の確認」と記録しない）
     if (!ready.ready) {
       return NextResponse.json({
-        error: '職長と事業責任者のチェックが終わってから確認してください / Hãy xác nhận sau khi tổ trưởng và người phụ trách kiểm tra xong',
+        error: '事務所のチェックが全部終わってから確認してください / Hãy xác nhận sau khi công ty kiểm tra xong',
       }, { status: 409 })
     }
     // 数字は画面から受け取らず、サーバでもう一度数えて残す（あとで出面が変わったかを見分ける）

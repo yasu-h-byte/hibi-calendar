@@ -26,6 +26,9 @@ export interface StaffConfirmInfo {
   /** その人の承認で足りない「現場×日」（waiting の説明用） */
   foremanMissing: number
   finalMissing: number
+  /** 会社のほかの人の分で承認が足りない「現場×日」・本人の空欄の日（10月分から） */
+  companyMissing?: number
+  blankDays?: number[]
   /** 以下は確認の記録があるときだけ */
   status?: 'ok' | 'issue'
   note?: string
@@ -73,10 +76,12 @@ export default function StaffConfirmBadge({
   const missing = [
     info.foremanMissing > 0 ? `職長承認がまだ ${info.foremanMissing}件` : '',
     info.finalMissing > 0 ? `最終承認がまだ ${info.finalMissing}件` : '',
+    (info.companyMissing || 0) > 0 ? `ほかの人の分の承認がまだ ${info.companyMissing}件` : '',
+    (info.blankDays?.length || 0) > 0 ? `空欄の日 ${info.blankDays!.join('・')}日` : '',
   ].filter(Boolean).join('・')
   const title = {
-    none: '職長承認と最終承認がそろい、本人のスマホに確認が出ています。本人がまだ押していません。',
-    waiting: `この人の出面の承認がそろっていないため、本人のスマホにはまだ確認が出ていません（${missing || '承認待ち'}・現場×日）。承認がそろうと確認が出ます。`,
+    none: '会社の全現場の承認がそろい、空欄の日もないので、本人のスマホに確認が出ています。本人がまだ押していません。',
+    waiting: `事務所のチェックが終わっていないため、本人のスマホにはまだ確認が出ていません（${missing || '承認待ち'}）。会社の全現場の承認（職長・最終）がそろい、この人の空欄の日が埋まると確認が出ます。`,
     outside: 'スマホで確認できるのは、締める前の前の月だけです。この月は本人のスマホに確認が出ません。',
     early: `承認がそろう前に「正しい」と押した記録です（${fmt(info.at)}）。数えません。本人のスマホにもう一度確認が出ています。`,
     stale: `本人が確認したあとで出面が変わりました（確認: ${fmt(info.at)}）。本人のスマホに「もう一度確認してください」と出ています。`,
