@@ -8,6 +8,7 @@ import { AttendanceEntry, NIGHT_SHIFT_MANDAYS, calcActualHours, calcDayShiftHour
 import { type HomeLeaveEntry } from './homeLeave'
 import { type WorkerAllowanceMonthly } from './allowance'
 import { withWorkTypeSiteCalendars } from './site-hierarchy'
+import { overtimeCalendarDays, workerSiteCalendarDays } from './compute-overtime'
 import { effectiveHourlyRateForYm, effectiveRateForYm, effectiveSalaryForYm, isHiredByMonth, isStillActiveForMonth, midMonthRateChangeOf } from './workers'
 import { isSuspectCompanyRest } from './attendance-confirm'
 import { oldContractUnpaidDays } from './old-contract'
@@ -836,14 +837,15 @@ export function computeMonthly(
      *   ② 月途中の時給改定で、改定後の残業が平均時給で安く計算されていないか
      *   ③ 稼働日の空欄が「欠」より多く払われていないか（空欄を欠として計算し直して比べる）
      */
+    // 週の残業の基準に使うカレンダー（10月分から本人の現場のカレンダーだけ・2026-11-02 代表）
+    const otCalendarDays = calendarDays ? overtimeCalendarDays(calendarDays, attD, wm.id, ym) : calendarDays
     const vnNotes = (v: VietnameseSalaryResult, hourly: number, personalAbsence: number | undefined) => {
       if (ym < PAY_NOTES_FROM_YM) return
-      // ① 本人の現場のカレンダーだけで判定し直す
-      if (calendarDays) {
+      // ① 本人の現場のカレンダーだけで判定し直す（10月分からは本体が本人の現場で計算するので出ない）
+      if (calendarDays && otCalendarDays === calendarDays) {
         const allKeys = Object.keys(calendarDays)
-        const own: Record<string, Record<string, string>> = {}
-        for (const sid of wm.sites) if (calendarDays[sid]) own[sid] = calendarDays[sid]
-        if (Object.keys(own).length > 0 && allKeys.length > Object.keys(own).length) {
+        const own = workerSiteCalendarDays(calendarDays, attD, wm.id, ym)
+        if (allKeys.length > Object.keys(own).length) {
           const v2 = calculateVietnameseSalary(wm.id, ym, hourly, proratedBaseDays, attD, main.sites,
             wm.plUsed, wm.compDays, wm.examDays, own, workerPrescribedDays > 0 ? workerPrescribedDays : undefined, personalAbsence)
           const dh = Math.round((v2.statutoryOT - v.statutoryOT) * 10) / 10
@@ -881,7 +883,7 @@ export function computeMonthly(
       const blank = wm.calendarBlankDays || 0
       if (blank > 0 && personalAbsence !== undefined) {
         const v3 = calculateVietnameseSalary(wm.id, ym, hourly, proratedBaseDays, attD, main.sites,
-          wm.plUsed, wm.compDays, wm.examDays, calendarDays, workerPrescribedDays > 0 ? workerPrescribedDays : undefined, personalAbsence + blank)
+          wm.plUsed, wm.compDays, wm.examDays, otCalendarDays, workerPrescribedDays > 0 ? workerPrescribedDays : undefined, personalAbsence + blank)
         const diff = v.salaryNet - v3.salaryNet
         if (diff > 0) {
           addNote('blankDays',
@@ -940,7 +942,7 @@ export function computeMonthly(
       const personalAbsence1 = ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? (wm.personalAbsenceDays || 0) : undefined
       const v = calculateVietnameseSalary(
         wm.id, ym, wm.hourlyRate, proratedBaseDays, attD, main.sites,
-        wm.plUsed, wm.compDays, wm.examDays, calendarDays,
+        wm.plUsed, wm.compDays, wm.examDays, otCalendarDays,
         // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)。閑散期の月給保証
         workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
         personalAbsence1,
@@ -1070,7 +1072,7 @@ export function computeMonthly(
       const derivedHourlyRate = wm.salary / (Math.max(1, baseDays) * 7)  // 単価は固定（按分前の月給ベース。baseDays=0 設定でも NaN にしない）
       const v = calculateVietnameseSalary(
         wm.id, ym, derivedHourlyRate, proratedBaseDays, attD, main.sites,
-        wm.plUsed, wm.compDays, wm.examDays, calendarDays,
+        wm.plUsed, wm.compDays, wm.examDays, otCalendarDays,
         // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)（時給ブランチと同じ）
         workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
         // 2026-09-30（案A）: 月給ブランチも同じく本人の「欠」を保証から引く

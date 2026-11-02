@@ -28,6 +28,7 @@ import {
   generateConsentLedger,
 } from '@/lib/export-labor'
 import { isMonthLockedInLocks } from '@/lib/locks'
+import { withWorkTypeSiteCalendars } from '@/lib/site-hierarchy'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { db } from '@/lib/firebase'
 import { collection, getDocs, query, where } from '@/lib/fsdb'
@@ -130,7 +131,8 @@ export async function GET(request: NextRequest) {
           sites: activeSites,
           assign: main.assign,
           massign: main.massign,
-          calendarDays: calendarDaysMap,
+          // 工種サイトは親現場のカレンダー（給与計算の computeMonthly と同じ。勤怠サマリーの「本人の現場」判定に要る）
+          calendarDays: withWorkTypeSiteCalendars(main.sites, calendarDaysMap),
           baseDays,
           monthlyWorkers: monthly.workers,
         }
@@ -334,7 +336,6 @@ export async function GET(request: NextRequest) {
         })
         {
           // 工種サイトは親現場のカレンダー（2026-09-15）
-          const { withWorkTypeSiteCalendars } = await import('@/lib/site-hierarchy')
           Object.assign(siteCalendars, withWorkTypeSiteCalendars(main.sites, siteCalendars))
         }
         const wb = generatePlannedShiftExcel({
