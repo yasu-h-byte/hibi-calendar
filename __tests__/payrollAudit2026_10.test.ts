@@ -184,6 +184,20 @@ describe('給与チェックの注意点（payNotes・支給額は変えない�
     expect(n?.message).toContain('日曜の出勤 1日')
     expect(n?.message).toContain('夜勤 1回')
   })
+  it('役員（共同代表）は10月分から残業代・日曜の法定休日手当なし（月給だけ）。9月分までは変えない', () => {
+    const run = (YM: string) => {
+      const att: Record<string, AttendanceEntry> = {}
+      for (let d = 1; d <= dim(YM); d++) att[`s_12_${YM}_${d}`] = { ...E, o: 2 } as AttendanceEntry   // 日曜も含め毎日2h残業
+      return computeMonthly(mk([{ ...JP_MONTHLY, job: 'yakuin', hireDate: '2020-01-01' }]), att, {}, YM, 0, undefined, 20, {}).workers[0]
+    }
+    const oct = run('202610')
+    expect(oct.otAllowance).toBe(0)
+    expect(oct.legalHolidayAllowance).toBe(0)
+    expect(oct.dailyOtHours).toBe(0)
+    expect(oct.salaryNetPay).toBe(232000)
+    const sep = run('202609')
+    expect(sep.otAllowance).toBeGreaterThan(0)
+  })
   describe('新ルールの外国人', () => {
     const YM = '202609'
     const cal = (sat: boolean) => { const c: Record<string, string> = {}; let n = 0; for (let d = 1; d <= 30; d++) { const w = dow(YM, d); const work = w !== 0 && (sat || w !== 6); c[d] = work ? 'work' : 'off'; if (work) n++ } return { c, n } }

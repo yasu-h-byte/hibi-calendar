@@ -1236,9 +1236,12 @@ export function computeMonthly(
       const lhDayHoursM = Array.from(wm._lhDayHours?.values() || [])
       const otHoursExLhM = Math.max(0, wm.otHours - lhOtHoursM)
       // 残業単価を1円単位に切り上げ → 残業代も1円未満切り上げ
+      // 役員（政仁さん・共同代表）は残業代・法定休日手当なし（2026-11-02 代表・10月分から）。
+      //   役員は労働時間の決まり（労基法の割増）の外。月給（役員報酬）だけを支給する。出面の残業h（otHours）は記録として残す
+      const noOtPay = wm.job === 'yakuin' && ym >= PAYROLL_RULES.yakuinNoOvertimeFromYm
       const otUnitRate = ceilYen(hourlyEquivalent * wm.otMul)
-      const otPay = ceilYen(otUnitRate * otHoursExLhM)
-      const legalHolidayAllowanceM = calcLegalHolidayAllowance(hourlyEquivalent, lhDayHoursM)
+      const otPay = noOtPay ? 0 : ceilYen(otUnitRate * otHoursExLhM)
+      const legalHolidayAllowanceM = noOtPay ? 0 : calcLegalHolidayAllowance(hourlyEquivalent, lhDayHoursM)
 
       // ── 欠勤控除（2026年8月分から・代表決定 2026-08-31。JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM）──
       //   従来は「出勤日数に関わらず月給は固定」で、欠勤しても引かれなかった。
@@ -1280,10 +1283,10 @@ export function computeMonthly(
 
       wm.basePay = basePay
       wm.prescribedHours = JP_SALARY_AVG_MONTHLY_HOURS  // 割増算定基礎の月平均所定時間
-      wm.dailyOtHours = Math.round(otHoursExLhM * 10) / 10
+      wm.dailyOtHours = noOtPay ? 0 : Math.round(otHoursExLhM * 10) / 10
       wm.otAllowance = otPay
-      wm.legalHolidayDays = wm._lhDayHours?.size || 0
-      wm.legalHolidayHours = Math.round(lhDayHoursM.reduce((a, b) => a + b, 0) * 10) / 10
+      wm.legalHolidayDays = noOtPay ? 0 : wm._lhDayHours?.size || 0
+      wm.legalHolidayHours = noOtPay ? 0 : Math.round(lhDayHoursM.reduce((a, b) => a + b, 0) * 10) / 10
       wm.legalHolidayAllowance = legalHolidayAllowanceM
       wm.absence = absentDaysM
       wm.absentCost = absentDeductionM
