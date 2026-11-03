@@ -11,7 +11,7 @@ import { withWorkTypeSiteCalendars } from './site-hierarchy'
 import { overtimeCalendarDays, workerSiteCalendarDays } from './compute-overtime'
 import { effectiveHourlyRateForYm, effectiveRateForYm, effectiveSalaryForYm, isHiredByMonth, isStillActiveForMonth, midMonthRateChangeOf } from './workers'
 import { isSuspectCompanyRest } from './attendance-confirm'
-import { oldContractUnpaidDays } from './old-contract'
+import { OLD_CONTRACT_DAILY_HOURS, countOldContractPrescribedDays, oldContractUnpaidDays } from './old-contract'
 import { type VietnameseSalaryResult, calcLegalHolidayAllowance, calcNightMinutes, calcNightShiftLegalRequiredPay, calculateVietnameseSalary } from './compute-vn-salary'
 import { detectRestMismatches } from './rest-mismatch'
 import { isWorkingDay } from './attendance'
@@ -213,6 +213,8 @@ export interface WorkerMonthly {
   _jpDayHours?: Map<number, number>
   /** 旧ルール: 計算に使った1日あたりの賃金（日給。注意点用） */
   _oldRuleDayRate?: number
+  /** 旧契約・10月分から: 月途中の入社・退職・帰国の月の、在籍中の所定の日数（基本給 = 1日分 × この日数） */
+  _oldContractTenureDays?: number
   /**
    * 日本人の現場都合休（出面の 0.6）の日数（2026-10-02 総合点検）。
    * 日本人の 0.6 は compDays に入らず workDays に 0.6 日として入る（基本給 = 日額×0.6）ので、
@@ -726,6 +728,14 @@ export function computeMonthly(
     const workerWmEarly = main.workers.find(x => x.id === wm.id)
     const isOldRulesWorker = ym < '202605' || workerWmEarly?.useOldRules === true
     let workerPrescribedDays = prescribedDays
+    // 2026-11-04 代表（10月分から）: 旧契約は雇用契約書の所定の日（日曜と会社の休日以外）を数える。
+    //   全社の所定日数（main.workDays）は承認した現場カレンダーの最大値で、契約の所定と一致しない月がある
+    const ymY0 = parseInt(ym.slice(0, 4)), ymM0 = parseInt(ym.slice(4, 6))
+    const monthStartIso0 = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+    const monthEndIso0 = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(ymY0, ymM0, 0).getDate()).padStart(2, '0')}`
+    const perContractOld = wm.visa !== 'none' && workerWmEarly?.useOldRules === true
+      && ym >= PAYROLL_RULES.oldContractPerContractFromYm
+    if (perContractOld) workerPrescribedDays = countOldContractPrescribedDays(monthStartIso0, monthEndIso0)
     if (!isOldRulesWorker && siteWorkDaysMap && wm.sites.length > 0) {
       // 新ルールのみ: スタッフが配置されている現場の所定日数の最大値を採用
       const siteDays = wm.sites.map(sid => siteWorkDaysMap[sid] || 0).filter(d => d > 0)
@@ -801,6 +811,12 @@ export function computeMonthly(
           proratedBaseDays = Math.round(baseDays * ratio)
           proratedPrescribedDays = Math.round(workerPrescribedDays * ratio)
           prorationRatio = ratio
+          // 旧契約（10月分から）: 所定は在籍中（帰国中を除く）の所定の日を数える。暦日の割合で丸めると
+          //   10/26 入社（6日とも所定）が「所定5日」になり、出勤6日が所定超えと出ていた（2026-11-04）
+          if (perContractOld) {
+            proratedPrescribedDays = countOldContractPrescribedDays(startIso, endIso, new Set(hk.dates))
+            wm._oldContractTenureDays = proratedPrescribedDays
+          }
         }
       }
     }
@@ -1151,9 +1167,14 @@ export function computeMonthly(
       //   フン 104（日給15,693 ≠ 2,403×7）は該当せず、残業単価 2,943円 のまま。
       //   当初は締め済みの 2026-08 を動かさないよう 2026-09 分からとしたが、2026-09-15 代表決定で
       //   8月分から適用（HFU の8月分は最低20日保証の変更で締め直すため、あわせて契約時給にそろえる）。
+      // 2026-11-04 代表（10月分から・雇用契約書）: 1日の所定は全員 6時間40分。契約時給のある人（フォン・タン・ホアン。
+      //   契約書「1時間当たりの金額 = 月給×12÷2,020」）の 1日分は 時給 × 6時間40分。
+      //   9月分までは「日給 = 時給×7 なら 7時間契約」として 1日分 = 時給×7（欠勤・0.6補で20分ぶん多く引いていた）
+      const perContract = ym >= PAYROLL_RULES.oldContractPerContractFromYm
       const isSevenHourContract = ym >= '202608'
         && !!wm.hourlyRate && wm.hourlyRate > 0 && !!wm.rate && wm.rate === wm.hourlyRate * 7
-      const dailyHoursOld = isSevenHourContract ? 7 : 20 / 3
+      //   isSevenHourContract は「契約時給を単価にする人」の判定として残す（単価は 10月分からも契約時給）
+      const dailyHoursOld = isSevenHourContract && !perContract ? 7 : OLD_CONTRACT_DAILY_HOURS
       const prescribedH = workerPrescribedDays * dailyHoursOld
       // 後方互換フォールバックの時給換算は按分前のフル月所定で算出（単価は月で変えない）
       const fullPrescribedH = (unproratedPrescribedDays > 0 ? unproratedPrescribedDays : workerPrescribedDays) * dailyHoursOld
@@ -1163,7 +1184,12 @@ export function computeMonthly(
       const otMul = wm.otMul && wm.otMul > 0 ? wm.otMul : 1.25
 
       // 2026-06-12 修正 (監査C5): 月途中入退社は固定月給を在籍日数で日割り（暦日比・切上）
-      const basePay = ceilYen(wm.salary * prorationRatio)
+      // 2026-11-04 代表（10月分から）: 1日分 × 在籍中の所定の日数（月給は超えない）。暦日の割合で割ると、
+      //   働かない日曜の分まで薄まり最低賃金を割る（月末の6日だけ在籍した月に、40時間の基本給が最低賃金を下回った）
+      const tenureDays = perContract ? wm._oldContractTenureDays : undefined
+      const basePay = tenureDays !== undefined
+        ? Math.min(wm.salary, ceilYen(hourlyRate * dailyHoursOld * tenureDays))
+        : ceilYen(wm.salary * prorationRatio)
       const compAllowance = ceilYen(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)  // 休業補償 = 日給×0.6×補償日（切上）
       const otUnitRate = ceilYen(hourlyRate * otMul)        // 残業単価を1円単位に切り上げ（固定）
       const otAllowance = ceilYen(otUnitRate * wm.otHours)  // 残業手当も1円未満切り上げ
@@ -1501,7 +1527,7 @@ export function computeMonthly(
           note(wm, 'oldRuleExtraWork',
             `${parts.join('・')} があります。旧契約（固定月給・所定日数）の計算では、日曜の割増（1.35倍）・深夜の割増（0.25倍）・夜勤の時間・所定を超えた日の賃金は支給額に入っていません。手計算で足すか代表に確認してください`)
         }
-        // 旧契約の所定の日（日曜以外）なのに、空欄・「現場休み」だけの日（2026-10-23 タン 9/21・22 の補償漏れ）。
+        // 旧契約の所定の日（日曜と会社の休日以外）なのに、空欄・「現場休み」だけの日（2026-10-23 タン 9/21・22 の補償漏れ）。
         //   旧契約は全社の所定日数で計算するので、現場カレンダーが休みの日も欠勤（日給100%控除）になる。
         //   会社都合の休みなら 0.6補（60%補償）。支給額は変えず、締める前に気づけるようにする（lib/old-contract.ts）
         const ud = oldContractUnpaidDays({ attD, workerId: wm.id, ym, hireDate: raw?.hireDate, retired: raw?.retired, todayIso: todayJstIso() })
@@ -1514,7 +1540,7 @@ export function computeMonthly(
             ud.siteOff.length > 0 ? `「現場休み」 ${ud.siteOff.join('・')}日` : '',
           ].filter(Boolean).join('／')
           note(wm, 'oldRuleUnpaidDays',
-            `旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が ${unpaid.length}日 あります（${kinds}）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償${lost ? `・${lost.toLocaleString()}円` : ''}）、本人の都合なら「欠」を入れてください`,
+            `旧契約の所定の日（日曜と会社の休日以外）なのに欠勤（日給100%控除）になっている日が ${unpaid.length}日 あります（${kinds}）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償${lost ? `・${lost.toLocaleString()}円` : ''}）、本人の都合なら「欠」を入れてください`,
             lost)
         }
       }

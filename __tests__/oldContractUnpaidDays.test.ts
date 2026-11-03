@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import { computeMonthly } from '@/lib/compute-monthly'
 import { type MainData } from '@/lib/compute'
-import { isOldContractPrescribedDay, isOldContractWorker, oldContractUnpaidDays } from '@/lib/old-contract'
+import { countOldContractPrescribedDays, isOldContractPrescribedDay, isOldContractWorker, oldContractUnpaidDays } from '@/lib/old-contract'
 import type { AttendanceEntry } from '@/types'
 
 /**
@@ -94,5 +94,22 @@ describe('月次集計の注意点', () => {
     const w = computeMonthly(main(), att(false), {}, YM, 26, { s: 24 }, 20, cal).workers.find(x => x.id === 205)!
     expect(w.payNotes?.some(x => x.code === 'oldRuleUnpaidDays')).toBeFalsy()
     expect(w.calendarBlankDays || 0).toBe(0)
+  })
+})
+
+// 2026-11-04 雇用契約書: 休日 = 日曜・年末年始・夏季（年62日）。会社の休日は所定の日ではない
+describe('雇用契約書の所定の日', () => {
+  const holidays = ['2026-12-29', '2026-12-30', '2026-12-31']
+  test('会社の休日は所定の日ではない（祝日は所定の日）', () => {
+    expect(isOldContractPrescribedDay('2026-12-29', holidays)).toBe(false)
+    expect(isOldContractPrescribedDay('2026-12-28', holidays)).toBe(true)
+    expect(isOldContractPrescribedDay('2026-11-03', holidays)).toBe(true)    // 文化の日
+    expect(isOldContractPrescribedDay('2026-12-27', holidays)).toBe(false)   // 日曜
+  })
+  test('期間の所定の日数（会社の休日・除く日を数えない）', () => {
+    expect(countOldContractPrescribedDays('2026-10-26', '2026-10-31')).toBe(6)
+    expect(countOldContractPrescribedDays('2026-10-01', '2026-10-31')).toBe(27)
+    expect(countOldContractPrescribedDays('2026-12-01', '2026-12-31', undefined, holidays)).toBe(27 - 3)
+    expect(countOldContractPrescribedDays('2026-10-26', '2026-10-31', new Set(['2026-10-30', '2026-11-01']))).toBe(5)
   })
 })

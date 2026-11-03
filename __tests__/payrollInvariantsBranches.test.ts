@@ -89,13 +89,21 @@ describe('旧ルール（固定月給・所定日数）の既知の破れ（賃�
   const OLD = { id: 104, name: '旧契約B', org: 'hibi', visa: 'tokutei1', job: 'tobi', rate: 10000, hourlyRate: 1500, salary: 240000, otMul: 1.25, hireDate: '2020-01-01', token: '', useOldRules: true }
   const E = { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1 } as unknown as AttendanceEntry
   const mk = (w: typeof OLD) => ({ ...main(), workers: [w], workDays: { [YM10]: 27 } }) as unknown as MainData
-  it.todo('月途中の入社の暦日按分（月給×在籍日÷暦日）が「日給×出勤日数」を下回る → 決まりが決まったら (i) をここで固定する')
+  // 2026-11-04 代表（雇用契約書・10月分から）: 月途中の入社は 1日分 × 在籍中の所定の日数（月給は超えない）で決着
+  it('月途中の入社: 基本給 = 1日分 × 在籍中の所定の日数（暦日按分で「日給×出勤日数」を下回らない）', () => {
+    const att: Record<string, AttendanceEntry> = {}
+    for (let d = 26; d <= 31; d++) att[`s_104_${YM10}_${d}`] = E
+    const hire = computeMonthly(mk({ ...OLD, hireDate: '2026-10-26' }), att, {}, YM10, 27, undefined, 20, {}).workers[0]
+    expect(hire.workerPrescribedDays).toBe(6)
+    expect(hire.basePay).toBe(6 * 10000)
+    expect(hire.absentDeduction).toBe(0)
+  })
   it.todo('所定27日の月は欠勤1日の控除（日給）が基本給の1日分（月給÷27）を超える → 決まりが決まったら固定する')
   it('支給額はマイナスにならない。注意点 belowWorkedDays は出さない（2026-10-05 代表決定: 旧契約に最低保証の決まりは無い）', () => {
     const att: Record<string, AttendanceEntry> = {}
     for (let d = 26; d <= 31; d++) att[`s_104_${YM10}_${d}`] = E
     const hire = computeMonthly(mk({ ...OLD, hireDate: '2026-10-26' }), att, {}, YM10, 27, undefined, 20, {}).workers[0]
-    expect(hire.salaryNetPay).toBeLessThan(6 * 10000)
+    expect(hire.salaryNetPay).toBeGreaterThanOrEqual(6 * 10000)
     expect(hire.payNotes?.some(n => n.code === 'belowWorkedDays')).toBeFalsy()
     const few: Record<string, AttendanceEntry> = { [`s_104_${YM10}_1`]: E, [`s_104_${YM10}_2`]: E }
     const w = computeMonthly(mk(OLD), few, {}, YM10, 27, undefined, 20, {}).workers[0]

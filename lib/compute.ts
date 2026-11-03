@@ -54,6 +54,13 @@ export const PAYROLL_RULES = {
   ownSiteCalendarOtFromYm: '202610',
   /** 役員（政仁さん・共同代表）に残業代・法定休日手当を付けない月（2026-11-02 代表・10月分から）。役員報酬は労働時間の対価ではない */
   yakuinNoOvertimeFromYm: '202610',
+  /**
+   * 旧契約（固定月給の外国人）を雇用契約書どおりに計算する月（2026-11-04 代表・10月分から）。lib/old-contract.ts
+   *   - 1日の所定 = 6時間40分（フォン・タン・ホアンを「7時間契約」として 1日分 = 時給×7 にしていたのをやめる）
+   *   - 所定の日数 = 契約の所定の日（日曜と会社の休日以外）を数える（全社の所定日数 main.workDays ではなく）
+   *   - 月途中の入社・退職・帰国の月の基本給 = 1日分 × 在籍中の所定の日数（暦日の割合で割ると最低賃金を割る）
+   */
+  oldContractPerContractFromYm: '202610',
 }
 
 /**
@@ -349,8 +356,8 @@ export function countHomeLeaveDaysInRange(
   rangeEndIso: string,
   workedDatesIso?: Set<string>,
   paidLeaveDatesIso?: Set<string>,
-): { days: number; earlyReturnDates: string[] } {
-  if (!homeLeaves || homeLeaves.length === 0) return { days: 0, earlyReturnDates: [] }
+): { days: number; earlyReturnDates: string[]; dates: string[] } {
+  if (!homeLeaves || homeLeaves.length === 0) return { days: 0, earlyReturnDates: [], dates: [] }
   const days = new Set<string>()
   for (const hl of homeLeaves) {
     if (hl.workerId !== workerId) continue
@@ -388,7 +395,7 @@ export function countHomeLeaveDaysInRange(
   if (paidLeaveDatesIso && paidLeaveDatesIso.size > 0) {
     for (const d of paidLeaveDatesIso) days.delete(d)
   }
-  return { days: days.size, earlyReturnDates }
+  return { days: days.size, earlyReturnDates, dates: [...days] }
 }
 
 // ────────────────────────────────────────

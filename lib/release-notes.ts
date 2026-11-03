@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261104_old_contract_per_contract',
+    title: '旧契約の4人の給与を雇用契約書どおりの計算にしました（10月分から）',
+    content:
+      '旧契約（固定月給）の人の1日の所定を契約書どおり6時間40分にし、欠勤・0.6補の1日分を少し小さくしました（引きすぎを直しました）。'
+      + '月の途中で入社・退職・帰国した月の基本給は「1日分 × 在籍中の所定の日数」になり、最低賃金を割らなくなります。'
+      + '月の途中で入社した人に出ていた「所定を超える出勤」の注意点も出なくなります。9月分までの締めた月は変わりません。',
+    category: 'fix',
+    publishedAt: '2026-11-04T09:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261102_own_site_calendar_ot',
     title: '外国人の残業は本人の現場のカレンダーで判定するようにしました（10月分から）',
     content:
