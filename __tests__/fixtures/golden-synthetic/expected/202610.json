@@ -198,7 +198,7 @@
    "payNotes": [
     {
      "code": "oldRuleUnpaidDays",
-     "message": "旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が 6日 あります（記録が空欄 3・10・12・17・24・31日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・54,000円）、本人の都合なら「欠」を入れてください",
+     "message": "旧契約の所定の日（日曜と会社の休日以外）なのに欠勤（日給100%控除）になっている日が 6日 あります（記録が空欄 3・10・12・17・24・31日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・54,000円）、本人の都合なら「欠」を入れてください",
      "amount": 54000
     }
    ]
@@ -348,12 +348,12 @@
    "restDays": 1,
    "siteOffDays": 0,
    "examDays": 0,
-   "cost": 218119,
+   "cost": 219160,
    "otCost": 0,
-   "totalCost": 218119,
+   "totalCost": 219160,
    "absence": 2,
-   "absentCost": 27300,
-   "netPay": 218119,
+   "absentCost": 25999,
+   "netPay": 219160,
    "isDispatched": false,
    "dispatchTo": "",
    "dispatchDeduction": 0,
@@ -366,22 +366,22 @@
    "breakShortenAllowance": 13000,
    "breakShortenUnitRate": 1625,
    "breakShortenUnitNote": "契約時給 ¥1,300 × 1.25・切上",
-   "prescribedHours": 189,
-   "actualWorkHours": 185.2,
+   "prescribedHours": 180,
+   "actualWorkHours": 177,
    "legalOtHours": 5,
    "dailyOtHours": 5,
    "basePay": 218834,
-   "additionalAllowance": 5460,
+   "additionalAllowance": 5200,
    "otAllowance": 8125,
-   "absentDeduction": 18200,
-   "compBaseDeduction": 9100,
-   "salaryNetPay": 218119,
+   "absentDeduction": 17333,
+   "compBaseDeduction": 8666,
+   "salaryNetPay": 219160,
    "calendarBlankDays": 1,
    "payNotes": [
     {
      "code": "oldRuleUnpaidDays",
-     "message": "旧契約の所定の日（日曜以外）なのに欠勤（日給100%控除）になっている日が 1日 あります（記録が空欄 12日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・5,460円）、本人の都合なら「欠」を入れてください",
-     "amount": 5460
+     "message": "旧契約の所定の日（日曜と会社の休日以外）なのに欠勤（日給100%控除）になっている日が 1日 あります（記録が空欄 12日）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償・5,200円）、本人の都合なら「欠」を入れてください",
+     "amount": 5200
     }
    ]
   },
@@ -409,33 +409,27 @@
    "restDays": 0,
    "siteOffDays": 0,
    "examDays": 0,
-   "cost": 42355,
+   "cost": 52000,
    "otCost": 0,
-   "totalCost": 42355,
+   "totalCost": 52000,
    "absence": 0,
    "absentCost": 0,
-   "netPay": 42355,
+   "netPay": 52000,
    "isDispatched": false,
    "dispatchTo": "",
    "dispatchDeduction": 0,
    "manDays": 6,
-   "workerPrescribedDays": 5,
-   "prescribedHours": 35,
-   "actualWorkHours": 42,
+   "workerPrescribedDays": 6,
+   "prescribedHours": 40,
+   "actualWorkHours": 40,
    "legalOtHours": 0,
    "dailyOtHours": 0,
-   "basePay": 42355,
+   "basePay": 52000,
    "additionalAllowance": 0,
    "otAllowance": 0,
    "absentDeduction": 0,
    "compBaseDeduction": 0,
-   "salaryNetPay": 42355,
-   "payNotes": [
-    {
-     "code": "oldRuleExtraWork",
-     "message": "所定 5日 を超える出勤 1日 があります。旧契約（固定月給・所定日数）の計算では、日曜の割増（1.35倍）・深夜の割増（0.25倍）・夜勤の時間・所定を超えた日の賃金は支給額に入っていません。手計算で足すか代表に確認してください"
-    }
-   ]
+   "salaryNetPay": 52000
   }
  ],
  "sites": [
@@ -459,10 +453,10 @@
    "workDays": 83,
    "subWorkDays": 0,
    "otHours": 17,
-   "cost": 1226350,
+   "cost": 1237036,
    "subCost": 0,
    "billing": 0,
-   "profit": -1226350,
+   "profit": -1237036,
    "profitRate": 0
   },
   {
@@ -482,10 +476,10 @@
  "totals": {
   "workDays": 167,
   "subWorkDays": 0,
-  "cost": 2915034,
+  "cost": 2925720,
   "subCost": 0,
   "billing": 0,
-  "profit": -2915034,
+  "profit": -2925720,
   "otHours": 27
  }
 }

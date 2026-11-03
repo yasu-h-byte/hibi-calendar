@@ -48,10 +48,12 @@ describe('computeMonthly: フォンの 10/1 最賃対応', () => {
     expect(w.otAllowance).toBe(1588 * 2)
     expect(w.absentDeduction).toBe(8890)
   })
-  test('10月分: 月給215,467・残業単価1,600・欠勤1日8,960', () => {
+  // 2026-11-04 代表（雇用契約書）: 10月分から所定は契約の所定の日（日曜以外・27日）・1日分は 契約時給 × 6時間40分
+  test('10月分: 月給215,467・残業単価1,600・欠勤1日 = 契約時給 × 6時間40分（契約書）', () => {
     const w = run('202610')
     expect(w.basePay).toBe(215467)
     expect(w.otAllowance).toBe(1600 * 2)
-    expect(w.absentDeduction).toBe(8960)
+    expect(w.workerPrescribedDays).toBe(27)
+    expect(w.absentDeduction).toBe(Math.floor(1280 * (20 / 3) * 5))   // 27 − 22 = 5日
   })
 })

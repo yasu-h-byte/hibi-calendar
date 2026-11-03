@@ -162,14 +162,20 @@ describe('給与チェックの注意点（payNotes・支給額は変えない�
     const y = computeMonthly(mk([{ ...JP_MONTHLY, job: 'yakuin' }]), att, {}, YM, 0, undefined, 20, {}).workers[0]
     expect(y.payNotes).toBeUndefined()
   })
-  it('旧ルール: 月途中の入社の暦日按分が「日給×出勤日数」を下回っても注意点は出さない（2026-10-05 代表決定）。所定超えの注意点は出す', () => {
+  it('旧ルール: 月途中の入社は 1日分 × 在籍中の所定の日数（10月分から）。9月分までは暦日按分', () => {
     const YM = '202610'
     const att: Record<string, AttendanceEntry> = {}
     for (let d = 26; d <= 31; d++) att[`s_104_${YM}_${d}`] = E
     const w = computeMonthly(mk([{ ...OLD, hireDate: '2026-10-26' }], { workDays: { [YM]: 27 } }), att, {}, YM, 27, undefined, 20, {}).workers[0]
-    expect(w.basePay).toBe(Math.ceil(240000 * 6 / 31))
+    // 2026-11-04（雇用契約書・10月分から）: 基本給 = 1日分 × 在籍中の所定の日数。所定は 10/26〜31 の6日なので所定超えではない
+    expect(w.basePay).toBe(6 * 10000)
     expect(w.payNotes?.some(x => x.code === 'belowWorkedDays')).toBeFalsy()
-    expect(w.payNotes?.some(x => x.code === 'oldRuleExtraWork')).toBe(true)   // 所定 round(27×6/31)=5日 を超える出勤
+    expect(w.payNotes?.some(x => x.code === 'oldRuleExtraWork')).toBeFalsy()
+    // 9月分までは従来どおり（暦日按分・所定 round(26×n/30)）
+    const sepAtt: Record<string, AttendanceEntry> = {}
+    for (let d = 25; d <= 30; d++) if (dow('202609', d) !== 0) sepAtt[`s_104_202609_${d}`] = E
+    const sep = computeMonthly(mk([{ ...OLD, hireDate: '2026-09-25' }], { workDays: { '202609': 26 } }), sepAtt, {}, '202609', 26, undefined, 20, {}).workers[0]
+    expect(sep.basePay).toBe(Math.ceil(240000 * 6 / 30))
   })
   it('旧ルール: 日曜出勤・夜勤は支給額に入らない → 注意点', () => {
     const YM = '202610'
