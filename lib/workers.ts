@@ -17,7 +17,7 @@ export const WORKER_PUBLIC_KEYS = ['id', 'name', 'nameVi', 'company', 'visaType'
 /** 事務所の人（給与は見られない事務・役員）に返す項目。給与以外の人員マスタの項目（スマホURLは workers.edit のときだけ） */
 export const WORKER_OFFICE_KEYS = [
   ...WORKER_PUBLIC_KEYS,
-  'token', 'visaExpiry', 'useOldRules', 'payrollNo', 'birthDate', 'nonSmoker', 'children', 'breakShortenMin', 'breakShortenFrom', 'memo',
+  'token', 'visaExpiry', 'useOldRules', 'oldRulesUntilYm', 'payrollNo', 'birthDate', 'nonSmoker', 'children', 'breakShortenMin', 'breakShortenFrom', 'memo',
 ] as const
 
 /**
@@ -28,7 +28,7 @@ export const WORKER_OFFICE_KEYS = [
  *   送ると、今月の給与計算の日額・月給が変わり、監査ログ（auditTrail）にも残らなかった。
  *   一覧を WORKER_PAY_KEYS から作って1つにする（給与の項目を足せば、自動で代表専用・監査対象になる）。
  */
-export const WORKER_OWNER_ONLY_KEYS: readonly string[] = [...WORKER_PAY_KEYS, 'useOldRules']
+export const WORKER_OWNER_ONLY_KEYS: readonly string[] = [...WORKER_PAY_KEYS, 'useOldRules', 'oldRulesUntilYm']
 
 /**
  * /api/workers の add・update が受け付ける項目（**許可リスト**・Firestore の生のキー名＝ org / visa / job）。
@@ -45,7 +45,7 @@ export const WORKER_WRITABLE_BASE_KEYS = [
   'dispatchTo', 'dispatchFrom', 'canDrive', 'nonSmoker', 'children', 'breakShortenMin', 'breakShortenFrom',
 ] as const
 export const WORKER_WRITABLE_PAY_KEYS = [
-  'rate', 'hourlyRate', 'otMul', 'salary', 'jpGrade', 'jpStep', 'useOldRules',
+  'rate', 'hourlyRate', 'otMul', 'salary', 'jpGrade', 'jpStep', 'useOldRules', 'oldRulesUntilYm',
   'rateFrom', 'prevRate', 'prevJpStep', 'hourlyRateFrom', 'prevHourlyRate', 'salaryFrom', 'prevSalary',
 ] as const
 /**
@@ -58,7 +58,7 @@ export const WORKER_CLEARABLE_KEYS: readonly string[] = [
   'nameVi', 'retired', 'visaExpiry', 'memo', 'birthDate', 'payrollNo', 'dispatchTo', 'dispatchFrom',
   'breakShortenMin', 'breakShortenFrom',
   'hourlyRate', 'salary', 'jpGrade', 'jpStep', 'rateFrom', 'prevRate', 'prevJpStep',
-  'hourlyRateFrom', 'prevHourlyRate', 'salaryFrom', 'prevSalary',
+  'hourlyRateFrom', 'prevHourlyRate', 'salaryFrom', 'prevSalary', 'oldRulesUntilYm',
 ]
 
 /**
@@ -90,6 +90,7 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     dispatchTo: (w.dispatchTo as string) || '',
     dispatchFrom: (w.dispatchFrom as string) || '',
     useOldRules: (w.useOldRules as boolean) || undefined,
+    oldRulesUntilYm: typeof w.oldRulesUntilYm === 'string' && /^\d{6}$/.test(w.oldRulesUntilYm) ? w.oldRulesUntilYm : undefined,
     payrollNo: (w.payrollNo as string) || undefined,
     birthDate: (w.birthDate as string) || '',
     jpGrade: (w.jpGrade as string) || undefined,

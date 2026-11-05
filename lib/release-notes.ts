@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261105_old_rules_until',
+    title: '旧契約の人を「何月分まで」で新しい契約へ切り替えられるようにしました',
+    content:
+      '人員マスタの「旧ルール」のチェックの下に「旧契約を ○月分まで使う」を足しました（代表だけが変えられます）。'
+      + '入れた月の翌月分から、時給制の新しい契約で給与を計算します。入れた月までの給与（締めた月を含む）は変わりません。'
+      + '切り替えるときに旧ルールのチェックは外さないでください（外すと過去の月まで計算し直しになります）。',
+    category: 'new',
+    publishedAt: '2026-11-05T18:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261104_old_contract_per_contract',
     title: '旧契約の4人の給与を雇用契約書どおりの計算にしました（10月分から）',
     content:

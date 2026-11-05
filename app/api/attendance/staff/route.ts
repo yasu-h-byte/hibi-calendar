@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { oldRulesActiveFor, resolveContractForYm } from '@/lib/old-contract'
 import { mapRawWorkers, hourlyRateOn, isEmployedOn, findWorkerByToken } from '@/lib/workers'
 import { getWorkerByToken } from '@/lib/workers.server'
 import {
@@ -444,11 +445,14 @@ export async function GET(request: NextRequest) {
       toolBudgetCarry,
       toolBudgetCompanyPaid,
       // 休憩短縮（旧契約の毎日20分など）。出面には記録せず給与計算で足している分を、画面で見せるため（2026-09-30）
-      breakShorten: (worker.breakShortenMin ?? 0) > 0 && worker.breakShortenFrom
-        ? { min: worker.breakShortenMin, from: worker.breakShortenFrom } : null,
+      //   旧契約を oldRulesUntilYm で終えた人は、新契約の月に出さない（lib/old-contract.ts・2026-11-05）
+      breakShorten: (() => {
+        const bs = resolveContractForYm(worker, tIso)
+        return (bs.breakShortenMin ?? 0) > 0 && bs.breakShortenFrom ? { min: bs.breakShortenMin, from: bs.breakShortenFrom } : null
+      })(),
       // 自分の都合で1日休むと減る給料の目安（時給 × 7時間）。新ルールの時給制の人だけ（2026-09-30）
       absenceDayPay: (() => {
-        if (!worker.visaType || worker.visaType === 'none' || worker.useOldRules) return null
+        if (!worker.visaType || worker.visaType === 'none' || oldRulesActiveFor(worker, tIso)) return null
         const rate = hourlyRateOn(worker, tIso)
         return rate && rate > 0 ? Math.round(rate * 7) : null
       })(),

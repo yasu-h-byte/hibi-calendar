@@ -63,6 +63,7 @@ const EMPTY_FORM = {
   breakShortenMin: '', breakShortenFrom: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '', payrollNo: '',
   useOldRules: false,
+  oldRulesUntilYm: '',  // 旧契約を何月分まで 'YYYYMM'（空 = ずっと旧契約）
 }
 
 /**
@@ -273,6 +274,7 @@ export default function WorkersPage() {
       dispatchTo: w.dispatchTo || '',
       dispatchFrom: w.dispatchFrom || '',
       useOldRules: !!w.useOldRules,
+      oldRulesUntilYm: w.oldRulesUntilYm || '',
     }
     setForm(next)
     setFormBase(JSON.stringify(next))
@@ -321,6 +323,10 @@ export default function WorkersPage() {
         }
         if (Number(form.otMul) !== (orig.otMul || 1.25)) diffs.push(`残業倍率: ${orig.otMul || 1.25} → ${form.otMul}`)
         if (!!form.useOldRules !== !!orig.useOldRules) diffs.push(`旧ルール継続: ${orig.useOldRules ? 'ON' : 'OFF'} → ${form.useOldRules ? 'ON' : 'OFF'}`)
+        if ((form.oldRulesUntilYm || '') !== (orig.oldRulesUntilYm || '')) {
+          const lbl = (v?: string) => v ? `${v.slice(0, 4)}年${Number(v.slice(4, 6))}月分まで` : 'ずっと'
+          diffs.push(`旧契約の期間: ${lbl(orig.oldRulesUntilYm)} → ${lbl(form.oldRulesUntilYm)}（翌月分から新契約）`)
+        }
         if (diffs.length > 0) {
           const ok = await confirmDialog({
             title: `${form.name} さんの給与計算に関わる設定を変えます`,
@@ -358,13 +364,14 @@ export default function WorkersPage() {
           visaExpiry: clearable(form.visaExpiry, 'visaExpiry'), memo: clearable(form.memo, 'memo'),
           dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '',
           useOldRules: form.useOldRules ? true : (origOf('useOldRules') ? false : undefined),
+          oldRulesUntilYm: form.useOldRules ? clearable(form.oldRulesUntilYm, 'oldRulesUntilYm') : undefined,
           payrollNo: form.payrollNo.trim(),
         }
       : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined }
     // 給与欄を書き換えられない人（代表以外）は給与欄を送らない（2026-10-02）。
     //   給与を見られない人には給与欄が空で届くため、送ると「空にする変更」扱いで保存が止まっていた
     if (editId !== null && !canEditPay) {
-      for (const k of ['rate', 'hourlyRate', 'otMul', 'jpGrade', 'jpStep', 'salary'] as const) delete (body as Record<string, unknown>)[k]
+      for (const k of ['rate', 'hourlyRate', 'otMul', 'jpGrade', 'jpStep', 'salary', 'oldRulesUntilYm'] as const) delete (body as Record<string, unknown>)[k]
     }
     const res = await fetchWithAuth('/api/workers', { password, method: 'POST', headers: headers(), body: JSON.stringify(body) })
     if (!res.ok) {
@@ -1387,6 +1394,23 @@ export default function WorkersPage() {
                     チェックすると、5月以降も旧ルール（1日6h40min所定、月集計合計×1.25残業）で計算されます。
                     退職時に退職日を設定すれば自動的に対象外になります。
                   </p>
+                  {form.useOldRules && (
+                    <div className="mt-3">
+                      <label className="flex flex-wrap items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
+                        旧契約を
+                        <input type="month" disabled={!canEditPay}
+                          value={form.oldRulesUntilYm ? `${form.oldRulesUntilYm.slice(0, 4)}-${form.oldRulesUntilYm.slice(4, 6)}` : ''}
+                          onChange={e => setForm({ ...form, oldRulesUntilYm: e.target.value.replace('-', '') })}
+                          className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm disabled:opacity-60" />
+                        分まで使う
+                      </label>
+                      <p className="mt-1 text-3xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                        ※ 新しい契約（時給制・1か月単位の変形労働）に切り替える人だけ入れます。<b>入れた月の翌月分から新契約</b>で計算し、
+                        固定月給と休憩短縮は使いません（時給は「時給の適用開始日」で切り替え）。入れた月までの給与（締めた月を含む）は変わりません。
+                        空欄ならずっと旧契約。代表だけが変えられます。
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 

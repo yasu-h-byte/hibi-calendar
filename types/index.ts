@@ -22,6 +22,12 @@ export interface Worker {
    * 既定: 未設定（false 相当）= 5月以降は新ルール
    */
   useOldRules?: boolean
+  /**
+   * 旧契約（useOldRules）を何月分まで使うか 'YYYYMM'（2026-11-05 追加）。
+   * useOldRules: true かつ その月 ≤ この月 のときだけ旧契約。翌月分からは新契約（時給制・固定月給と休憩短縮は使わない）。
+   * 未設定ならずっと旧契約（今までどおり）。解決は lib/old-contract.ts resolveContractForYm（計算の入口で一度だけ）
+   */
+  oldRulesUntilYm?: string
   /** キャシュモ（給与計算委託先）が管理する従業員番号。社員番号(id)とは別。提出用の帳票に載せる（2026-09-17） */
   payrollNo?: string
   /**

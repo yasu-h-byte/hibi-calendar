@@ -269,6 +269,14 @@ export async function POST(request: NextRequest) {
         if (picked.updates.useOldRules === true) updates.useOldRules = true
         else { delete updates.useOldRules; if (!unsetFields.includes('useOldRules')) unsetFields.push('useOldRules') }
       }
+      // 旧契約を何月分まで使うか 'YYYYMM'（2026-11-05・lib/old-contract.ts）。空で送ると消す（＝ずっと旧契約）
+      if (updates.oldRulesUntilYm !== undefined) {
+        const v = String(updates.oldRulesUntilYm).replace('-', '')
+        if (!/^\d{6}$/.test(v) || Number(v.slice(4, 6)) < 1 || Number(v.slice(4, 6)) > 12) {
+          return NextResponse.json({ error: '「旧契約を何月分まで」は 年月（例 2026-11）で入れてください' }, { status: 400 })
+        }
+        updates.oldRulesUntilYm = v
+      }
 
       // 2026-06-12 (監査 Sprint2-C): 給与系フィールドの old→new を永続記録（更新前に現値を取得）
       const beforeWorkers = await getWorkers()
@@ -295,6 +303,25 @@ export async function POST(request: NextRequest) {
         if (locked.length > 0) {
           const label = { rateFrom: '日額', hourlyRateFrom: '時給', salaryFrom: '月給' }[f]
           return NextResponse.json({ error: `${label}の適用開始日 ${v} 以降に締め済みの月（${locked.map(k => k.slice(0, 4) + '年' + parseInt(k.slice(4, 6)) + '月').join('・')}）があるため変えられません。先に月次集計画面で締めを解除してください` }, { status: 409 })
+        }
+      }
+
+      // 「旧契約を何月分まで」を変えると、変わる月の契約（旧/新）が入れ替わる。締め済みの月が入るなら変えない（2026-11-05）。
+      //   変わる月 = 前後の値の早いほうの翌月から（消す＝ずっと旧契約、は前の値の翌月から）
+      {
+        const beforeUntil = typeof beforeW.oldRulesUntilYm === 'string' ? beforeW.oldRulesUntilYm : ''
+        const afterUntil = unsetFields.includes('oldRulesUntilYm') ? '' : (typeof updates.oldRulesUntilYm === 'string' ? updates.oldRulesUntilYm : beforeUntil)
+        const wasOld = beforeW.useOldRules === true
+        const isOld = unsetFields.includes('useOldRules') ? false : (updates.useOldRules === true || wasOld)
+        if (wasOld && isOld && beforeUntil !== afterUntil) {
+          const firstChanged = [beforeUntil, afterUntil].filter(Boolean).sort()[0]
+          const y = Number(firstChanged.slice(0, 4)), m = Number(firstChanged.slice(4, 6))
+          const nextIso = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+          const { lockedMonthsFrom } = await import('@/lib/locks.server')
+          const locked = await lockedMonthsFrom(nextIso, String(beforeW.org || beforeW.company || ''))
+          if (locked.length > 0) {
+            return NextResponse.json({ error: `「旧契約を何月分まで」を変えると、締め済みの月（${locked.map(k => k.slice(0, 4) + '年' + parseInt(k.slice(4, 6)) + '月').join('・')}）の契約が変わるため変えられません。先に月次集計画面で締めを解除してください` }, { status: 409 })
+          }
         }
       }
 

@@ -11,7 +11,7 @@ import { withWorkTypeSiteCalendars } from './site-hierarchy'
 import { overtimeCalendarDays, workerSiteCalendarDays } from './compute-overtime'
 import { effectiveHourlyRateForYm, effectiveRateForYm, effectiveSalaryForYm, isHiredByMonth, isStillActiveForMonth, midMonthRateChangeOf } from './workers'
 import { isSuspectCompanyRest } from './attendance-confirm'
-import { OLD_CONTRACT_DAILY_HOURS, countOldContractPrescribedDays, oldContractUnpaidDays } from './old-contract'
+import { OLD_CONTRACT_DAILY_HOURS, countOldContractPrescribedDays, oldContractUnpaidDays, resolveWorkersForYm } from './old-contract'
 import { type VietnameseSalaryResult, calcLegalHolidayAllowance, calcNightMinutes, calcNightShiftLegalRequiredPay, calculateVietnameseSalary } from './compute-vn-salary'
 import { detectRestMismatches } from './rest-mismatch'
 import { isWorkingDay } from './attendance'
@@ -276,6 +276,10 @@ export function computeMonthly(
   sites: SiteSummary[]
   totals: { workDays: number; subWorkDays: number; cost: number; subCost: number; billing: number; profit: number; otHours: number }
 } {
+  // 2026-11-05: 旧契約を何月分まで使うか（oldRulesUntilYm）をここで一度だけ解決する。
+  //   新契約になった月の人は useOldRules・固定月給・休憩短縮が外れた形になり、以下はその月の契約だけを見る
+  //   （useOldRules を見ている各所に条件を足さない。lib/old-contract.ts resolveContractForYm）
+  main = { ...main, workers: resolveWorkersForYm(main.workers, ym) }
   // 2026-09-15: 工種サイト（親現場の下の入力先）は親のカレンダーを使う。
   //   呼び出し元（月次・締め・Excel・ダッシュボード・サイドバー）がそれぞれ作るマップを、ここで一括して補う
   siteWorkDaysMap = siteWorkDaysMap ? withWorkTypeSiteCalendars(main.sites, siteWorkDaysMap) : siteWorkDaysMap
