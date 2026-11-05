@@ -3,6 +3,7 @@ import { checkApiAuth, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { computeMonthly } from '@/lib/compute-monthly'
+import { oldRulesActiveFor } from '@/lib/old-contract'
 import { parseDKey } from '@/lib/compute'
 import { getMainData, getAttData, loadMonthlyAllowances } from '@/lib/compute.server'
 import { isMonthLockedInLocks, orgKeyOf } from '@/lib/locks'
@@ -165,7 +166,7 @@ export async function GET(request: NextRequest) {
       //   true の場合、カレンダーがある月でも全社所定日数の入力欄を表示する
       //   （旧ルール者の欠勤控除は main.workDays[ym] を使うため毎月の設定が必要）
       hasOldRulesWorkers: main.workers.some(w =>
-        (w as { useOldRules?: boolean }).useOldRules === true
+        oldRulesActiveFor(w, ym)  // 旧契約を何月分まで使うか（oldRulesUntilYm）も見る
         && isStillActiveForMonth(w.retired, ym)
         && isHiredByMonth(w.hireDate, ym)),
       siteNames,

@@ -12,6 +12,7 @@ import { approvalDateError } from '@/lib/attendance-authz'
 import { attendanceDateError, dayApprovalOf, finalApprovedEditError, writeAttendanceEntry, COMP_NON_WORKING_DAY_MESSAGE } from '@/lib/attendance-save'
 import { getApprovalForDay } from '@/lib/attendance.server'
 import { isStillActiveForMonth, isHiredByMonth, isEmployedOn } from '@/lib/workers'
+import { oldRulesActiveFor } from '@/lib/old-contract'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
         retired: w.retired || undefined,  // 退職日（バッジ表示用）
         hireDate: w.hireDate || undefined,  // 入社日（入社前の日を未入力に数えない）
         // 2026-06-13: 旧契約継続者（フン等）は出面UIをレガシー（日数+残業+0.6補）にするため
-        useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
+        useOldRules: oldRulesActiveFor(w, ym) || undefined,  // 旧契約を何月分まで使うか（oldRulesUntilYm）も見る
         canDrive: (w as { canDrive?: boolean }).canDrive,
         offRoster: undefined as boolean | undefined,   // 配置外の入力がある人（下で足す）
       }))
@@ -122,7 +123,7 @@ export async function GET(request: NextRequest) {
         id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
         retired: w.retired || undefined,
         hireDate: w.hireDate || undefined,
-        useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
+        useOldRules: oldRulesActiveFor(w, ym) || undefined,  // 旧契約を何月分まで使うか（oldRulesUntilYm）も見る
         canDrive: (w as { canDrive?: boolean }).canDrive,
         offRoster: true,
       })
@@ -197,7 +198,7 @@ export async function GET(request: NextRequest) {
           id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
           retired: w.retired || undefined,
           hireDate: w.hireDate || undefined,
-          useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
+          useOldRules: oldRulesActiveFor(w, ym) || undefined,  // 旧契約を何月分まで使うか（oldRulesUntilYm）も見る
           canDrive: (w as { canDrive?: boolean }).canDrive,
           offRoster: undefined,
         })

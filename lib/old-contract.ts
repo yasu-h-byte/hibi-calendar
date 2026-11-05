@@ -14,10 +14,70 @@
  */
 import type { AttendanceEntry } from '@/types'
 
-/** 人員マスタの生データ（visa）と mapRawWorkers 後（visaType）のどちらでも判定できる */
-export function isOldContractWorker(w: { visa?: string; visaType?: string; useOldRules?: boolean } | undefined | null): boolean {
+// ────────────────────────────────────────
+//  旧契約を何月分まで使うか（2026-11-05 代表決定）
+// ────────────────────────────────────────
+/**
+ * 人員マスタの useOldRules（旧契約）は「いつまで」を持たないフラグで、外すと締めた過去月まで新契約で計算し直してしまう。
+ * そこで oldRulesUntilYm（'YYYYMM'）を足し、**useOldRules: true かつ その月 ≤ oldRulesUntilYm の月だけ旧契約**にする。
+ * oldRulesUntilYm が無い人は今までどおり（ずっと旧契約）。
+ *
+ * 例: HFU の技能実習1号3名は 2026-12 分から新契約（時給制・1か月単位の変形労働）→ oldRulesUntilYm = '202611'。
+ *
+ * ⚠️ 計算の入口（computeMonthly・月次 API・帳票・出面の API）で **resolveWorkersForYm を一度だけ通す**。
+ *   useOldRules を見ている所（約110か所）に条件を書き足さない（足し忘れが必ず出る）。
+ */
+type OldRulesFields = { useOldRules?: boolean; oldRulesUntilYm?: string }
+
+function ymOf(ymOrDate: string): string {
+  // 'YYYYMM' / 'YYYY-MM' / 'YYYY-MM-DD' のどれでも 'YYYYMM' に
+  const s = ymOrDate.replace(/-/g, '')
+  return s.slice(0, 6)
+}
+
+/** その月（または日 'YYYY-MM-DD' の月）に旧契約で計算する人か（在留資格は見ない。外国人かは isOldContractWorker） */
+export function oldRulesActiveFor(w: OldRulesFields | undefined | null, ymOrDate: string): boolean {
+  if (!w || w.useOldRules !== true) return false
+  const until = w.oldRulesUntilYm
+  if (!until || !/^\d{6}$/.test(until)) return true
+  return ymOf(ymOrDate) <= until
+}
+
+/**
+ * その月の契約で解決した人を返す（同じ形のまま）。
+ * 旧契約の月 … そのまま（固定月給・休憩短縮も使う）
+ * 新契約になった月 … useOldRules を外し、旧契約だけの項目（固定月給 salary・休憩短縮 breakShortenMin）も外す。
+ *   時給は hourlyRate / hourlyRateFrom / prevHourlyRate（適用開始日）でそのまま決まる。
+ * oldRulesUntilYm の無い人・useOldRules でない人は同じオブジェクトを返す。
+ */
+export function resolveContractForYm<T extends OldRulesFields>(w: T, ymOrDate: string): T {
+  if (w.useOldRules !== true || !w.oldRulesUntilYm) return w
+  if (oldRulesActiveFor(w, ymOrDate)) return w
+  const out = { ...w } as T & Record<string, unknown>
+  delete out.useOldRules
+  delete out.salary
+  delete out.salaryFrom
+  delete out.prevSalary
+  delete out.breakShortenMin
+  delete out.breakShortenFrom
+  return out
+}
+
+/** 人の一覧をその月の契約で解決する（computeMonthly など計算の入口で一度だけ通す） */
+export function resolveWorkersForYm<T extends OldRulesFields>(workers: readonly T[], ymOrDate: string): T[] {
+  return workers.map(w => resolveContractForYm(w, ymOrDate))
+}
+
+/**
+ * 旧契約の外国人か。人員マスタの生データ（visa）と mapRawWorkers 後（visaType）のどちらでも判定できる。
+ * ymOrDate（その月 'YYYYMM' か その日 'YYYY-MM-DD'）で oldRulesUntilYm を見る（新契約になった月は false）。
+ */
+export function isOldContractWorker(
+  w: { visa?: string; visaType?: string; useOldRules?: boolean; oldRulesUntilYm?: string } | undefined | null,
+  ymOrDate: string,
+): boolean {
   const visa = w?.visa ?? w?.visaType
-  return !!w && !!visa && visa !== 'none' && w.useOldRules === true
+  return !!w && !!visa && visa !== 'none' && oldRulesActiveFor(w, ymOrDate)
 }
 
 /**

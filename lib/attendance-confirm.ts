@@ -10,6 +10,7 @@
  */
 import type { AttendanceEntry } from '@/types'
 import { jstIsoOf } from './date-utils'
+import { resolveContractForYm } from './old-contract'
 // 「仕事の日か」は共通（lib/attendance-missing.ts・2026-10-02 総合点検。数え方そのものは変えていない）
 import { isWorkDayOf } from './attendance-missing'
 
@@ -264,9 +265,15 @@ export function jstDateOf(isoTime: string): string {
   return jstIsoOf(new Date(isoTime))
 }
 
-/** その月に休憩短縮（分/日）が適用されるか。人員マスタの breakShortenMin・breakShortenFrom（'YYYYMM'）から */
-export function breakShortenMinFor(w: { breakShortenMin?: number; breakShortenFrom?: string }, ym: string): number {
-  const min = w.breakShortenMin ?? 0
+/**
+ * その月に休憩短縮（分/日）が適用されるか。人員マスタの breakShortenMin・breakShortenFrom（'YYYYMM'）から。
+ * 旧契約を oldRulesUntilYm で終えた人は、新契約の月に休憩短縮を付けない（lib/old-contract.ts resolveContractForYm・2026-11-05）
+ */
+export function breakShortenMinFor(
+  w: { breakShortenMin?: number; breakShortenFrom?: string; useOldRules?: boolean; oldRulesUntilYm?: string },
+  ym: string,
+): number {
+  const min = resolveContractForYm(w, ym).breakShortenMin ?? 0
   const from = w.breakShortenFrom
   return min > 0 && from && ym.replace('-', '') >= from ? min : 0
 }

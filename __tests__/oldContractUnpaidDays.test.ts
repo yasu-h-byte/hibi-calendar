@@ -13,11 +13,11 @@ const e = (x: object) => x as unknown as AttendanceEntry
 
 describe('旧契約の判定', () => {
   test('useOldRules の外国人だけ（visa / visaType どちらでも）', () => {
-    expect(isOldContractWorker({ visa: 'jisshu1', useOldRules: true })).toBe(true)
-    expect(isOldContractWorker({ visaType: 'jisshu1', useOldRules: true })).toBe(true)
-    expect(isOldContractWorker({ visa: 'jisshu1' })).toBe(false)
-    expect(isOldContractWorker({ visa: 'none', useOldRules: true })).toBe(false)
-    expect(isOldContractWorker(null)).toBe(false)
+    expect(isOldContractWorker({ visa: 'jisshu1', useOldRules: true }, YM)).toBe(true)
+    expect(isOldContractWorker({ visaType: 'jisshu1', useOldRules: true }, YM)).toBe(true)
+    expect(isOldContractWorker({ visa: 'jisshu1' }, YM)).toBe(false)
+    expect(isOldContractWorker({ visa: 'none', useOldRules: true }, YM)).toBe(false)
+    expect(isOldContractWorker(null, YM)).toBe(false)
   })
   test('所定の日 = 日曜以外（祝日・現場の休みも所定）', () => {
     expect(isOldContractPrescribedDay('2026-09-21')).toBe(true)   // 敬老の日（月）

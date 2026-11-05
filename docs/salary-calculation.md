@@ -269,6 +269,26 @@
 - 毎日20分の残業（契約の休憩140分と現場の120分の差）は休憩短縮として 1.25倍。週6日×6h40m＝40時間なので、この20分が週40時間を超える分にあたる
 - 会社の休日の日付（年末年始・夏季）は毎年 `OLD_CONTRACT_COMPANY_HOLIDAYS` に足す（空のままだと日曜以外がすべて所定の日）
 
+### 2026-11-05 追記: 旧契約を何月分まで使うか（`oldRulesUntilYm`）
+
+`useOldRules` は「いつまで」を持たないフラグで、外すと**締めた過去月まで新契約で再計算**してしまう
+（月次 API は締めた月も今の決まりで計算し直し、凍結値 payrollSnapshots と比べる）。そこで人員マスタに
+`oldRulesUntilYm: 'YYYYMM'` を足し、月で区切る。
+
+```
+旧契約で計算する月 = useOldRules: true かつ（oldRulesUntilYm が無い か その月 ≤ oldRulesUntilYm）
+新契約になった月   = useOldRules・固定月給（salary・salaryFrom・prevSalary）・休憩短縮（breakShortenMin・breakShortenFrom）を外した人として計算
+                     時給は hourlyRate / hourlyRateFrom / prevHourlyRate（適用開始日）で決まる（例: 新契約の初日を適用開始日にする）
+```
+
+- 解決は `lib/old-contract.ts` の `resolveContractForYm` / `resolveWorkersForYm` / `oldRulesActiveFor`。
+  **計算の入口で一度だけ通す**（`computeMonthly` の先頭・`generateOrgAttendance`・出面の API が画面へ渡す `useOldRules`・
+  月次 API の `hasOldRulesWorkers`・`breakShortenMinFor`）。`useOldRules` を見ている各所に条件を書き足さない
+- `isOldContractWorker(w, ymOrDate)` は月か日を必ず受け取る（0.6補を入れられる日・空欄の注意点は、その日の月で判定）
+- 人員マスタの画面（代表だけ）: 旧ルールのチェックの下に「旧契約を ○年○月 分まで使う」。締め済みの月の契約が変わる変更は API が 409 で止める
+- 2026-11-05 代表決定: HFU の技能実習1号（旧契約）を 2026年12月分から新契約（時給制・1日7時間・最低20日保証）へ。値の設定は本番で別に行う
+- テスト: `__tests__/oldRulesUntilYm.test.ts`（11月分=旧契約・12月分=新契約・過去月不変・期限の無い人は影響なし）
+
 ## 原価（労務費）の集計 — 2026-06 改定
 
 月次集計・原価収益の「労務費（totalCost）」は、**実際の支給額（salaryNetPay）に統一**する。

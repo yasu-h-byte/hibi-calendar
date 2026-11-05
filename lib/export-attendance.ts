@@ -9,6 +9,7 @@ import { dayLabel, daysInMonth, setColWidths, timesheetDayHours, ymLabel } from 
 import { isWorkingDay } from './attendance'
 import { WorkerMonthly } from './compute-monthly'
 import { effectiveHourlyRateForYm, isHiredByMonth, isStillActiveForMonth } from './workers'
+import { resolveWorkersForYm } from './old-contract'
 import { calculateOvertimeSummary, overtimeCalendarDays } from './compute-overtime'
 
 // ────────────────────────────────────────
@@ -329,7 +330,9 @@ export function sitesForMonthSheets<T extends { id: string; archived?: boolean }
 }
 
 export function generateOrgAttendance(data: HfuAttendanceExportData, org: AttendanceOrg): XLSX.WorkBook {
-  const { ym, workers, attD, sites, calendarDays } = data
+  const { ym, attD, sites, calendarDays } = data
+  // 旧契約を何月分まで使うか（oldRulesUntilYm）をここで一度だけ解決する（lib/old-contract.ts・2026-11-05）
+  const workers = resolveWorkersForYm(data.workers, ym)
   const label = ATTENDANCE_ORG_LABEL[org]
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()

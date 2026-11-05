@@ -60,7 +60,7 @@ export async function isScheduledWorkDay(siteId: string, dateIso: string): Promi
 export async function isCompAllowedDay(siteId: string, dateIso: string, workerId: number): Promise<boolean> {
   const { isOldContractWorker, isOldContractPrescribedDay } = await import('./old-contract')
   const w = (await getMainData()).workers.find(x => x.id === Number(workerId))
-  if (isOldContractWorker(w)) return isOldContractPrescribedDay(dateIso)
+  if (isOldContractWorker(w, dateIso)) return isOldContractPrescribedDay(dateIso)
   return isScheduledWorkDay(siteId, dateIso)
 }
 

@@ -220,6 +220,7 @@ export interface RawWorker {
   dispatchTo?: string  // 出向先名（空なら通常勤務）
   dispatchFrom?: string  // 出向開始月 YYYY-MM（空なら全期間出向扱い）
   useOldRules?: boolean  // 旧ルール（変形労働制以前）給与計算を継続するフラグ（個別対応）
+  oldRulesUntilYm?: string  // 旧契約を何月分まで使うか 'YYYYMM'（lib/old-contract.ts resolveContractForYm）
   payrollNo?: string     // キャシュモ管理の従業員番号（提出帳票用・2026-09-17）
   rateFrom?: string      // 現在の rate/jpStep の適用開始日（年次改定の基準日）。types/index.ts 参照
   prevRate?: number      // rateFrom より前の月に使う日額

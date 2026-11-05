@@ -22,6 +22,7 @@ export interface WorkerData {
   dispatchTo?: string // 出向先名（空なら通常勤務、値あり=出向中）
   dispatchFrom?: string // 出向開始月 YYYY-MM（空なら全期間出向扱い）
   useOldRules?: boolean
+  oldRulesUntilYm?: string  // 旧契約を何月分まで 'YYYYMM'（lib/old-contract.ts）
 }
 
 /**

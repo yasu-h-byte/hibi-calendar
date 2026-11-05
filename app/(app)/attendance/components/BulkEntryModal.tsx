@@ -89,7 +89,7 @@ export default function BulkEntryModal({
         // 0.6補（会社都合の休み）はカレンダーの仕事の日だけ（スタッフのスマホ・サーバと同じ決まり・2026-10-02 総合点検。
         //   旧: 休みの日にも入り、休業手当（60%）の過払いになりえた）
         //   旧契約の人は所定が全社の日曜以外なので、現場カレンダーが休みの日も入れる（lib/old-contract.ts・2026-10-23）
-        const compDayOk = isOldContractWorker(w) ? isOldContractPrescribedDay(iso) : isWorkDay(d)
+        const compDayOk = isOldContractWorker(w, iso) ? isOldContractPrescribedDay(iso) : isWorkDay(d)
         if (kind === 'comp' && !compDayOk && cur?.w !== 0.6) { skipRestDay++; continue }
         if (kind === 'comp') { items.push({ workerId: String(w.id), day: d, entry: { w: 0.6, s: 'admin' } }); continue }
         // 出勤
