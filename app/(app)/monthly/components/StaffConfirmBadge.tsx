@@ -22,7 +22,7 @@ export interface StaffConfirmInfo {
   /** スマホに確認が出た日（催促の「3日たってから」の起点） */
   since?: string
   org: 'hibi' | 'hfu'
-  state: 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside'
+  state: 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside' | 'exempt'
   /** その人の承認で足りない「現場×日」（waiting の説明用） */
   foremanMissing: number
   finalMissing: number
@@ -60,6 +60,7 @@ export default function StaffConfirmBadge({
     none: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
     waiting: 'bg-gray-50 text-gray-500 border border-dashed border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600',
     outside: 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+    exempt: 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
     early: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
     stale: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     ok: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
@@ -67,7 +68,7 @@ export default function StaffConfirmBadge({
     issue: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   }[kind]
   const label = {
-    none: 'まだ', waiting: '承認待ち', outside: '期間外',
+    none: 'まだ', waiting: '承認待ち', outside: '期間外', exempt: '確認不要（帰国中）',
     early: 'まだ（承認前に確認）', stale: '要再確認', ok: '確認ずみ ✓', resolved: '連絡 対応済み', issue: '⚠ 本人から連絡あり',
   }[kind]
   const missing = [
@@ -78,6 +79,7 @@ export default function StaffConfirmBadge({
     none: '職長承認と最終承認がそろい、本人のスマホに確認が出ています。本人がまだ押していません。',
     waiting: `この人の出面の承認がそろっていないため、本人のスマホにはまだ確認が出ていません（${missing || '承認待ち'}・現場×日）。承認がそろうと確認が出ます。`,
     outside: 'スマホで確認できるのは、締める前の前の月だけです。この月は本人のスマホに確認が出ません。',
+    exempt: 'この月はまるごと帰国中で、出勤・有給などが1日もありません（支給が無い月）。本人確認も、帰国の日の職長・最終承認も要りません。',
     early: `承認がそろう前に「正しい」と押した記録です（${fmt(info.at)}）。数えません。本人のスマホにもう一度確認が出ています。`,
     stale: `本人が確認したあとで出面が変わりました（確認: ${fmt(info.at)}）。本人のスマホに「もう一度確認してください」と出ています。`,
     ok: `本人がスマホで「正しい」と確認しました（${fmt(info.at)}）`,

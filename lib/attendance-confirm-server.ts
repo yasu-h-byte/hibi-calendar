@@ -11,7 +11,7 @@ import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 import { approvalGap, type FamilyDay } from './approval-gap'
 import {
   summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth, breakShortenMinFor,
-  isConfirmStale, jstDateOf, requiredApprovalKeys, confirmTargetYm,
+  isConfirmStale, jstDateOf, requiredApprovalKeys, confirmTargetYm, isHomeLeaveOnlyMonth,
   type AttConfirmDoc, type StaffMonthSummary,
 } from './attendance-confirm'
 import type { AttendanceEntry } from '@/types'
@@ -64,10 +64,23 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
     })
 
   /**
+   * その月がまるごと帰国中か（lib/attendance-confirm.ts isHomeLeaveOnlyMonth・2026-11-06）。
+   * 本人確認は「確認不要」、承認が必要な日も無し（帰国期間は申請のときに承認済み）。
+   * 旧契約の人は所定が日曜以外なので、カレンダーでなく日曜以外の全部の日に帰国の印があるかで見る（summarize と同じ）
+   */
+  const homeLeaveOnly = async (worker: ConfirmWorker): Promise<boolean> =>
+    isHomeLeaveOnlyMonth({
+      d, workerId: worker.id, ym, calDays: isOldContractWorker(worker) ? null : await calOfWorker(worker.id),
+      hireDate: worker.hireDate, retired: worker.retired,
+    })
+
+  /**
    * その人について承認が必要な「現場（親）×日」。本人確認と月締め（lib/month-approval-status.ts・2026-09分〜）が同じものを使う。
    * 記録がある日（出勤・残業・有給・休み・0.6補…すべて）＋記録が無い主現場の仕事の日
    */
   const requiredFamilyDays = async (worker: ConfirmWorker): Promise<FamilyDay[]> => {
+    // まるごと帰国中の月は承認する日が無い（帰国の印は職長が入力したものではなく、帰国の申請の承認で入る）
+    if (await homeLeaveOnly(worker)) return []
     const keys = requiredApprovalKeys({
       d, workerId: worker.id, ym, calDays: await calOfWorker(worker.id),
       approvalSiteOf: sid => calendarSiteIdOf(sites, sid),
@@ -105,7 +118,7 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
     return isConfirmStale(c, range)
   }
 
-  return { summarize, readiness, staleOf, requiredFamilyDays }
+  return { summarize, readiness, staleOf, requiredFamilyDays, homeLeaveOnly }
 }
 
 /**
@@ -122,8 +135,9 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
  *   issue    本人から「まちがいがある」の連絡（未対応）
  *   waiting  その人の出面の承認（職長・最終）がそろっていない → スマホにはまだ確認が出ない
  *   outside  スマホで確認できる月ではない（スマホで確認できるのは締める前の「前の月」だけ）
+ *   exempt   確認不要（その月はまるごと帰国中で、出勤・有給などが1日も無い＝支給が無い・2026-11-06）
  */
-export type StaffConfirmState = 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside'
+export type StaffConfirmState = 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside' | 'exempt'
 export const STAFF_CONFIRM_STATE_LABEL: Record<StaffConfirmState, string> = {
   ok: '確認ずみ',
   none: '未確認',
@@ -132,6 +146,7 @@ export const STAFF_CONFIRM_STATE_LABEL: Record<StaffConfirmState, string> = {
   issue: '本人から「まちがいがある」の連絡（未対応）',
   waiting: '承認待ち（職長・最終承認がそろっていないため、スマホに確認が出ていない）',
   outside: 'スマホ確認の期間外（スマホで確認できるのは前の月だけ）',
+  exempt: '確認不要（帰国中で出勤・有給が無い月）',
 }
 
 /** 承認がそろってからした確認だけを数える（承認前の確認は無いものとみなす） */
@@ -164,6 +179,8 @@ export async function evalStaffConfirm(
     return { state: 'waiting', readiness: { noEntries: false, foremanMissing: 0, finalMissing: 0, ready: false }, stale: false }
   }
   const readiness = await ctx.readiness(worker, { fresh: opts.fresh })
+  // まるごと帰国中の月（出勤も有給も無く支給が無い）は確認が要らない。本人からの連絡が残っていればそちらを優先（上）
+  if (!openIssue && await ctx.homeLeaveOnly(worker)) return { state: 'exempt', readiness, stale: false }
   if (isValidConfirmation(c)) {
     const stale = await ctx.staleOf(c, worker)
     if (stale) return { state: 'stale', readiness, stale }
@@ -249,7 +266,8 @@ export async function staffConfirmRows(args: {
     const c = confs.get(w.id) || null
     const ev = await evalStaffConfirm(c, w, ctx, { ym, todayIso, locked: isMonthLockedInLocks(main.locks, ym, o), fresh: args.fresh })
     // 記録が1件も無い月は対象外（スマホにも出さない）。対象者の選び方と同じだが、入社前・退職後だけの記録はここで落ちる
-    if (ev.readiness.noEntries && !c) return null
+    // 確認不要（まるごと帰国中）の人は承認の日が無いので noEntries になるが、一覧には「確認不要」として残す
+    if (ev.state !== 'exempt' && ev.readiness.noEntries && !c) return null
     let since: string | undefined
     if (ev.state === 'none' || ev.state === 'early' || ev.state === 'stale') {
       const readyDay = ev.readiness.readyAt ? jstDateOf(ev.readiness.readyAt) : ''

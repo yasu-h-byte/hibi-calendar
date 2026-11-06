@@ -205,10 +205,67 @@ export function summarizeWorkerMonth(args: {
   return s
 }
 
+/**
+ * 本人確認が済んだとみなす状態か（確認ずみ・確認不要）。月次集計の「本人確認まだ」と月締めの一覧が同じものを使う。
+ * 状態の決め方は lib/attendance-confirm-server.ts evalStaffConfirm
+ */
+export function isConfirmSettled(state: string): boolean {
+  return state === 'ok' || state === 'exempt'
+}
+
 /** 確認したあとで出面が変わったかを見分けるための指紋 */
 export function summaryFingerprint(s: StaffMonthSummary): string {
   return [s.workDays, s.otHours, s.plDays, s.compDays, s.restDays, s.examDays, s.homeLeaveDays,
     s.restList.map(r => `${r.day}${r.suspect ? 's' : ''}`).join('.'), s.missingDays.join('.')].join('|')
+}
+
+/** 帰国の印のほかに、支給や欠勤に関わる中身が入っているか（出勤・残業・夜勤・有給・休み・現場休・試験・時刻） */
+function hasNonHomeLeaveContent(e: AttendanceEntry): boolean {
+  const x = e as AttendanceEntry & { nonly?: number }
+  return (e.w || 0) > 0 || (e.o || 0) > 0 || !!e.p || !!e.r || !!e.h || !!e.exam
+    || !!e.ns || !!x.nonly || !!e.st || !!e.et || !!e.nst || !!e.net
+}
+
+/**
+ * その月がまるごと帰国中か＝本人確認が要らない月か（2026-11-06 代表決定・フウ 101 の10月分）。
+ *
+ * 支給が1円も出ない月は、本人に確かめてもらう中身が無い（スマホも見られない）。次の3つが全部そろったときだけ true:
+ *   1. 帰国の印（hk）のほかに中身のある記録が1件も無い（出勤・残業・夜勤・有給・休み・現場休・試験。0.6補も w>0 で落ちる）
+ *   2. 帰国の印が1件以上ある
+ *   3. 在籍中の仕事の日（主現場のカレンダー。無ければ日曜以外）は全部、帰国の印が入っている
+ *      → 帰国の前後に空欄の仕事の日が残っている月（入力漏れかもしれない）は確認が要るほうに倒す
+ * 1日でも当てはまらなければ、これまでどおり本人確認が要る（既定は安全側）。
+ */
+export function isHomeLeaveOnlyMonth(args: {
+  d: Record<string, AttendanceEntry | null | undefined>
+  workerId: number
+  ym: string
+  calDays: Record<string, string> | null
+  hireDate?: string
+  retired?: string
+}): boolean {
+  const { d, workerId, ym, calDays, hireDate, retired } = args
+  const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
+  const dim = new Date(y, m, 0).getDate()
+  const suffix = `_${workerId}_${ym}_`
+  const hkDays = new Set<number>()
+  for (const [key, entry] of Object.entries(d)) {
+    if (!entry) continue
+    const i = key.indexOf(suffix)
+    if (i <= 0) continue
+    const day = Number(key.slice(i + suffix.length))
+    if (!Number.isFinite(day) || day < 1 || day > dim) continue
+    if (hasNonHomeLeaveContent(entry)) return false
+    if (entry.hk) hkDays.add(day)
+  }
+  if (hkDays.size === 0) return false
+  for (let day = 1; day <= dim; day++) {
+    const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+    if (hireDate && iso < hireDate) continue
+    if (retired && iso > retired) continue
+    if (isWorkDayOf(calDays, y, m, day) && !hkDays.has(day)) return false
+  }
+  return true
 }
 
 /** その月に一番多く記録がある現場（主現場）。カレンダーの判定に使う（lib/compute.ts の未入力警告と同じ考え方） */

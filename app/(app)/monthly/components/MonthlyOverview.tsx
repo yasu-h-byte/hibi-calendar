@@ -92,7 +92,7 @@ export interface CloseCardProps {
   /** 出面の承認状況（締め済み・取得できなかったときは null） */
   approval: ApprovalStatus | null
   /** 本人確認の対象者の数と状態ごとの人数（状態はサーバが締めと同じ判定で決める） */
-  confirm: { target: number; ok: number; none: number; stale: number; issue: number; waiting: number; outside: number; failed?: boolean }
+  confirm: { target: number; ok: number; none: number; stale: number; issue: number; waiting: number; outside: number; exempt: number; failed?: boolean }
   /** 自動検算の対象人数と、異常のある人数（null＝検算しない月） */
   /** notEnded = 月の途中（自動検算は月が終わってから・2026-10-18） */
   audit: { target: number; affected: number; notEnded?: boolean } | null
@@ -107,7 +107,8 @@ export interface CloseCardProps {
 
 export function CloseCard(p: CloseCardProps) {
   const cf = p.confirm
-  const confirmLeft = cf.target - cf.ok
+  // 確認不要（まるごと帰国中で支給が無い月・2026-11-06）の人は、確認ずみと同じく残りに数えない
+  const confirmLeft = cf.target - cf.ok - cf.exempt
   // 確認がまだの人が全員「承認待ち」（スマホにまだ確認が出ていない）なら、警告にせず待ちとして出す
   const onlyWaiting = confirmLeft > 0 && cf.waiting === confirmLeft
   const confirmNote = [
@@ -117,6 +118,7 @@ export function CloseCard(p: CloseCardProps) {
     cf.issue > 0 ? `連絡あり ${cf.issue}名` : '',
     cf.waiting > 0 ? `承認待ち ${cf.waiting}名` : '',
     cf.outside > 0 ? `期間外 ${cf.outside}名` : '',
+    cf.exempt > 0 ? `確認不要（帰国中） ${cf.exempt}名` : '',
   ].filter(Boolean).join('・')
   return (
     <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl p-5 flex flex-col gap-4">
@@ -142,7 +144,7 @@ export function CloseCard(p: CloseCardProps) {
         ) : cf.target === 0 ? (
           <Check state="none" label="本人確認" note="対象の人がいません（日本人はスマホ確認の対象外）" />
         ) : confirmLeft === 0 ? (
-          <Check state="ok" label="本人確認" note={`${cf.target}名 全員が確認済み`} />
+          <Check state="ok" label="本人確認" note={cf.exempt > 0 ? `${cf.ok}名が確認済み・${cf.exempt}名は確認不要（帰国中で出勤・有給が無い月）` : `${cf.target}名 全員が確認済み`} />
         ) : p.locked ? (
           // 締めたあとはスマホに確認を出さない（締めるときに承知のうえで締めた記録が操作ログに残っている）
           <Check state="none" label="本人確認" note={`${cf.target}名中 ${cf.ok}名が確認済みのまま締めました`} action="一覧で見る" onAction={p.onShowConfirm} />

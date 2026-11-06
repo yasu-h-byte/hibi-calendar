@@ -13,12 +13,12 @@
  * 対象の状態は「スマホに確認が出ているのに押していない人」だけ:
  *   none（まだ）・early（承認前に押しただけ）・stale（確認のあとで出面が変わった）
  * 入れない人: waiting（承認待ち＝スマホにまだ確認が出ていないので、頼まれても押せない）・
- *   issue（本人から連絡あり＝事務所が対応する番）・outside（期間外）・ok
+ *   issue（本人から連絡あり＝事務所が対応する番）・outside（期間外）・exempt（確認不要＝まるごと帰国中）・ok
  * 状態と起点は lib/attendance-confirm-server.ts が決める（ここでは決め直さない）。
  */
 import { addDaysIso } from './date-utils'
 
-export type ReminderState = 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside'
+export type ReminderState = 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside' | 'exempt'
 
 export interface ReminderPerson {
   workerId: number
