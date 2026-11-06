@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
       ])
       const ctx = confirmMonthContext(sites, ym, d)
       const ready = await ctx.readiness(worker)
+      // まるごと帰国中の月（lib/attendance-confirm.ts isHomeLeaveOnlyMonth）も承認の日が無いのでここで出さない
       if (ready.noEntries) return NextResponse.json({ ym: null })
       // 承認前にした確認（2026-09-30 の初日分など）は数えない＝もう一度確認してもらう
       const raw = confSnap.exists() ? (confSnap.data() as AttConfirmDoc) : null
@@ -163,6 +164,10 @@ export async function POST(request: NextRequest) {
     }
     const d = (await getAttendanceDoc(ym)) as Record<string, AttendanceEntry | null>
     const ctx = confirmMonthContext(sites, ym, d)
+    // まるごと帰国中の月は確認が要らない（スマホにも出さない・2026-11-06）。GET は承認の日が無い＝noEntries で出さない
+    if (await ctx.homeLeaveOnly(worker)) {
+      return NextResponse.json({ error: 'この月は確認はいりません / Tháng này không cần xác nhận' }, { status: 400 })
+    }
     const ready = await ctx.readiness(worker, { fresh: true })   // 記録する前はキャッシュを使わない（承認を外した直後に「承認後の確認」と記録しない）
     if (!ready.ready) {
       return NextResponse.json({

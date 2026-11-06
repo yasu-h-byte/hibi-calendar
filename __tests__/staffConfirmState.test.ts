@@ -6,9 +6,12 @@ import type { AttConfirmDoc } from '@/lib/attendance-confirm'
 
 // 本人確認の状態は月次集計の一覧・カード・月締め・スマホが同じものを使う（2026-10-02 一本化）
 type Ctx = ReturnType<typeof confirmMonthContext>
-const ctxOf = (ready: boolean, stale = false): Ctx => ({
-  readiness: async () => ({ noEntries: false, foremanMissing: ready ? 0 : 3, finalMissing: ready ? 0 : 5, ready }),
+const ctxOf = (ready: boolean, stale = false, homeLeaveOnly = false): Ctx => ({
+  readiness: async () => homeLeaveOnly
+    ? { noEntries: true, foremanMissing: 0, finalMissing: 0, ready: false }
+    : { noEntries: false, foremanMissing: ready ? 0 : 3, finalMissing: ready ? 0 : 5, ready },
   staleOf: async () => stale,
+  homeLeaveOnly: async () => homeLeaveOnly,
   summarize: async () => { throw new Error('unused') },
 } as unknown as Ctx)
 const w = { id: 101 }
@@ -43,6 +46,14 @@ describe('本人確認の状態', () => {
     // 締めたあとは期間外（スマホに出さない）。締める前にした有効な確認は残る
     expect((await evalStaffConfirm(null, w, ctxOf(true), { ...SEP, locked: true })).state).toBe('outside')
     expect((await evalStaffConfirm(conf({ afterApproval: true }), w, ctxOf(true), { ...SEP, locked: true })).state).toBe('ok')
+  })
+  test('まるごと帰国中の月は「確認不要」（2026-11-06 フウ 10月分）。本人からの未対応の連絡があればそちらを優先', async () => {
+    const SEP10 = { ym: '202610', todayIso: '2026-11-06', locked: false }
+    expect((await evalStaffConfirm(null, w, ctxOf(false, false, true), SEP10)).state).toBe('exempt')
+    // 期間外の月・締めたあとでも確認不要のまま（締めの一覧に出さない）
+    expect((await evalStaffConfirm(null, w, ctxOf(false, false, true), { ...SEP10, ym: '202609' })).state).toBe('exempt')
+    expect((await evalStaffConfirm(null, w, ctxOf(false, false, true), { ...SEP10, locked: true })).state).toBe('exempt')
+    expect((await evalStaffConfirm(conf({ ym: '202610', status: 'issue' }), w, ctxOf(false, false, true), SEP10)).state).toBe('issue')
   })
   test('スマホに確認を出す月は「前の月」で締める前だけ', () => {
     expect(isPhoneConfirmMonth('202609', '2026-10-02', false)).toBe(true)

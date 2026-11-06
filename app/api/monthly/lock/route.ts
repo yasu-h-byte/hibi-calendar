@@ -169,7 +169,9 @@ async function staffConfirmPending(ym: string, org: string | undefined, att: Att
     confirmations: qs.docs.map(x => x.data() as import('@/lib/attendance-confirm').AttConfirmDoc),
     fresh: true,   // 締めの判定はキャッシュを使わない
   })
-  return rows.filter(r => r.state !== 'ok').map(r => ({
+  const { isConfirmSettled } = await import('@/lib/attendance-confirm')
+  // 確認ずみ・確認不要（まるごと帰国中・2026-11-06）の人は出さない
+  return rows.filter(r => !isConfirmSettled(r.state)).map(r => ({
     id: r.workerId, name: r.name, state: STAFF_CONFIRM_STATE_LABEL[r.state],
     ...(r.confirmation?.note ? { note: r.confirmation.note } : {}),
   }))

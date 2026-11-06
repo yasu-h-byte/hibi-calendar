@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261106_confirm_exempt_home_leave',
+    title: 'まるごと帰国中の人は、本人確認が「確認不要」になりました',
+    content:
+      'その月はずっと帰国中で、出勤・有給・0.6補などが1日も無い人（給料が出ない月）は、月次集計に「確認不要（帰国中）」と出ます。'
+      + 'スマホに確認は出ず、締めるときの「確認ずみでない人」の一覧にも出ません。帰国の日の職長・最終承認も要りません。'
+      + '1日でも出勤や有給がある月は、これまでどおり本人確認が要ります。',
+    category: 'fix',
+    publishedAt: '2026-11-06T17:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261104_old_contract_per_contract',
     title: '旧契約の4人の給与を雇用契約書どおりの計算にしました（10月分から）',
     content:

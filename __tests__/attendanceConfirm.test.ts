@@ -1,7 +1,9 @@
 import { describe, test, expect } from 'vitest'
 import {
   confirmTargetYm, isSuspectCompanyRest, summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth,
+  isHomeLeaveOnlyMonth, isConfirmSettled,
 } from '@/lib/attendance-confirm'
+import type { AttendanceEntry } from '@/types'
 
 describe('確認する月（前の月・2026-09-30 変更）', () => {
   test('いつでも前の月（出すかどうかは承認と締めで決める）', () => {
@@ -152,5 +154,59 @@ describe('本人確認の前にそろうべき承認', () => {
     const d = { ihi_201_202609_3: { w: 1 } }
     const keys = requiredApprovalKeys({ d, workerId: 201, ym: '202609', calDays: cal, approvalSiteOf: parentOf, hireDate: '2026-09-03' })
     expect(keys.sort()).toEqual(['ihi_202609_3', 'ihi_202609_4'])
+  })
+})
+
+describe('まるごと帰国中の月＝本人確認が要らない月（2026-11-06 フウ 10月分）', () => {
+  const ym = '202610'
+  // 帰国の同期と同じく日曜以外の毎日に { w: 0, hk: 1 }（lib/home-leave-sync.ts）
+  const allHk = (): Record<string, AttendanceEntry> => {
+    const d: Record<string, AttendanceEntry> = {}
+    for (let day = 1; day <= 31; day++) {
+      if (new Date(2026, 9, day).getDay() === 0) continue
+      d[`siteA_101_${ym}_${day}`] = { w: 0, hk: 1 }
+    }
+    return d
+  }
+  const base = { workerId: 101, ym, calDays: null }
+  test('日曜以外の毎日が帰国の印だけなら確認不要', () => {
+    expect(isHomeLeaveOnlyMonth({ ...base, d: allHk() })).toBe(true)
+  })
+  test('1日でも出勤・残業・有給・0.6補・休み・現場休・試験・夜勤があれば確認が要る', () => {
+    const extras: AttendanceEntry[] = [
+      { w: 1 }, { w: 0, o: 2 }, { w: 0, p: 1 }, { w: 0.6 }, { w: 0, r: 1 }, { w: 0, h: 1 }, { w: 0, exam: 1 },
+      { w: 0, hk: 1, ns: 1 }, { w: 0, hk: 1, st: '08:00', et: '17:00' }, { w: 1, hk: 1 },
+    ]
+    for (const e of extras) {
+      const d = allHk()
+      d[`siteA_101_${ym}_5`] = e
+      expect(isHomeLeaveOnlyMonth({ ...base, d })).toBe(false)
+    }
+  })
+  test('帰国の前後に空欄の仕事の日があれば確認が要る（入力漏れかもしれない）', () => {
+    const d = allHk()
+    delete d[`siteA_101_${ym}_2`]
+    expect(isHomeLeaveOnlyMonth({ ...base, d })).toBe(false)
+    // カレンダーで休みの日なら空欄でもよい
+    const cal: Record<string, string> = {}
+    for (let day = 1; day <= 31; day++) cal[String(day)] = new Date(2026, 9, day).getDay() === 0 || day === 2 ? 'off' : 'work'
+    expect(isHomeLeaveOnlyMonth({ ...base, d, calDays: cal })).toBe(true)
+  })
+  test('入社前・退職後の日は見ない。帰国の印が1件も無い月は対象外', () => {
+    const d = allHk()
+    for (let day = 21; day <= 31; day++) delete d[`siteA_101_${ym}_${day}`]
+    expect(isHomeLeaveOnlyMonth({ ...base, d })).toBe(false)
+    expect(isHomeLeaveOnlyMonth({ ...base, d, retired: '2026-10-20' })).toBe(true)
+    expect(isHomeLeaveOnlyMonth({ ...base, d: {} })).toBe(false)
+  })
+  test('ほかの人の記録は見ない', () => {
+    const d = allHk()
+    d[`siteA_102_${ym}_5`] = { w: 1 }
+    expect(isHomeLeaveOnlyMonth({ ...base, d })).toBe(true)
+  })
+  test('済んだとみなすのは確認ずみと確認不要だけ', () => {
+    expect(isConfirmSettled('ok')).toBe(true)
+    expect(isConfirmSettled('exempt')).toBe(true)
+    for (const s of ['none', 'early', 'stale', 'issue', 'waiting', 'outside']) expect(isConfirmSettled(s)).toBe(false)
   })
 })

@@ -12,6 +12,7 @@ import { notify } from '@/lib/notify'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot, type PayrollValidationIssue } from '@/lib/payroll-validator'
 import { isMonthEndedJst } from '@/lib/date-utils'
+import { isConfirmSettled } from '@/lib/attendance-confirm'
 import { summarizeOpenIssues, type PayNoteAck } from '@/lib/pay-note-ack'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import ConfirmReminder from './components/ConfirmReminder'
@@ -319,7 +320,7 @@ type TabKey = typeof TABS[number]['key']
 /** 本人確認の対象で、まだ確認ずみでない人（一覧の「本人確認まだ」の絞り込み・締めで一覧に出る人と同じ）。
  *  状態はサーバ（lib/attendance-confirm-server.ts staffConfirmRows）が月締めと同じ判定で決める（2026-10-02 一本化） */
 function isConfirmPending(c: StaffConfirmInfo | undefined): boolean {
-  return !!c && c.state !== 'ok'
+  return !!c && !isConfirmSettled(c.state)
 }
 
 export default function MonthlyPage() {
@@ -1197,7 +1198,7 @@ function MonthlyPageInner() {
                 approval={data.approvalStatus?.[org] ?? null}
                 confirm={{
                   target: confRows.length, ok: confCount('ok'), none: confCount('none') + confCount('early'),
-                  stale: confCount('stale'), issue: confCount('issue'), waiting: confCount('waiting'), outside: confCount('outside'),
+                  stale: confCount('stale'), issue: confCount('issue'), waiting: confCount('waiting'), outside: confCount('outside'), exempt: confCount('exempt'),
                   failed: staffConfirmsFailed,
                 }}
                 audit={auditAll ? { target: auditTargets.length, affected: auditAll.affectedWorkerIds.length }

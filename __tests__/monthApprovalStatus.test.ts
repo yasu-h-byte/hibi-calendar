@@ -51,3 +51,16 @@ describe('月締めの承認範囲: 日本人（2026-10-02 代表決定・外国
     expect(ap.complete).toBe(true)
   })
 })
+
+describe('月締めの承認範囲: まるごと帰国中の人（2026-11-06 フウ 10月分）', () => {
+  test('仕事の日が全部帰国の印だけの人は、承認が要る日に入れない（帰国期間は申請のときに承認済み）', async () => {
+    const hk = { s_101_202609_1: { w: 0, hk: 1 }, s_101_202609_2: { w: 0, hk: 1 }, s_101_202609_3: { w: 0, hk: 1 } }
+    const ap = await monthApprovalStatus(main, hk, '202609', 'hibi')
+    expect(ap).toMatchObject({ needed: 0, complete: true })
+  })
+  test('帰国の途中で1日でも出勤があれば、これまでどおり全部の日に承認が要る', async () => {
+    const hk = { s_101_202609_1: { w: 1 }, s_101_202609_2: { w: 0, hk: 1 }, s_101_202609_3: { w: 0, hk: 1 } }
+    const ap = await monthApprovalStatus(main, hk, '202609', 'hibi')
+    expect(ap.needed).toBe(3)
+  })
+})
