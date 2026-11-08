@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261108_expense_check',
+    title: '「経費の事前チェック」の画面ができました（試験運用）',
+    content:
+      'MF経費の承認待ちの申請を毎朝確認し、出面・道具代・領収書などと合わない申請だけを上に出す画面です（メニュー「締め・請求（毎月）」）。'
+      + '見るだけの画面で、承認はこれまでどおり MF経費で行います。代表が MF経費につないだあとから使えます。使い方は事務業務マニュアルの §4b です。',
+    category: 'new',
+    publishedAt: '2026-11-08T18:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261106_confirm_exempt_home_leave',
     title: 'まるごと帰国中の人は、本人確認が「確認不要」になりました',
     content:

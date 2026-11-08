@@ -37,6 +37,8 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   // 2026-10-08 追加
   { coll: 'feedback', prefix: 'feedback', note: '困ったこと・要望のやり取り（画像は Storage の feedback/ に置き、退避しない）' },
   { coll: 'leaveSettleRequests', prefix: 'leavesettle', note: '有給精算の申請・承認（承認済みの日数は plData の buyoutHistory にも記録）' },
+  // 2026-11-08 追加
+  { coll: 'mfExpense', prefix: 'mfexpense', note: 'MF経費の事前チェックの設定・科目の割り当て・従業員の結びつけ（トークンは mfExpenseSecrets で別）' },
   // 2026-10-22 追加
   { coll: 'calendarStatusLog', prefix: 'calstatlog', note: '就業カレンダーの提出・最終承認・差し戻し・取り消しの台帳（append-only・lib/calendar-status-log.server.ts）' },
 ]
@@ -66,6 +68,9 @@ export const BACKUP_EXCLUDED: readonly { coll: string; reason: string }[] = [
   { coll: 'accessLog', reason: 'スタッフのアクセス履歴（消えても業務に影響なし）' },
   { coll: 'loginThrottle', reason: 'ログインの失敗回数（15 分で消える一時的な記録・lib/login-throttle.server.ts）' },
   { coll: 'leaveIndex', reason: '有給の索引（出面から作り直せる・POST /api/leave/index・lib/leave-index.server.ts）' },
+  { coll: 'mfExpenseSecrets', reason: 'MF経費のトークン（暗号化済み）。バックアップに鍵を複製しない。消えたら代表がつなぎ直す' },
+  { coll: 'expenseChecks', reason: 'MF経費の申請のチェック結果（毎朝 MF から作り直せる）' },
+  { coll: 'expenseHistory', reason: 'MF経費の過去明細の控え（MF から読み直せる）' },
   { coll: 'workerPhotos', reason: '顔写真（撮り直せる・大きい）' },
 ]
 

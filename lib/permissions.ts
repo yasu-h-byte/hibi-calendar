@@ -102,6 +102,9 @@ export const CAPABILITIES = {
   'invoice.paper':           { group: '毎月', label: '紙（手作り）で出した請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },
   // 2026-10-05 代表: 外注から紙で届く請求書を DEDURA＋ に入れて共有する（今は代表、数か月後から森田さん。lib/subcon-invoice.ts）。削除は invoice.approve
   'invoice.subcon':          { group: '毎月', label: '受け取った外注の請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },
+  // 経費の事前チェック（2026-11-08 代表）。MF経費の申請を承認する前に総務が見る。MF との接続・切断は system.admin（代表だけ）
+  'expenseCheck.view':      { group: '毎月', label: '経費の事前チェックを見る（個人の経費の明細を含む）', roles: ['jimu', 'approver', 'owner'] },
+  'expenseCheck.edit':      { group: '毎月', label: '経費の事前チェックの実行・科目の割り当て・従業員の結びつけ', roles: ['jimu', 'approver', 'owner'] },
   // ── 経営 ──
   'cost.view':               { group: '経営', label: '原価・収益を見る（人件費を含む）', roles: PAY_ROLES },
   'cost.edit':               { group: '経営', label: '現場の請求額を入力', roles: ['jimu', 'approver', 'owner'] },

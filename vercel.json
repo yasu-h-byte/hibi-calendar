@@ -8,6 +8,14 @@
       "schedule": "0 0 1 * *"
     },
     {
+      "path": "/api/mf-expense/cron",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/mf-expense/cron",
+      "schedule": "10 22 * * *"
+    },
+    {
       "path": "/api/backup/snapshot",
       "schedule": "0 17 * * *"
     },
