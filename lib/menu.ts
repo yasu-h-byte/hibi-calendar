@@ -62,6 +62,8 @@ export const MENU_ITEMS: MenuItem[] = [
   // 「帳票出力」のメニュー項目は 2026-10-03 に廃止（月次集計・締めのタブだけに。検索からは引ける）
   // 2026-10-20 代表: 「請求・支払」と「原価・収益」を1つの画面（3タブ: 現場ごと／出す請求書／受け取る）に統合
   { label: '請求・原価', icon: 'receipt', href: '/billing', section: '締め・請求（毎月）', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice', '/prime-invoice'] },
+  // 経費の事前チェック（2026-11-08）。前月分の申請を当月10日ごろまでに集め、15日のキャシュモ格納までに承認する流れなので月次のまとまりに
+  { label: '経費の事前チェック', icon: 'check', href: '/expense-check', section: '締め・請求（毎月）', cap: 'expenseCheck.view' },
   // 経営コックピット（別サイト）へのリンクは 2026-10-20 にメニューから外した（代表「いらないかも」。ブックマークで開く）
   // ── 人・書類（ときどき）: 人員 → 道具代（月に数回）→ 書類庫（入社・更新のとき）──
   { label: '人員マスタ', icon: 'users', href: '/workers', section: '人・書類', cap: 'workers.view' },
@@ -120,6 +122,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: 'スマホ版の出面入力', where: '出面入力', href: '/attendance/mobile', cap: 'attendance.view', keywords: 'すまほ モバイル 携帯' },
   { label: '出面の変更履歴・復元', where: '出面入力 → 変更履歴', href: '/attendance', cap: 'attendance.history', keywords: 'りれき 戻す 誤削除 上書き' },
   { label: '出面データ確認ツール', where: '保守（代表のみ）', href: '/debug-att', cap: 'system.admin', keywords: 'でばっぐ 修正 移し替え' },
+  { label: 'MF経費の申請の事前チェック（交通費・領収書・道具代）', where: '経費の事前チェック', href: '/expense-check', cap: 'expenseCheck.view', keywords: 'けいひ まねーふぉわーど マネーフォワード 申請 交通費 ガソリン 領収書 道具代 承認' },
   // 月次・帳票
   { label: '月締め（ロック）', where: '月次集計・締め', href: '/monthly', cap: 'monthly.close', keywords: 'しめ ろっく 締め 解除' },
   { label: '所定日数', where: '月次集計・締め', href: '/monthly', cap: 'monthly.view', keywords: 'しょていにっすう' },

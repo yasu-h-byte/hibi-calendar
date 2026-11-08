@@ -480,6 +480,20 @@ workSchedule?: {
 - **開発（Claude）の返信**: 代表のセッションから Firestore に直接、messages の末尾に `by.kind = 'dev'` の1件を足し、
   `updatedAt` と `unreadForAuthor: true` を付ける（messages は**必ず読んでから全体を書き戻す**。足すだけ・消さない）
 
+## MF経費の事前チェック（2026-11-08）
+
+決まりは [mf-expense-check.md](mf-expense-check.md)。読み書きは `lib/mf-expense-run.server.ts`・`lib/mf-expense-client.server.ts` だけ。MF の応答は使う項目だけを残す（振込口座などは保存しない）。
+
+| 場所 | 中身 | バックアップ |
+|---|---|---|
+| `expenseChecks/{MFの申請ID}` | 申請ごとの結果（明細・指摘 flags・`open`。承認待ちから消えたら `open:false`） | しない（MF から作り直せる） |
+| `expenseHistory/{YYYYMM}` | 過去の明細の控え `rows`（T3・T4・D2・M1 用） | しない（MF から読み直せる） |
+| `mfExpense/settings` | 科目の種類 `itemKinds`・決まりの数字 | する |
+| `mfExpense/members` | MF の従業員と作業員の結びつけ | する |
+| `mfExpense/items`・`reminders`・`runState` | 科目の一覧・声かけ一覧・実行の状態 | する |
+| `mfExpenseSecrets/connection` | トークン（AES-GCM で暗号化・鍵は Client Secret から作る） | **しない**（鍵を複製しない） |
+| `mfExpenseSecrets/oauth_*` | 接続の手続きの1回限りの合言葉（10分） | しない |
+
 ## 日次バックアップの対象（2026-10-02 総合点検で一本化）
 
 対象の決まりは **`lib/backup-plan.ts` だけ**。`app/api/backup/snapshot` はこの一覧を回す。
