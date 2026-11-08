@@ -25,7 +25,7 @@ import {
 import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import {
-  buildMonthlyReminders, checkExpenseReport, linkMfMembers, normalizeMfExpenseSettings, shiftYm, ymOfIso,
+  buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, linkMfMembers, normalizeMfExpenseSettings, shiftYm, ymOfIso,
   type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
   type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
@@ -132,10 +132,15 @@ function hibiWorkers(workers: RawWorker[]): RawWorker[] {
   return workers.filter(w => w.org === '日比' || w.org === 'hibi')
 }
 
-export async function loadHibiWorkerOptions(): Promise<{ id: number; name: string }[]> {
+/**
+ * 結びつけの選択肢。在籍の人に加えて、keepIds（すでに結びついている人）は退職扱いでも含める。
+ * 含めないと、番号で正しく結びついているのに選択欄が「選んでください」に見える（2026-11-09）
+ */
+export async function loadHibiWorkerOptions(keepIds: (number | null)[] = []): Promise<{ id: number; name: string }[]> {
   const main = await getMainData()
+  const keep = new Set(keepIds)
   return hibiWorkers(main.workers as RawWorker[])
-    .filter(w => !w.retired)
+    .filter(w => !w.retired || keep.has(w.id))
     .map(w => ({ id: w.id, name: w.name }))
     .sort((a, b) => a.id - b.id)
 }
@@ -209,13 +214,17 @@ async function syncMasters(api: MfApi, workers: RawWorker[]): Promise<Record<str
   return linked
 }
 
-/** 明細の控えを月ごとに更新する。古い月は1回読めば十分、前月と当月は毎回読み直す */
+/**
+ * 明細の控えを月ごとに更新する。古い月は1回読めば十分、前月と当月は6時間ごとに読み直す。
+ * 毎回読み直すと、それだけで1回の持ち時間（45秒）の大半を使い、申請の読み取りまで届かない（2026-11-09 実データで35秒ほど）。
+ * この控えは二重申請や平均との比較に使うだけで、チェックする申請そのものの明細は別に読む
+ */
 async function syncHistory(api: MfApi, months: string[], hotFrom: string): Promise<MfHistoryTx[]> {
   const rows: MfHistoryTx[] = []
   for (const ym of months) {
     const ref = doc(db, 'expenseHistory', ym)
     const snap = await getDoc(ref)
-    if (ym < hotFrom && snap.exists()) {
+    if (snap.exists() && isMfHistoryFresh(ym, hotFrom, snap.data().fetchedAt, Date.now())) {
       rows.push(...((snap.data().rows || []) as MfHistoryTx[]))
       continue
     }

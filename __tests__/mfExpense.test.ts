@@ -6,7 +6,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
-  shiftYm, targetYmOf,
+  MF_HOT_HISTORY_TTL_MS, isMfHistoryFresh, shiftYm, targetYmOf,
   type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
@@ -34,6 +34,32 @@ describe('日付', () => {
     expect(shiftYm('202601', -1)).toBe('202512')
     expect(shiftYm('202612', 1)).toBe('202701')
     expect(targetYmOf('2026-01-08')).toBe('202512')
+  })
+
+  test('何月分か: 16日以降に出て当月の明細が多ければ当月分（実データ: 10/31 に 10月分）', () => {
+    expect(targetYmOf('2026-10-31', ['2026-10-01', '2026-10-30'])).toBe('202610')
+    expect(targetYmOf('2026-10-16', ['2026-10-01'])).toBe('202610')
+    // 15日までは決まりどおり前月分
+    expect(targetYmOf('2026-10-15', ['2026-10-01'])).toBe('202609')
+    // 16日以降でも前月の明細が多い、または同数なら前月分
+    expect(targetYmOf('2026-10-20', ['2026-09-30', '2026-09-29', '2026-10-01'])).toBe('202609')
+    expect(targetYmOf('2026-10-20', ['2026-09-30', '2026-10-01'])).toBe('202609')
+    expect(targetYmOf('2026-10-20')).toBe('202609')
+  })
+
+  test('D1: 月末に当月分を出した申請には出さない。15日までの当月の日付には出す', () => {
+    const october = { submittedIso: '2026-10-31', today: '2026-11-09', txs: [tx({ date: '2026-10-05' })] }
+    expect(rules(run(october))).not.toContain('D1')
+    expect(rules(run({ submittedIso: '2026-11-08', today: '2026-11-09', txs: [tx({ date: '2026-11-05' })] }))).toContain('D1')
+  })
+
+  test('明細の控え: 古い月はそのまま、前月・当月は6時間だけ使う', () => {
+    const now = Date.parse('2026-11-09T07:10:00+09:00')
+    const at = (msAgo: number) => new Date(now - msAgo).toISOString()
+    expect(isMfHistoryFresh('202609', '202610', undefined, now)).toBe(true)
+    expect(isMfHistoryFresh('202610', '202610', at(10 * 60_000), now)).toBe(true)
+    expect(isMfHistoryFresh('202611', '202610', at(MF_HOT_HISTORY_TTL_MS), now)).toBe(false)
+    expect(isMfHistoryFresh('202611', '202610', undefined, now)).toBe(false)
   })
 })
 
