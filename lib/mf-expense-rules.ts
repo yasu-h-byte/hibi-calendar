@@ -146,8 +146,34 @@ export function shiftYm(ym: string, delta: number): string {
   return `${y}${String((total % 12) + 1).padStart(2, '0')}`
 }
 
-/** 申請した日から見た「前月」（前月分を当月に申請するのが決まり） */
-export const targetYmOf = (submittedIso: string): string => shiftYm(ymOfIso(submittedIso), -1)
+/**
+ * これより後の日に出た申請は、月末に当月分を出した可能性を見る。
+ * 前月分の申請はキャシュモの締め切り（当月15日）までに出るので、16日以降は当月分もありうる
+ */
+export const MONTH_END_SUBMIT_FROM_DAY = 16
+
+/**
+ * 何月分の申請か。決まりは「前月分を当月に申請する」だが、実データでは月末に当月分を出す人がいた
+ * （2026-11-09: 10/31 に 10月分を出した申請が全明細「当月の日付」になった）。
+ * 16日以降に出て、当月の明細のほうが多ければ当月分とする。15日までは前月分のまま（当月の日付が混ざったら D1 で知らせる）
+ */
+export function targetYmOf(submittedIso: string, txDates: string[] = []): string {
+  const thisYm = ymOfIso(submittedIso)
+  const prevYm = shiftYm(thisYm, -1)
+  if (Number(submittedIso.slice(8, 10)) < MONTH_END_SUBMIT_FROM_DAY) return prevYm
+  const count = (ym: string) => txDates.filter(d => d && ymOfIso(d) === ym).length
+  return count(thisYm) > count(prevYm) ? thisYm : prevYm
+}
+
+/** 前月・当月の明細の控えを読み直す間隔。朝 7:00 に読めば 7:10 の続きでは読み直さず、申請の読み取りに時間を使える */
+export const MF_HOT_HISTORY_TTL_MS = 6 * 60 * 60_000
+
+/** 明細の控えをそのまま使えるか。前月より古い月は控えがあれば十分、前月・当月は読んでから間もなければ使う */
+export function isMfHistoryFresh(ym: string, hotFromYm: string, fetchedAt: string | undefined, nowMs: number): boolean {
+  if (ym < hotFromYm) return true
+  const at = fetchedAt ? Date.parse(fetchedAt) : NaN
+  return Number.isFinite(at) && nowMs - at < MF_HOT_HISTORY_TTL_MS
+}
 
 const fmtYm = (ym: string) => `${Number(ym.slice(4, 6))}月`
 const fmtDay = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`
@@ -186,7 +212,7 @@ export interface MfReportCheckInput {
 
 export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpenseFlag[]; targetYm: string } {
   const { reportId, submittedIso, today, txs, history, settings, link, workDays, loadedYms, tool } = input
-  const targetYm = targetYmOf(submittedIso)
+  const targetYm = targetYmOf(submittedIso, txs.map(t => t.date))
   const flags: MfExpenseFlag[] = []
   const kindOf = (itemId: string): MfItemKind | undefined => settings.itemKinds[itemId]
   const others = history.filter(h => h.reportId !== reportId)
@@ -208,7 +234,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
       flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${label}: 未来の日付です` })
     } else if (ymOfIso(tx.date) !== targetYm) {
       const older = ymOfIso(tx.date) < targetYm
-      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${label}: ${fmtYm(targetYm)}分の申請に${older ? '前々月以前の出し忘れ' : '当月の日付'}が入っています` })
+      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${label}: ${fmtYm(targetYm)}分の申請に${older ? 'それより前の月の出し忘れ' : '当月の日付'}が入っています` })
     }
 
     // D2: 同じ人・同じ日・同じ金額・同じ科目が他の申請にもある

@@ -22,10 +22,11 @@ export async function GET(request: NextRequest) {
   const denied = await requireCap(request, 'expenseCheck.view')
   if (denied) return denied
   try {
-    const [connection, runState, settings, items, members, reminders, checks, workers] = await Promise.all([
+    const [connection, runState, settings, items, members, reminders, checks] = await Promise.all([
       getMfConnectionStatus(), loadMfRunState(), loadMfSettings(), loadMfItems(), loadMfMembers(),
-      loadMfReminders(), loadOpenExpenseChecks(), loadHibiWorkerOptions(),
+      loadMfReminders(), loadOpenExpenseChecks(),
     ])
+    const workers = await loadHibiWorkerOptions(Object.values(members).map(m => m.workerId))
     return NextResponse.json({
       connection, runState, settings, items, members: Object.values(members), reminders, checks, workers,
       redirectUri: MF_REDIRECT_URI,
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
       if (!/^[\w-]+$/.test(mfId) || !(workerId === null || typeof workerId === 'number')) {
         return NextResponse.json({ error: '入力が正しくありません' }, { status: 400 })
       }
-      if (workerId !== null && !(await loadHibiWorkerOptions()).some(w => w.id === workerId)) {
+      if (workerId !== null && !(await loadHibiWorkerOptions([workerId])).some(w => w.id === workerId)) {
         return NextResponse.json({ error: '日比建設の作業員を選んでください' }, { status: 400 })
       }
       if (!(await saveMfMemberLink(mfId, workerId))) return NextResponse.json({ error: 'MF の従業員が見つかりません' }, { status: 404 })

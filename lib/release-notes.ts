@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_fix',
+    title: '「経費の事前チェック」の誤った「要確認」を直しました',
+    content:
+      '月末に当月分を出した申請に「当月の日付が入っています」と出ていたのを直しました。'
+      + '16日以降に出た申請は、当月の明細が多ければ当月分として見ます。退職扱いの人の結びつけが空に見えていた表示も直しました。皆さんの操作は変わりません。',
+    category: 'fix',
+    publishedAt: '2026-11-09T09:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261108_expense_check',
     title: '「経費の事前チェック」の画面ができました（試験運用）',
     content:
