@@ -13,10 +13,10 @@ import { notify } from '@/lib/notify'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { Chip, FieldError, PageHeader, RowButton, SearchBox, TodoCard, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
-import { todayJstIso } from '@/lib/date-utils'
+import { currentYmJst, todayJstIso } from '@/lib/date-utils'
 import { buildMfRejectComment, hasMfRejectComment, type MfCommentLang } from '@/lib/mf-expense-comment'
 import {
-  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfExpenseSettingsError, normalizeMfReviewNote,
+  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
   type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
@@ -435,7 +435,9 @@ function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdi
 /** 同じ区間の交通費を人ごとに並べる。最安との差は小さくても見えるようにして、訂正を頼めるようにする */
 function RoutesTab({ table }: { table: Record<string, MfRouteTableRow[]> }) {
   const months = Object.keys(table).sort().reverse()
-  const [ym, setYm] = useState(months[0] || '')
+  // チェックするのは前月分なので、前月を最初に出す（前月の分が無ければ一番新しい月）
+  const prevYm = shiftYm(currentYmJst(), -1)
+  const [ym, setYm] = useState(months.includes(prevYm) ? prevYm : months[0] || '')
   const [onlyDiff, setOnlyDiff] = useState(true)
   if (months.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>「今すぐチェック」を押すと、区間の比較表を作ります</div>
   const rows = (table[ym] || []).filter(r => !onlyDiff || r.entries.some(e => e.amount !== r.min))
