@@ -16,11 +16,12 @@ import { SaveButton } from '@/components/ui/SaveButton'
 import { currentYmJst, todayJstIso } from '@/lib/date-utils'
 import { buildMfRejectComment, hasMfRejectComment, type MfCommentLang } from '@/lib/mf-expense-comment'
 import {
-  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfCheckState, mfReviewIsCurrent, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
-  type MfCheckState, type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
+  MF_HFU_FROM_YM, MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_ORG_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfCheckState, mfMemberNeedsLink, mfReviewIsCurrent, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
+  type MfCheckState, type MfOrg, type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
 interface Check {
+  org?: MfOrg
   reportId: string
   number: number | null
   title: string
@@ -54,11 +55,12 @@ interface PageData {
   runState: { lastRunAt: string | null; partial: boolean; lastError: string | null }
   receiptState: { configured: boolean; lastRunAt: string | null; lastError: string | null; lastRead: number; remaining: number }
   settings: MfExpenseSettings
-  items: { id: string; name: string; active: boolean }[]
+  runStateHfu: { lastRunAt: string | null; partial: boolean; lastError: string | null } | null
+  items: { id: string; name: string; active: boolean; org?: MfOrg }[]
   members: MfMemberLink[]
   reminders: MfReminderEntry[]
   checks: Check[]
-  workers: { id: number; name: string }[]
+  workers: { id: number; name: string; org?: MfOrg }[]
   routeTable: Record<string, MfRouteTableRow[]>
   redirectUri: string
 }
@@ -130,10 +132,19 @@ export default function ExpenseCheckPage() {
 
   const run = async () => {
     setRunning(true)
-    const r = await post({ action: 'run' })
+    const messages: string[] = []
+    for (const org of data?.settings.hfuEnabled ? ['hibi', 'hfu'] as const : ['hibi'] as const) {
+      const r = await post({ action: 'run', org })
+      if (!r.ok) {
+        setRunning(false)
+        notify.failed(`${MF_ORG_LABEL[org]}のチェック`, r.error || (typeof r.data?.message === 'string' ? r.data.message : undefined))
+        await load()
+        return
+      }
+      messages.push(typeof r.data?.message === 'string' ? r.data.message : 'チェックしました')
+    }
     setRunning(false)
-    if (!r.ok) { notify.failed('チェック', r.error || (typeof r.data?.message === 'string' ? r.data.message : undefined)); await load(); return }
-    notify.success(typeof r.data?.message === 'string' ? r.data.message : 'チェックしました')
+    notify.success(messages.join('／'))
     await load()
   }
 
@@ -157,7 +168,7 @@ export default function ExpenseCheckPage() {
   const counts = useMemo(() => {
     const checks = data?.checks || []
     const countOf = (s: MfCheckState) => checks.filter(c => mfCheckState(c) === s).length
-    const unlinked = (data?.members || []).filter(m => m.active && m.how === null).length
+    const unlinked = (data?.members || []).filter(mfMemberNeedsLink).length
     const unsetItems = (data?.items || []).filter(i => i.active && !data?.settings.itemKinds[i.id]).length
     return {
       flagged: countOf('confirm'),
@@ -225,7 +236,7 @@ function ConnectionCard({ data, isOwner, canEdit, running, connecting, reading, 
   data: PageData; isOwner: boolean; canEdit: boolean; running: boolean; connecting: boolean; reading: boolean
   onConnect: () => void; onDisconnect: () => void; onRun: () => void; onReadReceipts: () => void; onChooseOffice: (id: string) => void
 }) {
-  const { connection: c, runState: s, receiptState: rs } = data
+  const { connection: c, runState: s, runStateHfu: sh, receiptState: rs } = data
   if (!c.configured) {
     return (
       <div className={`${cardCls} p-5 text-sm text-gray-700 dark:text-gray-200`}>
@@ -248,8 +259,8 @@ function ConnectionCard({ data, isOwner, canEdit, running, connecting, reading, 
     <div className={`${cardCls} p-5 space-y-3`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-gray-700 dark:text-gray-200 space-y-0.5">
-          <div>接続先: <b>{c.officeName || '事業者が選ばれていません'}</b>{c.authorizedMember && <span className="text-hibi-sub dark:text-gray-400">（{c.authorizedMember} さんの権限）</span>}</div>
-          <div className="text-xs text-hibi-sub dark:text-gray-400">最後のチェック: {fmtAt(s.lastRunAt)}{s.partial && '（途中まで）'}</div>
+          <div>接続先: <b>{c.officeName || '事業者が選ばれていません'}</b>{data.settings.hfuEnabled && <>・<b>HFU（技能実習生・{Number(MF_HFU_FROM_YM.slice(4, 6))}月分から）</b></>}{c.authorizedMember && <span className="text-hibi-sub dark:text-gray-400">（{c.authorizedMember} さんの権限）</span>}</div>
+          <div className="text-xs text-hibi-sub dark:text-gray-400">最後のチェック: {fmtAt(s.lastRunAt)}{s.partial && '（途中まで）'}{sh && `・HFU ${fmtAt(sh.lastRunAt)}${sh.partial ? '（途中まで）' : ''}`}</div>
           <div className="text-xs text-hibi-sub dark:text-gray-400">
             {rs.configured ? `領収書の読み取り: ${fmtAt(rs.lastRunAt)}${rs.remaining > 0 ? `（残り ${rs.remaining} 枚）` : ''}` : '領収書の読み取り: 鍵が未設定のため止まっています'}
           </div>
@@ -267,6 +278,7 @@ function ConnectionCard({ data, isOwner, canEdit, running, connecting, reading, 
         </select>
       )}
       {s.lastError && <FieldError>前回のチェックは失敗しました: {s.lastError}</FieldError>}
+      {sh?.lastError && <FieldError>HFU の前回のチェックは失敗しました: {sh.lastError}</FieldError>}
       {rs.lastError && <FieldError>前回の領収書の読み取りで問題がありました: {rs.lastError}</FieldError>}
     </div>
   )
@@ -400,7 +412,7 @@ function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
   return (
     <div className="border-t first:border-t-0 border-hibi-line dark:border-gray-700 px-5 py-3 space-y-2">
       <button onClick={() => setOpen(o => !o)} aria-expanded={open} className="w-full text-left grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 items-center">
-        <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{c.memberName}</span>
+        <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{c.org === 'hfu' && <span className="mr-1.5"><Chip tone="blue">HFU</Chip></span>}{c.memberName}</span>
         <span className="justify-self-end text-sm font-bold text-gray-900 dark:text-gray-100 tabular-nums">{yen(c.total)}</span>
         <span className="text-xs text-hibi-sub dark:text-gray-400 truncate">{c.title || '題名なし'}（申請 {fmtDay(c.submittedIso)}・明細 {c.txs.length} 件）</span>
         <span className="justify-self-end">
@@ -505,6 +517,7 @@ function RemindersTab({ reminders }: { reminders: MfReminderEntry[] }) {
       {reminders.map((r, i) => (
         <div key={i} className="border-t first:border-t-0 border-hibi-line dark:border-gray-700 px-5 py-2.5 flex items-center gap-3">
           <Chip tone={r.level === 'confirm' ? 'amber' : 'gray'}>{MF_RULE_LABEL[r.rule]}</Chip>
+          {r.org === 'hfu' && <Chip tone="blue">HFU</Chip>}
           <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{r.name}</span>
           <span className="text-xs text-hibi-sub dark:text-gray-400">{r.message}</span>
         </div>
@@ -518,15 +531,15 @@ function MembersTab({ members, workers, canEdit, post, reload }: {
 }) {
   const [q, setQ] = useState('')
   const workerName = useMemo(() => new Map(workers.map(w => [w.id, w.name])), [workers])
-  const order = (m: MfMemberLink) => (m.how === null ? 0 : m.nameDiffers ? 1 : 2)
+  const order = (m: MfMemberLink) => (mfMemberNeedsLink(m) ? 0 : m.nameDiffers ? 1 : m.how === null ? 3 : 2)
   const norm = q.trim().replace(/[\s　]/g, '')
   const shown = members
     .filter(m => m.active && (!norm || m.name.replace(/[\s　]/g, '').includes(norm)))
     .sort((a, b) => order(a) - order(b) || a.number.localeCompare(b.number))
 
-  const save = async (mfId: string, value: string) => {
+  const save = async (mfId: string, value: string, org: MfOrg) => {
     const workerId = value === 'excluded' ? null : Number(value)
-    const r = await post({ action: 'saveMember', mfId, workerId })
+    const r = await post({ action: 'saveMember', mfId, workerId, org })
     if (!r.ok) { notify.failed('保存', r.error); return }
     notify.success('結びつけを保存しました', '「今すぐチェック」を押すと、申請の結果に反映されます')
     reload()
@@ -542,7 +555,8 @@ function MembersTab({ members, workers, canEdit, post, reload }: {
           <div key={m.mfId} className="border-t first:border-t-0 border-hibi-line dark:border-gray-700 px-5 py-2.5 flex flex-wrap items-center gap-3">
             <span className="w-14 text-xs tabular-nums text-hibi-sub dark:text-gray-400">{m.number || '番号なし'}</span>
             <span className="text-sm font-bold text-gray-900 dark:text-gray-100 min-w-[8rem]">{m.name}</span>
-            {m.how === null && <Chip tone="amber">未確定</Chip>}
+            {m.org === 'hfu' && <Chip tone="blue">HFU</Chip>}
+            {m.how === null && (mfMemberNeedsLink(m) ? <Chip tone="amber">未確定</Chip> : <Chip tone="gray">実習生の候補なし</Chip>)}
             {m.how === 'number' && <Chip tone="green">番号が一致</Chip>}
             {m.how === 'manual' && <Chip tone="blue">確定</Chip>}
             {m.how === 'excluded' && <Chip tone="gray">作業員ではない</Chip>}
@@ -550,7 +564,7 @@ function MembersTab({ members, workers, canEdit, post, reload }: {
             <select
               className={`${inputCls} ml-auto`} aria-label={`${m.name} の作業員`} disabled={!canEdit}
               value={m.how === 'excluded' ? 'excluded' : m.workerId === null ? '' : String(m.workerId)}
-              onChange={e => e.target.value && save(m.mfId, e.target.value)}
+              onChange={e => e.target.value && save(m.mfId, e.target.value, m.org ?? 'hibi')}
             >
               <option value="">選んでください</option>
               {m.candidates.length > 0 && (
@@ -558,8 +572,8 @@ function MembersTab({ members, workers, canEdit, post, reload }: {
                   {m.candidates.map(id => <option key={id} value={String(id)}>{workerName.get(id) || id}</option>)}
                 </optgroup>
               )}
-              <optgroup label="日比建設の作業員">
-                {workers.map(w => <option key={w.id} value={String(w.id)}>{w.name}</option>)}
+              <optgroup label={m.org === 'hfu' ? 'HFU の技能実習生' : '日比建設の作業員'}>
+                {workers.filter(w => (w.org ?? 'hibi') === (m.org ?? 'hibi')).map(w => <option key={w.id} value={String(w.id)}>{w.name}</option>)}
               </optgroup>
               <option value="excluded">作業員ではない</option>
             </select>
@@ -584,7 +598,7 @@ function ItemsTab({ data, canEdit, post, reload }: { data: PageData; canEdit: bo
       <div className={cardCls}>
         {[...items].sort((a, b) => Number(!!kinds[a.id]) - Number(!!kinds[b.id])).map(i => (
           <div key={i.id} className="border-t first:border-t-0 border-hibi-line dark:border-gray-700 px-5 py-2.5 flex items-center justify-between gap-3">
-            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{i.name}</span>
+            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{i.org === 'hfu' && <span className="mr-1.5"><Chip tone="blue">HFU</Chip></span>}{i.name}</span>
             <select className={inputCls} aria-label={`${i.name} の種類`} disabled={!canEdit} value={kinds[i.id] || ''}
               onChange={e => setKinds(prev => {
                 const next = { ...prev }
@@ -609,7 +623,9 @@ function RulesTab({ data, canEdit, post, reload }: { data: PageData; canEdit: bo
     transitWords: data.settings.transitWords.join('、'), gasWords: data.settings.gasWords.join('、'), splitWords: data.settings.splitWords.join('、'),
   })
   const words = (s: string) => s.split(/[、,\s　]+/).map(w => w.trim()).filter(Boolean)
+  const [hfuEnabled, setHfuEnabled] = useState(data.settings.hfuEnabled)
   const next: MfExpenseSettings = {
+    hfuEnabled,
     itemKinds: data.settings.itemKinds,
     amountPct: Number(form.amountPct), siteTransitMargin: Number(form.siteTransitMargin), routeMargin: Number(form.routeMargin), m1Day: Number(form.m1Day), m2Day: Number(form.m2Day),
     transitWords: words(form.transitWords), gasWords: words(form.gasWords), splitWords: words(form.splitWords),
@@ -627,6 +643,10 @@ function RulesTab({ data, canEdit, post, reload }: { data: PageData; canEdit: bo
   )
   return (
     <div className={`${cardCls} p-5 space-y-4 max-w-xl`}>
+      <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+        <input type="checkbox" className="mt-0.5" disabled={!canEdit} checked={hfuEnabled} onChange={e => setHfuEnabled(e.target.checked)} />
+        <span>HFU の技能実習生もチェックする（{Number(MF_HFU_FROM_YM.slice(4, 6))}月分から）<span className="block text-xs text-hibi-sub dark:text-gray-400">入れて保存し「今すぐチェック」を押すと、HFU の科目と従業員が「科目の種類」「従業員の結びつけ」のタブに出ます</span></span>
+      </label>
       {Field({ k: 'amountPct', label: '「いつもと大きく違う」の幅（%）' })}
       {Field({ k: 'siteTransitMargin', label: '同じ現場の交通費で見逃す差（円。この金額までの差は出さない）' })}
       {Field({ k: 'routeMargin', label: '同じ区間の社内の最安で見逃す差（円。この金額までの差は出さない）' })}

@@ -28,8 +28,8 @@ import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import { MF_RECEIPT_MODEL, isReceiptFatalError, isReceiptReaderConfigured, readReceiptFile } from '@/lib/mf-expense-receipt.server'
 import {
-  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, mfConfirmFlagKeys, mfIsReceiptReadCurrent, linkMfMembers, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
-  type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
+  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, mfConfirmFlagKeys, mfIsReceiptReadCurrent, isMfWorkerInOrg, linkMfMembers, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, MF_HFU_FROM_YM, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
+  type MfOrg, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
   type MfRawApproval, type MfRouteTableRow, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
@@ -40,6 +40,8 @@ const RUN_LOCK_MS = 70_000
 const SKIP_STATUSES = new Set(['unsubmitted', 'canceled', 'rejected'])
 
 export interface ExpenseCheckDoc {
+  /** どの会社の申請か。無ければ日比建設（HFU を足す前の保存） */
+  org?: MfOrg
   reportId: string
   number: number | null
   title: string
@@ -82,7 +84,10 @@ export type MfRunResult =
   | { ok: true; status: 'done' | 'partial' | 'skipped'; message: string; summary: MfExpenseRunState['summary'] }
   | { ok: false; status: 'busy' | 'maintenance' | 'notConnected' | 'error'; message: string }
 
-const stateRef = () => doc(db, 'mfExpense', 'runState')
+/** 会社ごとの保存先。日比建設は今までの名前のまま、HFU は _hfu を付ける */
+const orgDocId = (name: string, org: MfOrg) => (org === 'hibi' ? name : `${name}_hfu`)
+const historyDocId = (ym: string, org: MfOrg) => (org === 'hibi' ? ym : `hfu_${ym}`)
+const stateRef = (org: MfOrg = 'hibi') => doc(db, 'mfExpense', orgDocId('runState', org))
 
 // ────────────────────────────────────────
 //  読み書きの小道具
@@ -97,23 +102,23 @@ export async function saveMfSettings(s: MfExpenseSettings): Promise<void> {
   await setDoc(doc(db, 'mfExpense', 'settings'), s)
 }
 
-export async function loadMfItems(): Promise<{ id: string; name: string; active: boolean }[]> {
-  const snap = await getDoc(doc(db, 'mfExpense', 'items'))
+export async function loadMfItems(org: MfOrg = 'hibi'): Promise<{ id: string; name: string; active: boolean }[]> {
+  const snap = await getDoc(doc(db, 'mfExpense', orgDocId('items', org)))
   return snap.exists() ? ((snap.data().items || []) as { id: string; name: string; active: boolean }[]) : []
 }
 
-export async function loadMfMembers(): Promise<Record<string, MfMemberLink>> {
-  const snap = await getDoc(doc(db, 'mfExpense', 'members'))
+export async function loadMfMembers(org: MfOrg = 'hibi'): Promise<Record<string, MfMemberLink>> {
+  const snap = await getDoc(doc(db, 'mfExpense', orgDocId('members', org)))
   return snap.exists() ? ((snap.data().members || {}) as Record<string, MfMemberLink>) : {}
 }
 
-export async function loadMfReminders(): Promise<MfReminderEntry[]> {
-  const snap = await getDoc(doc(db, 'mfExpense', 'reminders'))
+export async function loadMfReminders(org: MfOrg = 'hibi'): Promise<MfReminderEntry[]> {
+  const snap = await getDoc(doc(db, 'mfExpense', orgDocId('reminders', org)))
   return snap.exists() ? ((snap.data().entries || []) as MfReminderEntry[]) : []
 }
 
-export async function loadMfRunState(): Promise<MfExpenseRunState> {
-  const snap = await getDoc(stateRef())
+export async function loadMfRunState(org: MfOrg = 'hibi'): Promise<MfExpenseRunState> {
+  const snap = await getDoc(stateRef(org))
   const d = snap.exists() ? snap.data() : {}
   return {
     lastRunAt: d.lastRunAt ?? null,
@@ -124,9 +129,11 @@ export async function loadMfRunState(): Promise<MfExpenseRunState> {
   }
 }
 
-export async function loadOpenExpenseChecks(): Promise<ExpenseCheckDoc[]> {
+/** org を渡すとその会社の申請だけ（承認待ちから消えた判定は、会社ごとにしないと他社の申請を閉じてしまう） */
+export async function loadOpenExpenseChecks(org?: MfOrg): Promise<ExpenseCheckDoc[]> {
   const snap = await getDocs(query(collection(db, 'expenseChecks'), where('open', '==', true)))
-  return snap.docs.map(d => d.data() as ExpenseCheckDoc)
+  const all = snap.docs.map(d => d.data() as ExpenseCheckDoc)
+  return org ? all.filter(c => (c.org ?? 'hibi') === org) : all
 }
 
 /**
@@ -152,29 +159,29 @@ export async function saveExpenseReview(reportId: string, note: string | null, a
 }
 
 /** 1人分の結びつけを人が決める。workerId=null は「作業員ではない」 */
-export async function saveMfMemberLink(mfId: string, workerId: number | null): Promise<boolean> {
-  const members = await loadMfMembers()
+export async function saveMfMemberLink(mfId: string, workerId: number | null, org: MfOrg = 'hibi'): Promise<boolean> {
+  const members = await loadMfMembers(org)
   const cur = members[mfId]
   if (!cur) return false
-  await updateDoc(doc(db, 'mfExpense', 'members'), {
+  await updateDoc(doc(db, 'mfExpense', orgDocId('members', org)), {
     [`members.${mfId}`]: { ...cur, workerId, how: workerId === null ? 'excluded' : 'manual', candidates: [], nameDiffers: false },
   })
   return true
 }
 
-/** 第1段階は日比建設の作業員だけ（結びつけの候補も、番号の照合も） */
-function hibiWorkers(workers: RawWorker[]): RawWorker[] {
-  return workers.filter(w => w.org === '日比' || w.org === 'hibi')
+/** その会社の対象の作業員（結びつけの候補も、番号の照合も）。HFU は技能実習生だけ */
+function orgWorkers(workers: RawWorker[], org: MfOrg): RawWorker[] {
+  return workers.filter(w => isMfWorkerInOrg(org, w))
 }
 
 /**
  * 結びつけの選択肢。在籍の人に加えて、keepIds（すでに結びついている人）は退職扱いでも含める。
  * 含めないと、番号で正しく結びついているのに選択欄が「選んでください」に見える（2026-11-09）
  */
-export async function loadHibiWorkerOptions(keepIds: (number | null)[] = []): Promise<{ id: number; name: string }[]> {
+export async function loadMfWorkerOptions(org: MfOrg, keepIds: (number | null)[] = []): Promise<{ id: number; name: string }[]> {
   const main = await getMainData()
   const keep = new Set(keepIds)
-  return hibiWorkers(main.workers as RawWorker[])
+  return orgWorkers(main.workers as RawWorker[], org)
     .filter(w => !w.retired || keep.has(w.id))
     .map(w => ({ id: w.id, name: w.name }))
     .sort((a, b) => a.id - b.id)
@@ -233,10 +240,10 @@ function monthRange(ym: string): { from: string; to: string } {
   return { from: `${prefix}-01`, to: `${prefix}-${String(last).padStart(2, '0')}` }
 }
 
-async function syncMasters(api: MfApi, workers: RawWorker[]): Promise<Record<string, MfMemberLink>> {
+async function syncMasters(api: MfApi, workers: RawWorker[], org: MfOrg): Promise<Record<string, MfMemberLink>> {
   const items = await api.getAll<{ id: string; name: string; is_active?: boolean }>('v1/offices/{office}/ex_items', 'ex_items')
   // 空の応答で設定を消さない（MF の一時的な異常で、手で決めた内容まで失わないように）
-  if (items.length > 0) await setDoc(doc(db, 'mfExpense', 'items'), {
+  if (items.length > 0) await setDoc(doc(db, 'mfExpense', orgDocId('items', org)), {
     items: items.map(i => ({ id: i.id, name: i.name, active: i.is_active !== false })),
     syncedAt: new Date().toISOString(),
   })
@@ -246,14 +253,14 @@ async function syncMasters(api: MfApi, workers: RawWorker[]): Promise<Record<str
   )
   // 振込口座などが一緒に返るが、番号と氏名と在籍だけを残す
   const members = rawMembers.map(m => ({ mfId: m.id, number: m.number || '', name: m.name || '', active: m.is_active !== false }))
-  const existing = await loadMfMembers()
+  const existing = await loadMfMembers(org)
   // 従業員が0人の応答はありえない。保存すると手で確定した結びつけが全部消えるので、今のものを使う
   if (members.length === 0) {
     console.error('MF の従業員一覧が空でした。結びつけは更新しません')
     return existing
   }
   const linked = linkMfMembers(members, workers.map(w => ({ id: w.id, name: w.name, payrollNo: w.payrollNo })), existing)
-  await setDoc(doc(db, 'mfExpense', 'members'), { members: linked, syncedAt: new Date().toISOString() })
+  await setDoc(doc(db, 'mfExpense', orgDocId('members', org)), { members: linked, syncedAt: new Date().toISOString() })
   return linked
 }
 
@@ -262,10 +269,10 @@ async function syncMasters(api: MfApi, workers: RawWorker[]): Promise<Record<str
  * 毎回読み直すと、それだけで1回の持ち時間（45秒）の大半を使い、申請の読み取りまで届かない（2026-11-09 実データで35秒ほど）。
  * この控えは二重申請や平均との比較に使うだけで、チェックする申請そのものの明細は別に読む
  */
-async function syncHistory(api: MfApi, months: string[], hotFrom: string): Promise<MfHistoryTx[]> {
+async function syncHistory(api: MfApi, months: string[], hotFrom: string, org: MfOrg): Promise<MfHistoryTx[]> {
   const rows: MfHistoryTx[] = []
   for (const ym of months) {
-    const ref = doc(db, 'expenseHistory', ym)
+    const ref = doc(db, 'expenseHistory', historyDocId(ym, org))
     const snap = await getDoc(ref)
     if (snap.exists() && isMfHistoryFresh(ym, hotFrom, snap.data().fetchedAt, Date.now())) {
       rows.push(...((snap.data().rows || []) as MfHistoryTx[]))
@@ -297,6 +304,12 @@ async function syncHistory(api: MfApi, months: string[], hotFrom: string): Promi
     rows.push(...monthRows)
   }
   return rows
+}
+
+/** もう一方の会社の控え（区間の比較を2社一緒にするため。MF は読みに行かない） */
+async function loadStoredHistory(months: string[], org: MfOrg): Promise<MfHistoryTx[]> {
+  const snaps = await Promise.all(months.map(ym => getDoc(doc(db, 'expenseHistory', historyDocId(ym, org)))))
+  return snaps.flatMap(s => (s.exists() ? ((s.data().rows || []) as MfHistoryTx[]) : []))
 }
 
 async function loadWorkDays(months: string[]): Promise<{ days: Map<number, Set<string>>; sites: Map<number, Map<string, Set<string>>> }> {
@@ -353,12 +366,12 @@ function toolContextFor(w: RawWorker, tb: ToolBudgetDocLike, today: string): MfT
 //  本体
 // ────────────────────────────────────────
 
-async function acquireLock(): Promise<boolean> {
+async function acquireLock(org: MfOrg): Promise<boolean> {
   return runTransaction(db, async tx => {
-    const snap = await tx.get(stateRef())
+    const snap = await tx.get(stateRef(org))
     const until = snap.exists() ? (snap.data().runningUntil as number | undefined) : undefined
     if (until && until > Date.now()) return false
-    tx.set(stateRef(), { runningUntil: Date.now() + RUN_LOCK_MS }, { merge: true })
+    tx.set(stateRef(org), { runningUntil: Date.now() + RUN_LOCK_MS }, { merge: true })
     return true
   })
 }
@@ -437,7 +450,10 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
   try {
     const deadline = Date.now() + RECEIPT_BUDGET_MS
     const api = await openMfApi(deadline)
-    const checks = (await loadOpenExpenseChecks()).sort((a, b) => a.submittedIso.localeCompare(b.submittedIso))
+    const hfuOffice = mfHfuOffice(api.offices, api.officeId)
+    const hfuApi = hfuOffice ? api.forOffice(hfuOffice) : null
+    const apiFor = (org: MfOrg | undefined) => (org === 'hfu' ? hfuApi : api)
+    const checks = (await loadOpenExpenseChecks()).filter(c => apiFor(c.org)).sort((a, b) => a.submittedIso.localeCompare(b.submittedIso))
     const reads = await loadReceiptReads(checks.map(c => c.reportId))
     const queue = checks.flatMap(c => c.txs
       .filter(t => {
@@ -445,14 +461,14 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
         const done = reads.get(c.reportId)?.[t.id]
         return !mfIsReceiptReadCurrent(t, done)
       })
-      .map(t => ({ reportId: c.reportId, txId: t.id, fileId: t.fileId || '' })))
+      .map(t => ({ reportId: c.reportId, txId: t.id, fileId: t.fileId || '', org: c.org })))
     remaining = queue.length
 
     let stop = false
     for (let i = 0; i < queue.length && i < RECEIPT_MAX_PER_RUN && !stop && Date.now() < deadline; i += RECEIPT_PARALLEL) {
       await Promise.all(queue.slice(i, i + RECEIPT_PARALLEL).map(async item => {
         try {
-          const file = await api.getFile(`v1/offices/{office}/ex_transactions/${encodeURIComponent(item.txId)}/mf_file`)
+          const file = await apiFor(item.org)!.getFile(`v1/offices/{office}/ex_transactions/${encodeURIComponent(item.txId)}/mf_file`)
           const result = await readReceiptFile(file.bytes, file.contentType)
           const saved: MfReceiptRead = {
             fileId: item.fileId, readable: result.readable, date: result.date, amount: result.amount,
@@ -478,18 +494,18 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
   return { ok: true, status: 'done', message: `領収書を ${read} 枚読みました${remaining > 0 ? `（残り ${remaining} 枚）` : ''}`, read, remaining }
 }
 
-async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ partial: boolean; summary: NonNullable<MfExpenseRunState['summary']> }> {
+async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg): Promise<{ partial: boolean; summary: NonNullable<MfExpenseRunState['summary']> }> {
   const main = await getMainData({ fresh: true })
-  const workers = hibiWorkers(main.workers as RawWorker[])
+  const workers = orgWorkers(main.workers as RawWorker[], org)
   const workerById = new Map(workers.map(w => [w.id, w]))
   const settings = await loadMfSettings()
-  const members = await syncMasters(api, workers)
+  const members = await syncMasters(api, workers, org)
 
   const currentYm = ymOfIso(today)
   const prevYm = shiftYm(currentYm, -1)
   // 前月のさらに3か月前まで見る（T3・T4・M1 の「直近3か月」）
   const months = [-4, -3, -2, -1, 0].map(d => shiftYm(currentYm, d))
-  const history = await syncHistory(api, months, prevYm)
+  const history = await syncHistory(api, months, prevYm, org)
 
   const historyByMember = new Map<string, MfHistoryTx[]>()
   for (const h of history) {
@@ -513,15 +529,27 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
   const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
   const toolBudget = (tbSnap.exists() ? tbSnap.data() : {}) as ToolBudgetDocLike
 
-  const reports = await api.getAll<RawMfReport>('v1/offices/{office}/approving_ex_reports', 'ex_reports')
+  const allReports = await api.getAll<RawMfReport>('v1/offices/{office}/approving_ex_reports', 'ex_reports')
+  // HFU は技能実習生の申請だけ読む（本部・不動産の人の明細は読まない）
+  const reports = org === 'hfu' ? allReports.filter(r => mfHfuReportInScope(members[r.office_member_id || ''])) : allReports
   const reportIds = new Set(reports.map(r => r.id))
-  const openChecks = await loadOpenExpenseChecks()
+  const openChecks = await loadOpenExpenseChecks(org)
   const previous = new Map(openChecks.map(c => [c.reportId, c]))
   const receiptReadsByReport = await loadReceiptReads(reports.map(r => r.id))
-  const allHistory = Array.from(historyByMember.values()).flat()
+  // 区間の比較は2社一緒（2026-11-09 代表）。HFU は結びついた実習生の分だけ入れる
+  const countsForRoute = (rows: MfHistoryTx[], rowOrg: MfOrg, who: Record<string, MfMemberLink>) =>
+    rowOrg === 'hibi' ? rows : rows.filter(h => mfHfuMemberCounts(who[h.memberId]))
+  let allHistory = countsForRoute(Array.from(historyByMember.values()).flat(), org, members)
+  let everyone = members
+  if (settings.hfuEnabled) {
+    const other: MfOrg = org === 'hibi' ? 'hfu' : 'hibi'
+    const otherMembers = await loadMfMembers(other)
+    allHistory = [...allHistory, ...countsForRoute(await loadStoredHistory(months, other), other, otherMembers)]
+    everyone = { ...otherMembers, ...members }
+  }
   const routeMinFares = buildMfRouteMinFares(allHistory, settings)
   await setDoc(doc(db, 'mfExpense', 'routeTable'), {
-    months: buildMfRouteTable(allHistory, settings, routeMinFares, id => members[id]?.name || '（不明）'),
+    months: buildMfRouteTable(allHistory, settings, routeMinFares, id => everyone[id]?.name || '（不明）'),
     updatedAt: new Date().toISOString(),
   })
 
@@ -575,6 +603,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       siteOfDay: worker ? siteOfDayFor(worker.id) : undefined,
       routeMinFares,
     })
+    if (org === 'hfu' && targetYm < MF_HFU_FROM_YM) continue
     if (readFailed) flags.push({ rule: 'X1', level: 'confirm', message: 'この申請の明細を MF から読めませんでした。MF で中身を確かめてください（次のチェックで読み直します）' })
     const reads = receiptReadsByReport.get(r.id) || {}
     const savedTxs = txs.map(({ receipt: _old, ...t }) => {
@@ -583,6 +612,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
     })
 
     const check: ExpenseCheckDoc = {
+      org,
       reportId: r.id,
       number: r.number ?? null,
       title: clip(r.title, 100),
@@ -657,7 +687,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
     reminders = buildMonthlyReminders({ today, settings, people, rejected })
     if (rejectedReadFailed) reminders.push({ rule: 'M2', level: 'info', memberId: '', name: '確認できません', message: '差し戻したままの申請を MF から読み取れませんでした。MF の画面で確かめてください' })
   }
-  await setDoc(doc(db, 'mfExpense', 'reminders'), { entries: reminders, updatedAt: new Date().toISOString() })
+  await setDoc(doc(db, 'mfExpense', orgDocId('reminders', org)), { entries: reminders, updatedAt: new Date().toISOString() })
 
   return {
     partial,
@@ -665,31 +695,39 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
   }
 }
 
-export async function runMfExpenseCheck(opts: { actor: string; force: boolean }): Promise<MfRunResult> {
+export async function runMfExpenseCheck(opts: { actor: string; force: boolean; org?: MfOrg }): Promise<MfRunResult> {
+  const org = opts.org ?? 'hibi'
   const today = todayJstIso()
   // MF は毎日 1:00〜6:00 がメンテナンス
   const hour = jstWallClock().getHours()
   if (hour >= 1 && hour < 6) return { ok: false, status: 'maintenance', message: 'MF経費は毎日 1時〜6時はメンテナンス中です。6時以降にもう一度押してください' }
 
-  const state = await loadMfRunState()
+  if (org === 'hfu' && !(await loadMfSettings()).hfuEnabled) return { ok: true, status: 'skipped', message: 'HFU はまだチェックしない設定です', summary: null }
+
+  const state = await loadMfRunState(org)
   if (!opts.force && state.completedDate === today) return { ok: true, status: 'skipped', message: '今日のチェックは終わっています', summary: state.summary }
 
-  if (!(await acquireLock())) return { ok: false, status: 'busy', message: 'いまチェックの途中です。少し待ってからもう一度押してください' }
+  if (!(await acquireLock(org))) return { ok: false, status: 'busy', message: 'いまチェックの途中です。少し待ってからもう一度押してください' }
 
   const deadline = Date.now() + RUN_BUDGET_MS
   const finish = async (patch: Partial<MfExpenseRunState>) => {
-    await setDoc(stateRef(), { ...patch, lastRunAt: new Date().toISOString(), runningUntil: 0 }, { merge: true })
+    await setDoc(stateRef(org), { ...patch, lastRunAt: new Date().toISOString(), runningUntil: 0 }, { merge: true })
   }
 
   try {
-    const api = await openMfApi(deadline)
-    const { partial, summary } = await runOnce(api, deadline, today)
+    let api = await openMfApi(deadline)
+    if (org === 'hfu') {
+      const office = mfHfuOffice(api.offices, api.officeId)
+      if (!office) throw new Error('MF経費の事業者に HFU が見つかりません')
+      api = api.forOffice(office)
+    }
+    const { partial, summary } = await runOnce(api, deadline, today, org)
     await finish({ completedDate: partial ? state.completedDate : today, partial, lastError: null, summary })
-    await logActivity(opts.actor, 'mf-expense', `申請チェック: 承認待ち${summary.open}件・要確認あり${summary.flagged}件・新しく読んだ${summary.fetched}件${partial ? '（途中まで）' : ''}`)
+    await logActivity(opts.actor, 'mf-expense', `申請チェック${org === 'hfu' ? '（HFU）' : ''}: 承認待ち${summary.open}件・要確認あり${summary.flagged}件・新しく読んだ${summary.fetched}件${partial ? '（途中まで）' : ''}`)
     return {
       ok: true,
       status: partial ? 'partial' : 'done',
-      message: partial ? '申請が多く途中で区切りました。もう一度押すと続きをチェックします' : `チェックしました（承認待ち ${summary.open} 件）`,
+      message: partial ? '申請が多く途中で区切りました。もう一度押すと続きをチェックします' : `${org === 'hfu' ? 'HFU を' : ''}チェックしました（承認待ち ${summary.open} 件）`,
       summary,
     }
   } catch (e) {
@@ -699,7 +737,7 @@ export async function runMfExpenseCheck(opts: { actor: string; force: boolean })
     }
     const message = e instanceof Error ? e.message : 'チェックに失敗しました'
     await finish({ lastError: message })
-    await logActivity(opts.actor, 'mf-expense', `申請チェック失敗: ${message}`)
+    await logActivity(opts.actor, 'mf-expense', `申請チェック失敗${org === 'hfu' ? '（HFU）' : ''}: ${message}`)
     return { ok: false, status: e instanceof MfReconnectError ? 'notConnected' : 'error', message }
   }
 }

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireCron } from '@/lib/cron-auth'
 import { actorLabel, requireCap } from '@/lib/auth'
 import { getMfConnectionStatus } from '@/lib/mf-expense-client.server'
-import { runMfExpenseCheck, runMfReceiptReads } from '@/lib/mf-expense-run.server'
+import { loadMfSettings, runMfExpenseCheck, runMfReceiptReads } from '@/lib/mf-expense-run.server'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -16,7 +16,10 @@ async function run(actor: string) {
   const conn = await getMfConnectionStatus()
   if (!conn.connected) return NextResponse.json({ ok: true, status: 'notConnected' })
   const result = await runMfReceiptReads()
-  if (result.read > 0) await runMfExpenseCheck({ actor, force: true })
+  if (result.read > 0) {
+    await runMfExpenseCheck({ actor, force: true })
+    if ((await loadMfSettings()).hfuEnabled) await runMfExpenseCheck({ actor, force: true, org: 'hfu' })
+  }
   return NextResponse.json(result, { status: result.ok ? 200 : 500 })
 }
 

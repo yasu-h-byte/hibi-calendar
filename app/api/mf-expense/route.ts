@@ -10,10 +10,10 @@ import {
   createMfAuthorizeUrl, disconnectMf, getMfConnectionStatus, isMfConfigured, selectMfOffice, MF_REDIRECT_URI,
 } from '@/lib/mf-expense-client.server'
 import {
-  loadHibiWorkerOptions, loadMfItems, loadMfMembers, loadMfReceiptState, loadMfReminders, loadMfRouteTable, loadMfRunState, loadMfSettings,
+  loadMfWorkerOptions, loadMfItems, loadMfMembers, loadMfReceiptState, loadMfReminders, loadMfRouteTable, loadMfRunState, loadMfSettings,
   loadOpenExpenseChecks, runMfExpenseCheck, saveExpenseReview, saveMfMemberLink, saveMfSettings,
 } from '@/lib/mf-expense-run.server'
-import { mfExpenseSettingsError, normalizeMfExpenseSettings, normalizeMfReviewNote } from '@/lib/mf-expense-rules'
+import { mfExpenseSettingsError, normalizeMfExpenseSettings, normalizeMfReviewNote, type MfOrg } from '@/lib/mf-expense-rules'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -26,9 +26,22 @@ export async function GET(request: NextRequest) {
       getMfConnectionStatus(), loadMfRunState(), loadMfSettings(), loadMfItems(), loadMfMembers(),
       loadMfReminders(), loadOpenExpenseChecks(), loadMfReceiptState(), loadMfRouteTable(),
     ])
-    const workers = await loadHibiWorkerOptions(Object.values(members).map(m => m.workerId))
+    const workers = await loadMfWorkerOptions('hibi', Object.values(members).map(m => m.workerId))
+    // HFU はスイッチを入れている間だけ見せる
+    const hfu = settings.hfuEnabled
+      ? await Promise.all([loadMfRunState('hfu'), loadMfItems('hfu'), loadMfMembers('hfu'), loadMfReminders('hfu')])
+      : null
+    const hfuWorkers = hfu ? await loadMfWorkerOptions('hfu', Object.values(hfu[2]).map(m => m.workerId)) : []
+    const withOrg = <T,>(rows: T[], org: MfOrg) => rows.map(r => ({ ...r, org }))
     return NextResponse.json({
-      connection, runState, receiptState, settings, items, members: Object.values(members), reminders, checks, workers, routeTable,
+      connection, runState, receiptState, settings,
+      runStateHfu: hfu ? hfu[0] : null,
+      items: [...withOrg(items, 'hibi'), ...withOrg(hfu ? hfu[1] : [], 'hfu')],
+      members: [...withOrg(Object.values(members), 'hibi'), ...withOrg(hfu ? Object.values(hfu[2]) : [], 'hfu')],
+      reminders: [...withOrg(reminders, 'hibi'), ...withOrg(hfu ? hfu[3] : [], 'hfu')],
+      checks: checks.filter(c => settings.hfuEnabled || (c.org ?? 'hibi') === 'hibi'),
+      workers: [...withOrg(workers, 'hibi'), ...withOrg(hfuWorkers, 'hfu')],
+      routeTable,
       redirectUri: MF_REDIRECT_URI,
     })
   } catch (e) {
@@ -64,8 +77,9 @@ export async function POST(request: NextRequest) {
       const denied = await requireCap(request, 'expenseCheck.edit')
       if (denied) return denied
       const actor = await actorLabel(request)
+      const org: MfOrg = body?.org === 'hfu' ? 'hfu' : 'hibi'
       if (action === 'run') {
-        const result = await runMfExpenseCheck({ actor, force: true })
+        const result = await runMfExpenseCheck({ actor, force: true, org })
         return NextResponse.json(result, { status: result.ok ? 200 : result.status === 'error' ? 502 : 409 })
       }
       if (action === 'saveSettings') {
@@ -95,10 +109,10 @@ export async function POST(request: NextRequest) {
       if (!/^[\w-]+$/.test(mfId) || !(workerId === null || typeof workerId === 'number')) {
         return NextResponse.json({ error: '入力が正しくありません' }, { status: 400 })
       }
-      if (workerId !== null && !(await loadHibiWorkerOptions([workerId])).some(w => w.id === workerId)) {
-        return NextResponse.json({ error: '日比建設の作業員を選んでください' }, { status: 400 })
+      if (workerId !== null && !(await loadMfWorkerOptions(org, [workerId])).some(w => w.id === workerId)) {
+        return NextResponse.json({ error: org === 'hfu' ? 'HFU の技能実習生を選んでください' : '日比建設の作業員を選んでください' }, { status: 400 })
       }
-      if (!(await saveMfMemberLink(mfId, workerId))) return NextResponse.json({ error: 'MF の従業員が見つかりません' }, { status: 404 })
+      if (!(await saveMfMemberLink(mfId, workerId, org))) return NextResponse.json({ error: 'MF の従業員が見つかりません' }, { status: 404 })
       await logActivity(actor, 'mf-expense', `MFの従業員の結びつけを変更: ${mfId} → ${workerId ?? '作業員ではない'}`)
       return NextResponse.json({ ok: true })
     }

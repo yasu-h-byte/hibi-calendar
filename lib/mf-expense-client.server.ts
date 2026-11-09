@@ -251,6 +251,10 @@ export class MfReconnectError extends Error {}
 export interface MfApi {
   officeId: string
   officeName: string
+  /** このトークンで見られる事業者 */
+  offices: MfOffice[]
+  /** 同じ接続（トークンの更新も共有）のまま、別の事業者を読む道具にする */
+  forOffice(office: MfOffice): MfApi
   get<T>(path: string, query?: Record<string, string>): Promise<T>
   /** next をたどって全ページ読む。key は配列が入っている項目名 */
   getAll<T>(path: string, key: string, query?: Record<string, string>): Promise<T[]>
@@ -333,24 +337,29 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
     const q = query && Object.keys(query).length > 0 ? `?${new URLSearchParams(query).toString()}` : ''
     return `${path}${q}`
   }
-  const officePath = (path: string) => `/api/external/${path.replace('{office}', officeId)}`
 
-  return {
-    officeId,
-    officeName: conn.officeName || '',
-    get: <T,>(path: string, query?: Record<string, string>) => fetchJson<T>(withQuery(officePath(path), query)),
-    getFile: (path: string) => fetchFile(officePath(path)),
-    async getAll<T>(path: string, key: string, query?: Record<string, string>): Promise<T[]> {
-      const rows: T[] = []
-      let next: string | null = withQuery(officePath(path), query)
-      for (let guard = 0; next && guard < 500; guard++) {
-        const json: Record<string, unknown> = await fetchJson<Record<string, unknown>>(next)
-        rows.push(...((json[key] as T[] | undefined) || []))
-        const nextPath: unknown = json.next
-        // MF が返す「次のページ」は同じ API の中だけをたどる
-        next = typeof nextPath === 'string' && nextPath.startsWith('/api/external/') ? nextPath : null
-      }
-      return rows
-    },
+  const makeApi = (office: MfOffice): MfApi => {
+    const officePath = (path: string) => `/api/external/${path.replace('{office}', office.id)}`
+    return {
+      officeId: office.id,
+      officeName: office.name,
+      offices: conn.offices,
+      forOffice: makeApi,
+      get: <T,>(path: string, query?: Record<string, string>) => fetchJson<T>(withQuery(officePath(path), query)),
+      getFile: (path: string) => fetchFile(officePath(path)),
+      async getAll<T>(path: string, key: string, query?: Record<string, string>): Promise<T[]> {
+        const rows: T[] = []
+        let next: string | null = withQuery(officePath(path), query)
+        for (let guard = 0; next && guard < 500; guard++) {
+          const json: Record<string, unknown> = await fetchJson<Record<string, unknown>>(next)
+          rows.push(...((json[key] as T[] | undefined) || []))
+          const nextPath: unknown = json.next
+          // MF が返す「次のページ」は同じ API の中だけをたどる
+          next = typeof nextPath === 'string' && nextPath.startsWith('/api/external/') ? nextPath : null
+        }
+        return rows
+      },
+    }
   }
+  return makeApi({ id: officeId, name: conn.officeName || '' })
 }

@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
   if (denied) return denied
   const conn = await getMfConnectionStatus()
   if (!conn.connected) return NextResponse.json({ ok: true, status: 'notConnected' })
-  const result = await runMfExpenseCheck({ actor: 'cron', force: false })
+  // 会社ごとに別の回で動かす（1回の持ち時間が 45 秒のため）。?org=hfu は 7:05・7:15 JST
+  const org = new URL(request.url).searchParams.get('org') === 'hfu' ? 'hfu' as const : 'hibi' as const
+  const result = await runMfExpenseCheck({ actor: 'cron', force: false, org })
   return NextResponse.json(result, { status: result.ok ? 200 : 500 })
 }
