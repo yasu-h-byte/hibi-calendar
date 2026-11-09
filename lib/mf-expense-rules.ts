@@ -80,7 +80,7 @@ export function mfExpenseSettingsError(s: MfExpenseSettings): string | null {
 //  指摘
 // ────────────────────────────────────────
 
-export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
+export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T5' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
 
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
@@ -175,6 +175,8 @@ export const MF_RULE_LABEL: Record<MfRuleId, string> = {
   R2: '領収書の日付',
   R3: '領収書の金額',
   R4: '領収書の読み取り',
+  R5: '交通費と駐輪場代',
+  T5: '同じ現場の交通費',
   T1: '交通費と出勤日',
   T3: '交通費の金額',
   T4: 'ガソリン代',
@@ -195,8 +197,10 @@ export interface MfExpenseFlag {
   message: string
   /** どの明細の指摘か（申請全体の指摘は無し） */
   txId?: string
-  /** 領収書から読み取った値（R2・R3） */
+  /** 領収書から読み取った値（R2・R3・R5） */
   receipt?: { date?: string; amount?: number }
+  /** 同じ現場のいつもの金額（T5） */
+  usual?: number
 }
 
 /** 保存する明細（MF の項目のうち、チェックと表示に要るものだけ） */
@@ -303,6 +307,8 @@ export interface MfReportCheckInput {
   tool: MfToolContext | null
   /** 領収書の読み取り結果（明細ID → 結果）。無ければ領収書の中身は見ない */
   receiptReads?: Record<string, MfReceiptRead>
+  /** その人がその日に入った現場（1日に1現場の日だけ。T5 に使う） */
+  siteOfDay?: Record<string, { id: string; name: string }>
 }
 
 export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpenseFlag[]; targetYm: string } {
@@ -354,7 +360,14 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
         // 折半・半額は申請額が領収書と違って当たり前なので比べない
         const isSplit = settings.splitWords.some(w => `${tx.remark} ${tx.memo}`.includes(w))
         if (read.amount !== null && !isSplit && read.amount !== Math.round(tx.amount)) {
-          flags.push({ rule: 'R3', level: MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { amount: read.amount }, message: `${label}: 領収書の金額は ${yen(read.amount)} です` })
+          // 交通費のずれは、電車代に駐輪場代を足した明細が多い。駐輪場代は分けて申請する決まり（2026-11-09 代表）
+          const transit = kind === 'transit'
+          flags.push({
+            rule: transit ? 'R5' : 'R3', level: MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { amount: read.amount },
+            message: transit
+              ? `${label}: 付いている領収書は ${yen(read.amount)} です。駐輪場代などが入っていたら分けて申請してもらってください`
+              : `${label}: 領収書の金額は ${yen(read.amount)} です`,
+          })
         }
       }
     }
@@ -435,6 +448,36 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     ]
     const workDaysIn = (ym: string) => Array.from(workDays).filter(d => ymOfIso(d) === ym)
     const targetTxs = allForMonth(targetYm)
+    // T5: 同じ人・同じ現場なのに、日によって交通費の合計が違う（2026-11-09 代表）。
+    // 3日以上あって、一番多い金額が1つに決まるときだけ、それと違う日を出す
+    if (input.siteOfDay) {
+      const dayTotal = new Map<string, number>()
+      for (const r of targetTxs) {
+        if (kindOf(r.itemId) === 'transit') dayTotal.set(r.date, (dayTotal.get(r.date) || 0) + r.amount)
+      }
+      const bySite = new Map<string, { name: string; days: [string, number][] }>()
+      for (const [date, total] of Array.from(dayTotal)) {
+        const site = input.siteOfDay[date]
+        if (!site) continue
+        const cur = bySite.get(site.id) || { name: site.name, days: [] }
+        cur.days.push([date, total])
+        bySite.set(site.id, cur)
+      }
+      for (const { name, days } of Array.from(bySite.values())) {
+        if (days.length < 3) continue
+        const counts = new Map<number, number>()
+        for (const [, total] of days) counts.set(total, (counts.get(total) || 0) + 1)
+        const ranked = Array.from(counts).sort((a, b) => b[1] - a[1])
+        if (ranked[0][1] < 2 || ranked[1]?.[1] === ranked[0][1]) continue
+        const usual = ranked[0][0]
+        for (const [date, total] of days.sort((a, b) => a[0].localeCompare(b[0]))) {
+          const mine = txs.find(t => t.date === date && kindOf(t.itemId) === 'transit')
+          if (total === usual || !mine) continue
+          flags.push({ rule: 'T5', level: 'confirm', txId: mine.id, usual, message: `${fmtDay(date)} の交通費 ${yen(total)}: 同じ現場（${name}）のいつもの金額 ${yen(usual)} と違います` })
+        }
+      }
+    }
+
     const gasTotal = (rows: { amount: number; itemId: string }[]) => rows.filter(r => kindOf(r.itemId) === 'gas').reduce((s, r) => s + r.amount, 0)
 
     // 「出勤した日に交通費が無い」は見ない。皆で車に乗り合わせて通う日があり、つけ忘れと区別できない（2026-11-09 代表）。

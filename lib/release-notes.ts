@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_site_transit',
+    title: '「経費の事前チェック」で、同じ現場の交通費の差を見るようにしました',
+    content:
+      '同じ人が同じ現場に行っているのに、日によって交通費が違う日を「要確認」に出します。'
+      + 'また、駐輪場代は電車代と分けて「駐車場・駐輪場代」で申請する決まりになりました。一緒になっている明細は表示されます。',
+    category: 'new',
+    publishedAt: '2026-11-09T17:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_receipt',
     title: '「経費の事前チェック」で領収書の日付と金額を確かめるようにしました',
     content:
