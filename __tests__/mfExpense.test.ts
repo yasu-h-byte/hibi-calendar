@@ -170,6 +170,8 @@ describe('領収書の読み取り結果との比較', () => {
     const flags = withRead(read({ amount: 110 }), { itemId: 't', amount: 1530 })
     expect(rules(flags)).toContain('R5')
     expect(rules(flags)).not.toContain('R3')
+    // 差し戻す決まりなので、これだけの申請も「チェック済み」にしない
+    expect(flags.find(x => x.rule === 'R5')?.level).toBe('confirm')
     const c = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags, txs: [{ ...receiptTx, itemId: 't', amount: 1530 }] })
     expect(c).toContain('駐輪場代は電車代と分けて')
   })
