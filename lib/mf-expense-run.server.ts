@@ -28,9 +28,9 @@ import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import { MF_RECEIPT_MODEL, isReceiptFatalError, isReceiptReaderConfigured, readReceiptFile } from '@/lib/mf-expense-receipt.server'
 import {
-  buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, linkMfMembers, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
+  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, linkMfMembers, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
   type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
-  type MfRawApproval, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
+  type MfRawApproval, type MfRouteTableRow, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
 /** Vercel の関数は 60 秒。余裕を見て 45 秒で区切り、残りは次の回に続ける */
@@ -370,6 +370,11 @@ export interface MfReceiptState {
   remaining: number
 }
 
+export async function loadMfRouteTable(): Promise<Record<string, MfRouteTableRow[]>> {
+  const snap = await getDoc(doc(db, 'mfExpense', 'routeTable'))
+  return snap.exists() ? ((snap.data().months || {}) as Record<string, MfRouteTableRow[]>) : {}
+}
+
 export async function loadMfReceiptState(): Promise<MfReceiptState> {
   const snap = await getDoc(receiptStateRef())
   const d = snap.exists() ? snap.data() : {}
@@ -500,6 +505,12 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
   const openChecks = await loadOpenExpenseChecks()
   const previous = new Map(openChecks.map(c => [c.reportId, c]))
   const receiptReadsByReport = await loadReceiptReads(reports.map(r => r.id))
+  const allHistory = Array.from(historyByMember.values()).flat()
+  const routeMinFares = buildMfRouteMinFares(allHistory, settings)
+  await setDoc(doc(db, 'mfExpense', 'routeTable'), {
+    months: buildMfRouteTable(allHistory, settings, routeMinFares, id => members[id]?.name || '（不明）'),
+    updatedAt: new Date().toISOString(),
+  })
 
   let fetched = 0
   let partial = false
@@ -539,6 +550,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       tool: worker ? toolContextFor(worker, toolBudget, today) : null,
       receiptReads: receiptReadsByReport.get(r.id),
       siteOfDay: worker ? siteOfDayFor(worker.id) : undefined,
+      routeMinFares,
     })
     const reads = receiptReadsByReport.get(r.id) || {}
     const savedTxs = txs.map(({ receipt: _old, ...t }) => {
