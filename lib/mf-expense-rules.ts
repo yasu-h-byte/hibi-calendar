@@ -29,6 +29,10 @@ export interface MfExpenseSettings {
   itemKinds: Record<string, MfItemKind>
   /** T3・T4 の「いつもと大きく違う」の幅（%） */
   amountPct: number
+  /** T5 で見逃す差（円）。曜日やルートで変わる小さな差は出さない（2026-11-09 代表） */
+  siteTransitMargin: number
+  /** T6 で見逃す差（円）。既定は 0＝小さな差も拾って訂正してもらう（2026-11-09 代表） */
+  routeMargin: number
   /** M1（出し忘れの声かけ）を出し始める日 */
   m1Day: number
   /** M2（締め切り後）を出し始める日 */
@@ -41,6 +45,8 @@ export interface MfExpenseSettings {
 export const DEFAULT_MF_EXPENSE_SETTINGS: MfExpenseSettings = {
   itemKinds: {},
   amountPct: 30,
+  siteTransitMargin: 300,
+  routeMargin: 0,
   m1Day: 8,
   m2Day: 11,
   transitWords: ['電車', 'バス', '地下鉄', '新幹線', 'JR', 'メトロ'],
@@ -56,6 +62,8 @@ export function normalizeMfExpenseSettings(raw: Partial<MfExpenseSettings> | nul
   return {
     itemKinds: raw?.itemKinds || {},
     amountPct: num(raw?.amountPct, d.amountPct),
+    siteTransitMargin: num(raw?.siteTransitMargin, d.siteTransitMargin),
+    routeMargin: num(raw?.routeMargin, d.routeMargin),
     m1Day: num(raw?.m1Day, d.m1Day),
     m2Day: num(raw?.m2Day, d.m2Day),
     transitWords: words(raw?.transitWords, d.transitWords),
@@ -67,6 +75,8 @@ export function normalizeMfExpenseSettings(raw: Partial<MfExpenseSettings> | nul
 /** 設定の入力の不備（無ければ null）。画面とサーバーの両方で同じ判定を使う */
 export function mfExpenseSettingsError(s: MfExpenseSettings): string | null {
   if (!Number.isInteger(s.amountPct) || s.amountPct < 1 || s.amountPct > 100) return '「大きく違う」の幅は 1〜100 の整数で入れてください'
+  if (!Number.isInteger(s.siteTransitMargin) || s.siteTransitMargin < 0 || s.siteTransitMargin > 10000) return '同じ現場の交通費で見逃す差は 0〜10000 の整数で入れてください'
+  if (!Number.isInteger(s.routeMargin) || s.routeMargin < 0 || s.routeMargin > 10000) return '同じ区間の最安で見逃す差は 0〜10000 の整数で入れてください'
   if (!Number.isInteger(s.m1Day) || s.m1Day < 1 || s.m1Day > 28) return '出し忘れの声かけの日は 1〜28 で入れてください'
   if (!Number.isInteger(s.m2Day) || s.m2Day < 1 || s.m2Day > 28) return '締め切り後の確認の日は 1〜28 で入れてください'
   if (s.m1Day >= s.m2Day) return '出し忘れの声かけの日は、締め切り後の確認の日より前にしてください'
@@ -80,7 +90,7 @@ export function mfExpenseSettingsError(s: MfExpenseSettings): string | null {
 //  指摘
 // ────────────────────────────────────────
 
-export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T5' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
+export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T5' | 'T6' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
 
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
@@ -177,6 +187,7 @@ export const MF_RULE_LABEL: Record<MfRuleId, string> = {
   R4: '領収書の読み取り',
   R5: '交通費と駐輪場代',
   T5: '同じ現場の交通費',
+  T6: '同じ区間の最安',
   T1: '交通費と出勤日',
   T3: '交通費の金額',
   T4: 'ガソリン代',
@@ -199,7 +210,7 @@ export interface MfExpenseFlag {
   txId?: string
   /** 領収書から読み取った値（R2・R3・R5） */
   receipt?: { date?: string; amount?: number }
-  /** 同じ現場のいつもの金額（T5） */
+  /** 同じ現場のいつもの金額（T5）・同じ区間の社内の最安（T6） */
   usual?: number
 }
 
@@ -309,6 +320,97 @@ export interface MfReportCheckInput {
   receiptReads?: Record<string, MfReceiptRead>
   /** その人がその日に入った現場（1日に1現場の日だけ。T5 に使う） */
   siteOfDay?: Record<string, { id: string; name: string }>
+  /** 区間ごとの社内の最安（buildMfRouteMinFares）。T6 に使う */
+  routeMinFares?: Record<string, number>
+}
+
+/**
+ * 明細の内容から区間のキーを作る。MF の経路検索が書く「秋津~笹塚 往復電車代」の形だけを読む。
+ * 名前の前置き「笹塚(秋津~笹塚 往復電車代)」は外し、「中里(東京都)／西武バス」の括弧は残す。上りと下りは同じ区間として扱う
+ */
+export function mfRouteKey(remark: string): string | null {
+  const s = remark.normalize('NFKC').replace(/[〜～]/g, '~')
+  const parts = s.split('~')
+  if (parts.length !== 2) return null
+  const m = parts[1].match(/^(.*?)\s*(往復|片道)/)
+  if (!m) return null
+  const to = m[1].trim()
+  let depth = 0
+  let open = -1
+  Array.from(parts[0]).forEach((c, i) => {
+    if (c === '(') { if (depth === 0) open = i; depth++ } else if (c === ')' && depth > 0) depth--
+  })
+  const from = (depth > 0 ? parts[0].slice(open + 1) : parts[0]).trim()
+  if (!from || !to) return null
+  return `${[from, to].sort().join('~')} ${m[2]}`
+}
+
+export interface MfRouteTableEntry {
+  memberId: string
+  name: string
+  amount: number
+  lines: number
+}
+
+export interface MfRouteTableRow {
+  route: string
+  /** 社内の最安（全期間の実績） */
+  min: number
+  entries: MfRouteTableEntry[]
+  /** 最安との差額の合計（円） */
+  excess: number
+}
+
+/** 月ごとの区間の比較表。最安との差額が大きい区間から並べる（画面の「区間の比較」） */
+export function buildMfRouteTable(
+  rows: { itemId: string; amount: number; remark: string; date: string; memberId: string }[],
+  settings: MfExpenseSettings,
+  minFares: Record<string, number>,
+  nameOf: (memberId: string) => string,
+): Record<string, MfRouteTableRow[]> {
+  const months = new Map<string, Map<string, Map<string, MfRouteTableEntry>>>()
+  for (const r of rows) {
+    if (settings.itemKinds[r.itemId] !== 'transit' || !(r.amount > 0) || !r.date) continue
+    const route = mfRouteKey(r.remark)
+    if (!route || minFares[route] === undefined) continue
+    const ym = ymOfIso(r.date)
+    if (!months.has(ym)) months.set(ym, new Map())
+    const routes = months.get(ym)!
+    if (!routes.has(route)) routes.set(route, new Map())
+    const entries = routes.get(route)!
+    const key = `${r.memberId}|${r.amount}`
+    const cur = entries.get(key)
+    if (cur) cur.lines++
+    else entries.set(key, { memberId: r.memberId, name: nameOf(r.memberId), amount: r.amount, lines: 1 })
+  }
+  const out: Record<string, MfRouteTableRow[]> = {}
+  for (const [ym, routes] of Array.from(months)) {
+    out[ym] = Array.from(routes).map(([route, entries]) => {
+      const min = minFares[route]
+      const list = Array.from(entries.values()).sort((a, b) => b.amount - a.amount || b.lines - a.lines)
+      return { route, min, entries: list, excess: list.reduce((s, e) => s + Math.max(0, e.amount - min) * e.lines, 0) }
+    }).sort((a, b) => b.excess - a.excess || a.route.localeCompare(b.route))
+  }
+  return out
+}
+
+/** 区間ごとの社内の最安。1回だけの金額は打ち間違いかもしれないので、2回以上出た金額の中で一番安いものにする */
+export function buildMfRouteMinFares(rows: { itemId: string; amount: number; remark: string }[], settings: MfExpenseSettings): Record<string, number> {
+  const seen = new Map<string, Map<number, number>>()
+  for (const r of rows) {
+    if (settings.itemKinds[r.itemId] !== 'transit' || !(r.amount > 0)) continue
+    const key = mfRouteKey(r.remark)
+    if (!key) continue
+    const counts = seen.get(key) || new Map<number, number>()
+    counts.set(r.amount, (counts.get(r.amount) || 0) + 1)
+    seen.set(key, counts)
+  }
+  const out: Record<string, number> = {}
+  for (const [key, counts] of Array.from(seen)) {
+    const repeated = Array.from(counts).filter(([, n]) => n >= 2).map(([a]) => a)
+    if (repeated.length > 0) out[key] = Math.min(...repeated)
+  }
+  return out
 }
 
 export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpenseFlag[]; targetYm: string } {
@@ -439,6 +541,23 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     })
   }
 
+  // T6: 同じ区間で社内の最安より高い（2026-11-09 代表・最安ルートの決まり）。申請ごと・区間ごとに1回だけ出す
+  if (input.routeMinFares) {
+    const over = new Map<string, { first: MfExpenseTx; lines: number; min: number }>()
+    for (const t of txs) {
+      if (kindOf(t.itemId) !== 'transit') continue
+      const key = mfRouteKey(t.remark)
+      const min = key ? input.routeMinFares[key] : undefined
+      if (!key || min === undefined || t.amount - min <= settings.routeMargin) continue
+      const cur = over.get(key)
+      if (cur) cur.lines++
+      else over.set(key, { first: t, lines: 1, min })
+    }
+    for (const [key, { first, lines, min }] of Array.from(over)) {
+      flags.push({ rule: 'T6', level: 'confirm', txId: first.id, usual: min, message: `${key}: ${yen(first.amount)}（${lines} 明細）。同じ区間の社内の最安は ${yen(min)} です` })
+    }
+  }
+
   // ここから先は「その月まとめて」見る決まり。この申請と、同じ人の他の申請の両方を合わせる
   if (hasAttendance) {
     const sameMonth = (date: string, ym: string) => !!date && ymOfIso(date) === ym
@@ -449,7 +568,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     const workDaysIn = (ym: string) => Array.from(workDays).filter(d => ymOfIso(d) === ym)
     const targetTxs = allForMonth(targetYm)
     // T5: 同じ人・同じ現場なのに、日によって交通費の合計が違う（2026-11-09 代表）。
-    // 3日以上あって、一番多い金額が1つに決まるときだけ、それと違う日を出す
+    // 3日以上あって、一番多い金額が1つに決まるときだけ、それと決まりの金額（siteTransitMargin）より違う日を出す
     if (input.siteOfDay) {
       const dayTotal = new Map<string, number>()
       for (const r of targetTxs) {
@@ -472,7 +591,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
         const usual = ranked[0][0]
         for (const [date, total] of days.sort((a, b) => a[0].localeCompare(b[0]))) {
           const mine = txs.find(t => t.date === date && kindOf(t.itemId) === 'transit')
-          if (total === usual || !mine) continue
+          if (Math.abs(total - usual) <= settings.siteTransitMargin || !mine) continue
           flags.push({ rule: 'T5', level: 'confirm', txId: mine.id, usual, message: `${fmtDay(date)} の交通費 ${yen(total)}: 同じ現場（${name}）のいつもの金額 ${yen(usual)} と違います` })
         }
       }

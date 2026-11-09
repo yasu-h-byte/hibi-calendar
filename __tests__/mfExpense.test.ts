@@ -6,7 +6,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
-  MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
+  buildMfRouteMinFares, buildMfRouteTable, mfRouteKey, MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
   type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
@@ -209,6 +209,12 @@ describe('同じ現場の交通費の差（T5）', () => {
     expect(f[0]).toMatchObject({ level: 'confirm', txId: 't8', usual: 1420 })
     expect(f[0].message).toContain('A現場')
   })
+  test('決まりの金額までの小さな差は出さない', () => {
+    const at = (last: number) => rules(run({ workDays, siteOfDay, txs: [day(5, 1420), day(6, 1420), day(7, 1420), day(8, last)] }))
+    expect(at(1720)).not.toContain('T5')
+    expect(at(1120)).not.toContain('T5')
+    expect(at(1721)).toContain('T5')
+  })
   test('金額がそろっていれば出さない', () => {
     expect(rules(run({ workDays, siteOfDay, txs: [day(5, 1420), day(6, 1420), day(7, 1420), day(8, 1420)] }))).not.toContain('T5')
   })
@@ -223,6 +229,50 @@ describe('同じ現場の交通費の差（T5）', () => {
   test('1日に複数の明細があれば合計で比べる', () => {
     const txs = [day(5, 1420), day(6, 1420), day(7, 710), tx({ id: 't7b', date: '2026-10-07', amount: 710 })]
     expect(rules(run({ workDays, siteOfDay, txs }))).not.toContain('T5')
+  })
+})
+
+describe('同じ区間の社内の最安（T6）', () => {
+  test('区間の読み取り', () => {
+    expect(mfRouteKey('秋津~笹塚 往復電車代')).toBe('秋津~笹塚 往復')
+    expect(mfRouteKey('笹塚(秋津~笹塚 往復電車代)')).toBe('秋津~笹塚 往復')
+    expect(mfRouteKey('Kawasaki(新秋津~大川 往復電車・バス代)')).toBe('大川~新秋津 往復')
+    expect(mfRouteKey('笹塚~秋津 往復電車代')).toBe('秋津~笹塚 往復')
+    expect(mfRouteKey('中里(東京都)／西武バス~所沢 片道電車・バス代')).toBe('中里(東京都)/西武バス~所沢 片道')
+    expect(mfRouteKey('ワークマンプラス')).toBeNull()
+    expect(mfRouteKey('A~B')).toBeNull()
+  })
+  const h = (amount: number, remark = '秋津~笹塚 往復電車代', itemId = 't') => ({ itemId, amount, remark })
+  test('2回以上出た金額の中で一番安いものを最安にする', () => {
+    expect(buildMfRouteMinFares([h(1402), h(1402), h(1560), h(1560), h(100)], settings)).toEqual({ '秋津~笹塚 往復': 1402 })
+    expect(buildMfRouteMinFares([h(1402)], settings)).toEqual({})
+    expect(buildMfRouteMinFares([h(5, 'A~B 往復', 'o'), h(5, 'A~B 往復', 'o')], settings)).toEqual({})
+  })
+  const line = (id: string, amount: number) => tx({ id, amount, remark: '秋津~笹塚 往復電車代' })
+  const routeMinFares = { '秋津~笹塚 往復': 1402 }
+  test('最安より決まりの金額を超えて高ければ、区間ごとに1回だけ要確認で出す', () => {
+    const f = run({ txs: [line('a', 1560), line('b', 1560)], routeMinFares }).filter(x => x.rule === 'T6')
+    expect(f).toHaveLength(1)
+    expect(f[0]).toMatchObject({ level: 'confirm', txId: 'a', usual: 1402 })
+    expect(f[0].message).toContain('2 明細')
+  })
+  test('小さな差も既定で出す。見逃す差を決めればそこまでは出さない', () => {
+    expect(rules(run({ txs: [line('a', 1412)], routeMinFares }))).toContain('T6')
+    expect(rules(run({ txs: [line('a', 1402)], routeMinFares }))).not.toContain('T6')
+    expect(rules(run({ txs: [line('a', 1502)], routeMinFares, settings: { ...settings, routeMargin: 100 } }))).not.toContain('T6')
+  })
+  test('比較表: 月ごとに人と金額でまとめ、差額の大きい区間から並べる', () => {
+    const r = (memberId: string, amount: number, remark = '秋津~笹塚 往復電車代', date = '2026-10-05') => ({ itemId: 't', amount, remark, date, memberId })
+    const t = buildMfRouteTable([r('a', 1560), r('a', 1560), r('b', 1402), r('c', 500, 'A~B 往復'), r('a', 1560, undefined, '2026-09-30')], settings, { '秋津~笹塚 往復': 1402, 'A~B 往復': 500 }, id => id.toUpperCase())
+    expect(t['202610'][0]).toMatchObject({ route: '秋津~笹塚 往復', min: 1402, excess: 316 })
+    expect(t['202610'][0].entries[0]).toEqual({ memberId: 'a', name: 'A', amount: 1560, lines: 2 })
+    expect(t['202610'][1].excess).toBe(0)
+    expect(t['202609'][0].excess).toBe(158)
+  })
+  test('差し戻しコメントに最安の金額が入る', () => {
+    const txs = [line('a', 1560)]
+    const flags = run({ txs, routeMinFares })
+    expect(buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags, txs })).toContain('社内の最安は 1,402円')
   })
 })
 

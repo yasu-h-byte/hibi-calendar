@@ -9,7 +9,7 @@ import type { MfExpenseFlag, MfExpenseTx, MfRuleId } from './mf-expense-rules'
 
 export type MfCommentLang = 'ja' | 'vi'
 
-const REJECT_RULES = new Set<MfRuleId>(['T1', 'D1', 'D2', 'R1', 'R2', 'R3', 'R5', 'T5', 'K1', 'G3'])
+const REJECT_RULES = new Set<MfRuleId>(['T1', 'D1', 'D2', 'R1', 'R2', 'R3', 'R5', 'T5', 'T6', 'K1', 'G3'])
 
 const WRAP: Record<MfCommentLang, { open: string; close: string }> = {
   ja: { open: 'お疲れさまです。次の点を確認して、直してからもう一度申請してください。', close: 'よろしくお願いします。' },
@@ -64,6 +64,12 @@ function ruleMessage(flag: MfExpenseFlag, tx: MfExpenseTx, targetYm: string, tod
       return ja
         ? `同じ現場の他の日は ${a}円 です。金額が正しいか確認してください。`
         : `Những ngày khác ở cùng công trường là ${a} yên. Vui lòng kiểm tra lại số tiền.`
+    }
+    case 'T6': {
+      const a = Math.round(flag.usual || 0).toLocaleString('en-US')
+      return ja
+        ? `同じ区間の社内の最安は ${a}円 です。一番安い経路で申請してください。`
+        : `Giá thấp nhất trong công ty cho cùng tuyến là ${a} yên. Vui lòng nộp theo tuyến rẻ nhất.`
     }
     case 'K1':
       return ja

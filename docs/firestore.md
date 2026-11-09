@@ -491,6 +491,7 @@ workSchedule?: {
 | `expenseHistory/{YYYYMM}` | 過去の明細の控え `rows`（T3・T4・D2・M1 用） | しない（MF から読み直せる） |
 | `mfExpense/settings` | 科目の種類 `itemKinds`・決まりの数字 | する |
 | `mfExpense/members` | MF の従業員と作業員の結びつけ | する |
+| `mfExpense/routeTable` | 区間の比較表 `months.{YYYYMM}`（チェックのたびに作り直す） | する |
 | `mfExpense/items`・`reminders`・`runState` | 科目の一覧・声かけ一覧・実行の状態 | する |
 | `mfExpenseSecrets/connection` | トークン（AES-GCM で暗号化・鍵は Client Secret から作る） | **しない**（鍵を複製しない） |
 | `mfExpenseSecrets/oauth_*` | 接続の手続きの1回限りの合言葉（10分） | しない |

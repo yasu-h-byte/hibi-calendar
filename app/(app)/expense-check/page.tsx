@@ -17,7 +17,7 @@ import { todayJstIso } from '@/lib/date-utils'
 import { buildMfRejectComment, hasMfRejectComment, type MfCommentLang } from '@/lib/mf-expense-comment'
 import {
   MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfExpenseSettingsError, normalizeMfReviewNote,
-  type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
+  type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
 interface Check {
@@ -58,10 +58,11 @@ interface PageData {
   reminders: MfReminderEntry[]
   checks: Check[]
   workers: { id: number; name: string }[]
+  routeTable: Record<string, MfRouteTableRow[]>
   redirectUri: string
 }
 
-type Tab = 'reports' | 'reminders' | 'members' | 'items' | 'rules'
+type Tab = 'reports' | 'routes' | 'reminders' | 'members' | 'items' | 'rules'
 
 const yen = (n: number) => `${Math.round(n).toLocaleString('ja-JP')}円`
 const fmtDay = (iso: string) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : '日付なし')
@@ -195,6 +196,7 @@ export default function ExpenseCheckPage() {
             label="表示の切り替え" active={tab} onChange={setTab}
             tabs={[
               { key: 'reports', label: '申請', badge: counts.flagged },
+              { key: 'routes', label: '区間の比較' },
               { key: 'reminders', label: '声かけ', badge: counts.reminders },
               { key: 'members', label: '従業員の結びつけ', badge: counts.unlinked },
               { key: 'items', label: '科目の種類', badge: counts.unsetItems },
@@ -203,6 +205,7 @@ export default function ExpenseCheckPage() {
           />
 
           {tab === 'reports' && <ReportsTab checks={data.checks} canEdit={canEdit} post={post} reload={load} />}
+          {tab === 'routes' && <RoutesTab table={data.routeTable} />}
           {tab === 'reminders' && <RemindersTab reminders={data.reminders} />}
           {tab === 'members' && <MembersTab members={data.members} workers={data.workers} canEdit={canEdit} post={post} reload={load} />}
           {tab === 'items' && <ItemsTab data={data} canEdit={canEdit} post={post} reload={load} />}
@@ -429,6 +432,52 @@ function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdi
   )
 }
 
+/** 同じ区間の交通費を人ごとに並べる。最安との差は小さくても見えるようにして、訂正を頼めるようにする */
+function RoutesTab({ table }: { table: Record<string, MfRouteTableRow[]> }) {
+  const months = Object.keys(table).sort().reverse()
+  const [ym, setYm] = useState(months[0] || '')
+  const [onlyDiff, setOnlyDiff] = useState(true)
+  if (months.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>「今すぐチェック」を押すと、区間の比較表を作ります</div>
+  const rows = (table[ym] || []).filter(r => !onlyDiff || r.entries.some(e => e.amount !== r.min))
+  const total = rows.reduce((s, r) => s + r.excess, 0)
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-hibi-sub dark:text-gray-400">最安は、同じ区間で社内に2回以上出た金額の中で一番安いものです。全員が高い経路を使っている区間は見つけられません。</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <select className={inputCls} aria-label="月" value={ym} onChange={e => setYm(e.target.value)}>
+          {months.map(m => <option key={m} value={m}>{Number(m.slice(0, 4))}年{Number(m.slice(4, 6))}月</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200">
+          <input type="checkbox" checked={onlyDiff} onChange={e => setOnlyDiff(e.target.checked)} />差があるものだけ
+        </label>
+        <span className="ml-auto text-sm font-bold text-gray-900 dark:text-gray-100">最安との差額の合計 {yen(total)}</span>
+      </div>
+      {rows.length === 0
+        ? <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>この月に差のある区間はありません</div>
+        : (
+          <div className={cardCls}>
+            {rows.map(r => (
+              <div key={r.route} className="border-t first:border-t-0 border-hibi-line dark:border-gray-700 px-5 py-3 space-y-1.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">{r.route}</span>
+                  <span className="text-xs text-hibi-sub dark:text-gray-400">社内の最安 {yen(r.min)}{r.excess > 0 && `・差額 ${yen(r.excess)}`}</span>
+                </div>
+                {r.entries.map(e => (
+                  <div key={`${e.memberId}-${e.amount}`} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 text-[0.8125rem] text-gray-800 dark:text-gray-200">
+                    <span className="truncate">{e.name}</span>
+                    <span className="tabular-nums">{yen(e.amount)}</span>
+                    <span className="tabular-nums text-xs text-hibi-sub dark:text-gray-400">{e.lines} 明細</span>
+                    <span className="w-20 text-right">{e.amount > r.min ? <Chip tone="amber">+{yen(e.amount - r.min)}</Chip> : <Chip tone="green">最安</Chip>}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+  )
+}
+
 function RemindersTab({ reminders }: { reminders: MfReminderEntry[] }) {
   if (reminders.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>今は声をかける人はいません（毎月 8 日から出ます）</div>
   return (
@@ -536,13 +585,13 @@ function ItemsTab({ data, canEdit, post, reload }: { data: PageData; canEdit: bo
 
 function RulesTab({ data, canEdit, post, reload }: { data: PageData; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
   const [form, setForm] = useState({
-    amountPct: String(data.settings.amountPct), m1Day: String(data.settings.m1Day), m2Day: String(data.settings.m2Day),
+    amountPct: String(data.settings.amountPct), siteTransitMargin: String(data.settings.siteTransitMargin), routeMargin: String(data.settings.routeMargin), m1Day: String(data.settings.m1Day), m2Day: String(data.settings.m2Day),
     transitWords: data.settings.transitWords.join('、'), gasWords: data.settings.gasWords.join('、'), splitWords: data.settings.splitWords.join('、'),
   })
   const words = (s: string) => s.split(/[、,\s　]+/).map(w => w.trim()).filter(Boolean)
   const next: MfExpenseSettings = {
     itemKinds: data.settings.itemKinds,
-    amountPct: Number(form.amountPct), m1Day: Number(form.m1Day), m2Day: Number(form.m2Day),
+    amountPct: Number(form.amountPct), siteTransitMargin: Number(form.siteTransitMargin), routeMargin: Number(form.routeMargin), m1Day: Number(form.m1Day), m2Day: Number(form.m2Day),
     transitWords: words(form.transitWords), gasWords: words(form.gasWords), splitWords: words(form.splitWords),
   }
   const error = mfExpenseSettingsError(next)
@@ -559,6 +608,8 @@ function RulesTab({ data, canEdit, post, reload }: { data: PageData; canEdit: bo
   return (
     <div className={`${cardCls} p-5 space-y-4 max-w-xl`}>
       {Field({ k: 'amountPct', label: '「いつもと大きく違う」の幅（%）' })}
+      {Field({ k: 'siteTransitMargin', label: '同じ現場の交通費で見逃す差（円。この金額までの差は出さない）' })}
+      {Field({ k: 'routeMargin', label: '同じ区間の社内の最安で見逃す差（円。この金額までの差は出さない）' })}
       {Field({ k: 'm1Day', label: '出し忘れの声かけを出し始める日' })}
       {Field({ k: 'm2Day', label: '締め切り後の確認を出し始める日' })}
       {Field({ k: 'transitWords', label: '交通費の言葉（「、」で区切る）', type: 'text' })}
