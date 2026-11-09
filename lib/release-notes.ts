@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_audit',
+    title: '「経費の事前チェック」を点検して直しました',
+    content:
+      '領収書をまだ読めていない申請は「✓ チェック済み」ではなく「領収書 未確認」と出ます。確認メモのあとに新しい指摘が出たら「要確認」に戻ります。'
+      + '現場都合の休み（0.6補）の日の交通費も「交通費と出勤日」で出るようになり、駐輪場代の明細は駅名があっても「科目」では止まらなくなりました。',
+    category: 'fix',
+    publishedAt: '2026-11-09T21:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_parking_confirm',
     title: '「経費の事前チェック」で、駐輪場代が一緒の交通費を「要確認」にしました',
     content:

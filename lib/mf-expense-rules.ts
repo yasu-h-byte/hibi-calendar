@@ -90,7 +90,7 @@ export function mfExpenseSettingsError(s: MfExpenseSettings): string | null {
 //  指摘
 // ────────────────────────────────────────
 
-export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T5' | 'T6' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
+export type MfRuleId = 'U1' | 'X1' | 'T1' | 'T3' | 'T5' | 'T6' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
 
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
@@ -135,12 +135,57 @@ export function mfApprovalWaitingLabel(status: string, approvals: MfApprovalStep
 
 /** 要確認の申請に総務が残す1行（「確認した・理由」）。MF には書かない（2026-11-09） */
 export interface MfExpenseReview {
+  /** 確認したときの要確認の指摘（mfFlagKey）。これより増えたら要確認に戻す */
+  flagKeys?: string[]
   note: string
   byName: string
   at: string
 }
 
 export const MF_REVIEW_NOTE_MAX = 200
+
+/** 指摘の見分け。確認したときの指摘と今の指摘を比べる */
+export const mfFlagKey = (f: Pick<MfExpenseFlag, 'rule' | 'txId'>): string => `${f.rule}:${f.txId || ''}`
+
+export const mfConfirmFlagKeys = (flags: MfExpenseFlag[]): string[] =>
+  Array.from(new Set(flags.filter(f => f.level === 'confirm').map(mfFlagKey)))
+
+/**
+ * 確認メモが今の指摘をすべて見たものか。確認のあとに増えた指摘（領収書を遅れて読んだ・別の申請が来た・出面を直した）を
+ * 「確認済み」の中に隠さない（2026-11-09 総点検）。flagKeys の無い古いメモは、すべて見たものとして扱う
+ */
+export function mfReviewIsCurrent(review: MfExpenseReview | undefined, flags: MfExpenseFlag[]): boolean {
+  if (!review) return false
+  if (!review.flagKeys) return true
+  const seen = new Set(review.flagKeys)
+  return mfConfirmFlagKeys(flags).every(k => seen.has(k))
+}
+
+export type MfCheckState = 'confirm' | 'reviewed' | 'receipt' | 'clean'
+
+/** 一覧の札。領収書をまだ読めていない申請は「問題なし」と言えないので、チェック済みと分ける（2026-11-09 総点検） */
+export function mfCheckState(c: { confirmCount: number; review?: MfExpenseReview; flags: MfExpenseFlag[]; receiptPending?: number }): MfCheckState {
+  if (c.confirmCount > 0) return mfReviewIsCurrent(c.review, c.flags) ? 'reviewed' : 'confirm'
+  if ((c.receiptPending || 0) > 0 || c.flags.some(f => f.rule === 'R4')) return 'receipt'
+  return 'clean'
+}
+
+/** 読み取り結果が今の添付のものか（差し替えられていたら読み直すまで使わない） */
+export function mfIsReceiptReadCurrent(tx: Pick<MfExpenseTx, 'fileId'>, read: Pick<MfReceiptRead, 'fileId'> | undefined): boolean {
+  return !!read && !(tx.fileId && read.fileId && tx.fileId !== read.fileId)
+}
+
+/** 駐輪場の明細には駅名が書かれるので、電車の言葉で「科目違い」にしない（駐輪場代を分けて出し直した人が止まらないように） */
+const MF_PARKING_WORDS = ['駐輪', '駐車']
+const KATAKANA = /[ァ-ヶー]/
+
+/** カタカナの言葉は、続きもカタカナなら別の言葉として扱う（バス → バスケット、レギュラー → レギュラーサイズ） */
+export function mfTextHasWord(text: string, word: string): boolean {
+  for (let i = text.indexOf(word); i >= 0; i = text.indexOf(word, i + 1)) {
+    if (!KATAKANA.test(word[0]) || !KATAKANA.test(text[i + word.length] || '')) return true
+  }
+  return false
+}
 
 /** 確認メモの入力を整える。画面とサーバで同じ判定にする */
 export function normalizeMfReviewNote(raw: unknown): { ok: true; note: string } | { ok: false; error: string } {
@@ -186,6 +231,7 @@ export const MF_RULE_LABEL: Record<MfRuleId, string> = {
   R3: '領収書の金額',
   R4: '領収書の読み取り',
   R5: '交通費と駐輪場代',
+  X1: '明細の読み取り',
   T5: '同じ現場の交通費',
   T6: '同じ区間の最安',
   T1: '交通費と出勤日',
@@ -212,6 +258,10 @@ export interface MfExpenseFlag {
   receipt?: { date?: string; amount?: number }
   /** 同じ現場のいつもの金額（T5）・同じ区間の社内の最安（T6） */
   usual?: number
+  /** その日の交通費の合計（T5。1行の金額ではなく合計で比べている） */
+  dayTotal?: number
+  /** 同じ区間で最安より高い、ほかの明細の数（T6。指摘は区間ごとに1回なので、文面で伝える） */
+  moreLines?: number
 }
 
 /** 保存する明細（MF の項目のうち、チェックと表示に要るものだけ） */
@@ -451,7 +501,8 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     }
 
     // R2・R3・R4: 領収書の中身と申請の比較。確信が持てない項目は AI が null にするので、読めた項目だけ比べる
-    const read = tx.hasFile ? input.receiptReads?.[tx.id] : undefined
+    const stored = tx.hasFile ? input.receiptReads?.[tx.id] : undefined
+    const read = mfIsReceiptReadCurrent(tx, stored) ? stored : undefined
     if (read) {
       if (!read.readable || (read.date === null && read.amount === null)) {
         flags.push({ rule: 'R4', level: 'info', txId: tx.id, message: `${label}: 領収書を読み取れませんでした。目で確かめてください` })
@@ -471,15 +522,21 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
               : `${label}: 領収書の金額は ${yen(read.amount)} です`,
           })
         }
+        // 交通費は金額のずれを必ず見る決まりなので、金額が読めなかったら「問題なし」にしない
+        if (read.amount === null && kind === 'transit') {
+          flags.push({ rule: 'R4', level: 'info', txId: tx.id, message: `${label}: 領収書の金額を読み取れませんでした。目で確かめてください` })
+        }
       }
     }
 
     // K1: 摘要と科目が合わない
     if (kind) {
       const text = tx.remark
-      const transitWord = settings.transitWords.find(w => text.includes(w))
-      const gasWord = settings.gasWords.find(w => text.includes(w))
-      if (kind !== 'transit' && transitWord) {
+      const isParking = MF_PARKING_WORDS.some(w => text.includes(w))
+      const transitWord = isParking ? undefined : settings.transitWords.find(w => mfTextHasWord(text, w))
+      const gasWord = settings.gasWords.find(w => mfTextHasWord(text, w))
+      // ガソリン代には店の名前（JR川口駅前店など）が書かれるので、電車の言葉では見ない
+      if (kind !== 'transit' && kind !== 'gas' && transitWord) {
         flags.push({ rule: 'K1', level: 'confirm', txId: tx.id, message: `${label}: 内容に「${transitWord}」とありますが、交通費の科目ではありません` })
       } else if (kind !== 'gas' && gasWord) {
         flags.push({ rule: 'K1', level: 'confirm', txId: tx.id, message: `${label}: 内容に「${gasWord}」とありますが、ガソリン代の科目ではありません` })
@@ -554,7 +611,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
       else over.set(key, { first: t, lines: 1, min })
     }
     for (const [key, { first, lines, min }] of Array.from(over)) {
-      flags.push({ rule: 'T6', level: 'confirm', txId: first.id, usual: min, message: `${key}: ${yen(first.amount)}（${lines} 明細）。同じ区間の社内の最安は ${yen(min)} です` })
+      flags.push({ rule: 'T6', level: 'confirm', txId: first.id, usual: min, moreLines: lines - 1, message: `${key}: ${yen(first.amount)}（${lines} 明細）。同じ区間の社内の最安は ${yen(min)} です` })
     }
   }
 
@@ -592,7 +649,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
         for (const [date, total] of days.sort((a, b) => a[0].localeCompare(b[0]))) {
           const mine = txs.find(t => t.date === date && kindOf(t.itemId) === 'transit')
           if (Math.abs(total - usual) <= settings.siteTransitMargin || !mine) continue
-          flags.push({ rule: 'T5', level: 'confirm', txId: mine.id, usual, message: `${fmtDay(date)} の交通費 ${yen(total)}: 同じ現場（${name}）のいつもの金額 ${yen(usual)} と違います` })
+          flags.push({ rule: 'T5', level: 'confirm', txId: mine.id, usual, dayTotal: total, message: `${fmtDay(date)} の交通費 ${yen(total)}: 同じ現場（${name}）のいつもの金額 ${yen(usual)} と違います` })
         }
       }
     }
