@@ -74,6 +74,15 @@ export function isWorkingDay(entry: AttendanceEntry | null | undefined): boolean
 }
 
 /**
+ * 実際に現場へ出た日か（経費の事前チェックの交通費と出勤日の照合に使う）。
+ * 0.6補（現場都合の休み）は w=0.6 で isWorkingDay が true になるが、現場には行っていない。
+ * isWorkingDay は給与計算でも使うので変えず、ここで分ける（2026-11-09 総点検）
+ */
+export function wasAtSite(entry: AttendanceEntry | null | undefined): boolean {
+  return isWorkingDay(entry) && entry?.w !== 0.6
+}
+
+/**
  * 在留資格コードから「ベトナム人スタッフ（特定技能・技能実習）」かどうか判定。
  *
  * tokutei1 / tokutei2: 特定技能 1号 / 2号

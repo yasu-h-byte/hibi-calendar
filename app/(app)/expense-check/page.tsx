@@ -16,8 +16,8 @@ import { SaveButton } from '@/components/ui/SaveButton'
 import { currentYmJst, todayJstIso } from '@/lib/date-utils'
 import { buildMfRejectComment, hasMfRejectComment, type MfCommentLang } from '@/lib/mf-expense-comment'
 import {
-  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
-  type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
+  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfCheckState, mfReviewIsCurrent, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
+  type MfCheckState, type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
 interface Check {
@@ -36,6 +36,7 @@ interface Check {
   confirmCount: number
   infoCount: number
   review?: MfExpenseReview
+  receiptPending?: number
 }
 
 interface PageData {
@@ -155,12 +156,14 @@ export default function ExpenseCheckPage() {
   const conn = data?.connection
   const counts = useMemo(() => {
     const checks = data?.checks || []
+    const countOf = (s: MfCheckState) => checks.filter(c => mfCheckState(c) === s).length
     const unlinked = (data?.members || []).filter(m => m.active && m.how === null).length
     const unsetItems = (data?.items || []).filter(i => i.active && !data?.settings.itemKinds[i.id]).length
     return {
-      flagged: checks.filter(c => c.confirmCount > 0 && !c.review).length,
-      reviewed: checks.filter(c => c.confirmCount > 0 && c.review).length,
-      clean: checks.filter(c => c.confirmCount === 0).length,
+      flagged: countOf('confirm'),
+      reviewed: countOf('reviewed'),
+      receipt: countOf('receipt'),
+      clean: countOf('clean'),
       unlinked,
       unsetItems,
       reminders: (data?.reminders || []).length,
@@ -186,7 +189,7 @@ export default function ExpenseCheckPage() {
       {conn.connected && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <TodoCard icon="alert" tone={counts.flagged > 0 ? 'warn' : 'ok'} title="要確認の申請" big={`${counts.flagged} 件`} sub={`確認済み ${counts.reviewed} 件・問題なし ${counts.clean} 件`} onClick={() => setTab('reports')} />
+            <TodoCard icon="alert" tone={counts.flagged > 0 ? 'warn' : 'ok'} title="要確認の申請" big={`${counts.flagged} 件`} sub={`確認済み ${counts.reviewed} 件・領収書 未確認 ${counts.receipt} 件・問題なし ${counts.clean} 件`} onClick={() => setTab('reports')} />
             <TodoCard icon="bell" tone={counts.reminders > 0 ? 'info' : 'ok'} title="声かけ" big={`${counts.reminders} 人`} sub="出し忘れ・差し戻したまま" onClick={() => setTab('reminders')} />
             <TodoCard icon="users" tone={counts.unlinked > 0 ? 'warn' : 'ok'} title="結びつけが未確定" big={`${counts.unlinked} 人`} sub="未確定の人は出面と比べられません" onClick={() => setTab('members')} />
             <TodoCard icon="receipt" tone={counts.unsetItems > 0 ? 'warn' : 'ok'} title="種類が未設定の科目" big={`${counts.unsetItems} 個`} sub="未設定の科目はチェックしません" onClick={() => setTab('items')} />
@@ -297,7 +300,7 @@ function ReviewBox({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
     if (!n.ok) { setError(n.error); return }
     send(n.note)
   }
-  if (c.review) {
+  if (c.review && mfReviewIsCurrent(c.review, c.flags)) {
     return (
       <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[0.8125rem] text-gray-800 dark:text-gray-200">
         <span><b>確認済み:</b> {c.review.note}<span className="text-xs text-hibi-sub dark:text-gray-400">（{c.review.byName}・{fmtAt(c.review.at)}）</span></span>
@@ -308,6 +311,11 @@ function ReviewBox({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
   if (!canEdit) return null
   return (
     <div className="space-y-1">
+      {c.review && (
+        <div className="text-xs text-amber-800 dark:text-amber-300">
+          前回の確認: {c.review.note}（{c.review.byName}）。そのあと新しい指摘が出たので、もう一度確かめてください
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <input
           className={`${inputCls} flex-1 min-w-0`} value={note} maxLength={MF_REVIEW_NOTE_MAX}
@@ -377,6 +385,15 @@ function ApprovalLine({ c }: { c: Check }) {
   )
 }
 
+function StateChip({ c }: { c: Check }) {
+  switch (mfCheckState(c)) {
+    case 'clean': return <Chip tone="green">✓ チェック済み</Chip>
+    case 'receipt': return <Chip tone="gray">領収書 未確認</Chip>
+    case 'reviewed': return <Chip tone="blue">確認済み</Chip>
+    default: return <Chip tone="amber">要確認 {c.confirmCount}</Chip>
+  }
+}
+
 function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
   const [open, setOpen] = useState(false)
   const shownFlags = [...c.flags].sort((a, b) => (a.level === b.level ? 0 : a.level === 'confirm' ? -1 : 1))
@@ -387,7 +404,7 @@ function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
         <span className="justify-self-end text-sm font-bold text-gray-900 dark:text-gray-100 tabular-nums">{yen(c.total)}</span>
         <span className="text-xs text-hibi-sub dark:text-gray-400 truncate">{c.title || '題名なし'}（申請 {fmtDay(c.submittedIso)}・明細 {c.txs.length} 件）</span>
         <span className="justify-self-end">
-          {c.confirmCount === 0 ? <Chip tone="green">✓ チェック済み</Chip> : c.review ? <Chip tone="blue">確認済み</Chip> : <Chip tone="amber">要確認 {c.confirmCount}</Chip>}
+          <StateChip c={c} />
         </span>
         <ApprovalLine c={c} />
       </button>
@@ -409,8 +426,9 @@ function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
   )
 }
 
-/** 未確認の要確認 → 確認済み → 問題なし の順 */
-const reportRank = (c: Check) => (c.confirmCount === 0 ? 2 : c.review ? 1 : 0)
+/** 未確認の要確認 → 確認済み → 領収書 未確認 → 問題なし の順 */
+const REPORT_RANK: Record<MfCheckState, number> = { confirm: 0, reviewed: 1, receipt: 2, clean: 3 }
+const reportRank = (c: Check) => REPORT_RANK[mfCheckState(c)]
 
 function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
   if (checks.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>承認待ちの申請はありません</div>

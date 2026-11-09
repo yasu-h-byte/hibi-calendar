@@ -15,7 +15,7 @@ import { db } from '@/lib/firebase'
 import { collection, deleteField, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where } from '@/lib/fsdb'
 import { getAttData, getAttDataCached, getMainData } from '@/lib/compute.server'
 import { isClosedMonthYm, parseDKey, type RawWorker } from '@/lib/compute'
-import { isWorkingDay } from '@/lib/attendance'
+import { wasAtSite } from '@/lib/attendance'
 import { isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 import { jstIsoOf, jstWallClock, todayJstIso } from '@/lib/date-utils'
 import { logActivity } from '@/lib/activity'
@@ -28,7 +28,7 @@ import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import { MF_RECEIPT_MODEL, isReceiptFatalError, isReceiptReaderConfigured, readReceiptFile } from '@/lib/mf-expense-receipt.server'
 import {
-  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, linkMfMembers, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
+  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, mfConfirmFlagKeys, mfIsReceiptReadCurrent, linkMfMembers, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
   type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
   type MfRawApproval, type MfRouteTableRow, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
@@ -63,6 +63,8 @@ export interface ExpenseCheckDoc {
   commentLang?: MfCommentLang
   /** MF の承認の段階（チェックのたびに読み直す） */
   approvals?: MfApprovalStep[]
+  /** 添付があるのに、まだ読めていない領収書の枚数（0より大きい間は「問題なし」と言わない） */
+  receiptPending?: number
   /** 総務の「確認した・理由」。毎朝のチェックでは消さない */
   review?: MfExpenseReview
 }
@@ -144,7 +146,7 @@ export async function saveExpenseReview(reportId: string, note: string | null, a
   const main = await getMainData()
   const worker = (main.workers as RawWorker[]).find(w => String(w.id) === String(actor))
   const byName = actor === 'super-admin' ? '日比靖仁' : worker?.name || String(actor)
-  const review: MfExpenseReview = { note, byName, at: new Date().toISOString() }
+  const review: MfExpenseReview = { note, byName, at: new Date().toISOString(), flagKeys: mfConfirmFlagKeys(cur.flags || []) }
   await updateDoc(ref, { review })
   return cur.memberName
 }
@@ -233,7 +235,8 @@ function monthRange(ym: string): { from: string; to: string } {
 
 async function syncMasters(api: MfApi, workers: RawWorker[]): Promise<Record<string, MfMemberLink>> {
   const items = await api.getAll<{ id: string; name: string; is_active?: boolean }>('v1/offices/{office}/ex_items', 'ex_items')
-  await setDoc(doc(db, 'mfExpense', 'items'), {
+  // 空の応答で設定を消さない（MF の一時的な異常で、手で決めた内容まで失わないように）
+  if (items.length > 0) await setDoc(doc(db, 'mfExpense', 'items'), {
     items: items.map(i => ({ id: i.id, name: i.name, active: i.is_active !== false })),
     syncedAt: new Date().toISOString(),
   })
@@ -244,6 +247,11 @@ async function syncMasters(api: MfApi, workers: RawWorker[]): Promise<Record<str
   // 振込口座などが一緒に返るが、番号と氏名と在籍だけを残す
   const members = rawMembers.map(m => ({ mfId: m.id, number: m.number || '', name: m.name || '', active: m.is_active !== false }))
   const existing = await loadMfMembers()
+  // 従業員が0人の応答はありえない。保存すると手で確定した結びつけが全部消えるので、今のものを使う
+  if (members.length === 0) {
+    console.error('MF の従業員一覧が空でした。結びつけは更新しません')
+    return existing
+  }
   const linked = linkMfMembers(members, workers.map(w => ({ id: w.id, name: w.name, payrollNo: w.payrollNo })), existing)
   await setDoc(doc(db, 'mfExpense', 'members'), { members: linked, syncedAt: new Date().toISOString() })
   return linked
@@ -269,6 +277,11 @@ async function syncHistory(api: MfApi, months: string[], hotFrom: string): Promi
       'query_object[recognized_at_from]': from,
       'query_object[recognized_at_to]': to,
     })
+    // 空の応答で控えを上書きしない（古い月は二度と読み直さないので、空のまま固まる）
+    if (txs.length === 0) {
+      if (snap.exists()) rows.push(...((snap.data().rows || []) as MfHistoryTx[]))
+      continue
+    }
     const monthRows: MfHistoryTx[] = txs
       .filter(t => t.ex_report?.id && !SKIP_STATUSES.has(t.ex_report.status || ''))
       .map(t => ({
@@ -293,7 +306,7 @@ async function loadWorkDays(months: string[]): Promise<{ days: Map<number, Set<s
     // 確定済みの月だけキャッシュを使う（CLAUDE.md「出面ドキュメントは同一リクエスト内で二度読まない」）
     const att = isClosedMonthYm(ym) ? await getAttDataCached(ym) : await getAttData(ym)
     for (const [key, entry] of Object.entries(att.d)) {
-      if (!isWorkingDay(entry)) continue
+      if (!wasAtSite(entry)) continue
       const p = parseDKey(key)
       const wid = Number(p.wid)
       if (!Number.isFinite(wid) || p.ym !== ym) continue
@@ -430,7 +443,7 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
       .filter(t => {
         if (!t.hasFile) return false
         const done = reads.get(c.reportId)?.[t.id]
-        return !done || !!(t.fileId && done.fileId && t.fileId !== done.fileId)
+        return !mfIsReceiptReadCurrent(t, done)
       })
       .map(t => ({ reportId: c.reportId, txId: t.id, fileId: t.fileId || '' })))
     remaining = queue.length
@@ -518,8 +531,14 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
 
   for (const r of reports) {
     const updatedAt = r.updated_at || ''
-    const before = previous.get(r.id)
+    // 一度一覧から消えて戻ってきた申請は open の読み込みに入らない。確認メモを失わないよう、その申請だけ読む
+    let before = previous.get(r.id)
+    if (!before) {
+      const closed = await getDoc(doc(db, 'expenseChecks', r.id))
+      if (closed.exists()) before = closed.data() as ExpenseCheckDoc
+    }
     let txs = before && before.updatedAt === updatedAt ? before.txs : null
+    let readFailed = false
     if (!txs) {
       if (Date.now() > deadline) { partial = true; continue }
       try {
@@ -528,7 +547,11 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
         fetched++
       } catch (e) {
         if (e instanceof MfTimeBudgetError) { partial = true; continue }
-        throw e
+        if (e instanceof MfReconnectError) throw e
+        // 1件の失敗で残りの申請を止めない。その申請は要確認にして、次の回に読み直す
+        console.error(`申請 ${r.id} の明細を読めませんでした:`, e)
+        txs = before?.txs ?? []
+        readFailed = true
       }
     }
 
@@ -552,6 +575,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       siteOfDay: worker ? siteOfDayFor(worker.id) : undefined,
       routeMinFares,
     })
+    if (readFailed) flags.push({ rule: 'X1', level: 'confirm', message: 'この申請の明細を MF から読めませんでした。MF で中身を確かめてください（次のチェックで読み直します）' })
     const reads = receiptReadsByReport.get(r.id) || {}
     const savedTxs = txs.map(({ receipt: _old, ...t }) => {
       const read = t.hasFile ? reads[t.id] : undefined
@@ -565,7 +589,8 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       status: r.status || '',
       submittedIso,
       submittedAt: r.submitted_at || '',
-      updatedAt,
+      // 読めなかった申請は、古い明細を使い回さず次の回に読み直す
+      updatedAt: readFailed ? '' : updatedAt,
       memberId,
       memberName: link?.name || '（MF の従業員が不明）',
       workerId: worker?.id ?? null,
@@ -575,6 +600,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       flags,
       confirmCount: flags.filter(f => f.level === 'confirm').length,
       infoCount: flags.filter(f => f.level === 'info').length,
+      receiptPending: isReceiptReaderConfigured() ? txs.filter(t => t.hasFile && !mfIsReceiptReadCurrent(t, reads[t.id])).length : 0,
       open: true,
       checkedAt: new Date().toISOString(),
       approvals: summarizeMfApprovals(r.ex_report_approvals),
@@ -612,15 +638,24 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
         }
       })
     let rejected: { memberId: string; name: string; title: string }[] = []
+    let rejectedReadFailed = false
     if (day >= settings.m2Day) {
-      const recent = await api.getAll<RawMfReport>('v1/offices/{office}/expense_reports', 'expense_reports', {
-        'query_object[submitted_at_from]': monthRange(prevYm).from,
-      })
-      rejected = recent
-        .filter(r => r.status === 'rejected')
-        .map(r => ({ memberId: r.office_member_id || '', name: members[r.office_member_id || '']?.name || '（不明）', title: clip(r.title, 100) }))
+      try {
+        const recent = await api.getAll<RawMfReport>('v1/offices/{office}/expense_reports', 'expense_reports', {
+          'query_object[submitted_at_from]': monthRange(prevYm).from,
+        })
+        rejected = recent
+          .filter(r => r.status === 'rejected')
+          .map(r => ({ memberId: r.office_member_id || '', name: members[r.office_member_id || '']?.name || '（不明）', title: clip(r.title, 100) }))
+      } catch (e) {
+        if (e instanceof MfTimeBudgetError || e instanceof MfReconnectError) throw e
+        // 声かけの一部が読めないだけで、朝のチェック全体を失敗にしない
+        console.error('差し戻しの一覧を読めませんでした:', e)
+        rejectedReadFailed = true
+      }
     }
     reminders = buildMonthlyReminders({ today, settings, people, rejected })
+    if (rejectedReadFailed) reminders.push({ rule: 'M2', level: 'info', memberId: '', name: '確認できません', message: '差し戻したままの申請を MF から読み取れませんでした。MF の画面で確かめてください' })
   }
   await setDoc(doc(db, 'mfExpense', 'reminders'), { entries: reminders, updatedAt: new Date().toISOString() })
 

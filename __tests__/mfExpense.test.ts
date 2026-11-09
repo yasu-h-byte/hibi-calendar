@@ -7,10 +7,13 @@ import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
   buildMfRouteMinFares, buildMfRouteTable, mfRouteKey, MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
-  type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
+  mfCheckState, mfConfirmFlagKeys, mfIsReceiptReadCurrent, mfReviewIsCurrent, mfTextHasWord,
+  type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
 import { buildMfRejectComment, hasMfRejectComment } from '@/lib/mf-expense-comment'
+import { wasAtSite } from '@/lib/attendance'
+import type { AttendanceEntry } from '@/types/index'
 
 const settings: MfExpenseSettings = {
   ...DEFAULT_MF_EXPENSE_SETTINGS,
@@ -173,7 +176,9 @@ describe('領収書の読み取り結果との比較', () => {
     // 差し戻す決まりなので、これだけの申請も「チェック済み」にしない
     expect(flags.find(x => x.rule === 'R5')?.level).toBe('confirm')
     const c = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags, txs: [{ ...receiptTx, itemId: 't', amount: 1530 }] })
-    expect(c).toContain('駐輪場代は電車代と分けて')
+    // 片道分の領収書や読み違いもあるので、本人には言い切らない
+    expect(c).toContain('駐輪場代が入っている場合は')
+    expect(c).toContain('入っていない場合は')
   })
   test('確信が持てない項目は比べない', () => {
     const f = rules(withRead(read({ date: null, amount: 700 })))
@@ -195,6 +200,69 @@ describe('領収書の読み取り結果との比較', () => {
     expect(ja).toContain('領収書の金額は 700円')
     const vi = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'vi', flags, txs: [receiptTx] })
     expect(vi).toContain('Ngày trên hóa đơn là 2026/10/03')
+  })
+})
+
+describe('2026-11-09 総点検の再発防止', () => {
+  test('0.6補の日は現場に行っていないので出勤に数えない', () => {
+    expect(wasAtSite({ w: 1 } as AttendanceEntry)).toBe(true)
+    expect(wasAtSite({ w: 0.5 } as AttendanceEntry)).toBe(true)
+    expect(wasAtSite({ w: 0.6 } as AttendanceEntry)).toBe(false)
+    expect(wasAtSite({ w: 1, p: 1 } as AttendanceEntry)).toBe(false)
+    expect(wasAtSite(null)).toBe(false)
+  })
+
+  test('科目: 駐輪場の明細は駅名があっても止めない', () => {
+    expect(rules(run({ txs: [tx({ itemId: 'o', remark: 'JR秋津駅 駐輪場代', hasFile: true })] }))).not.toContain('K1')
+    expect(rules(run({ txs: [tx({ itemId: 'n', remark: 'メトロ 駐車場' })] }))).not.toContain('K1')
+  })
+  test('科目: 別の言葉の一部では止めない。本当の交通費は止める', () => {
+    expect(mfTextHasWord('バスケット 工具入れ', 'バス')).toBe(false)
+    expect(mfTextHasWord('レギュラーサイズ手袋', 'レギュラー')).toBe(false)
+    expect(mfTextHasWord('シャトルバス代', 'バス')).toBe(true)
+    expect(mfTextHasWord('バスケット バス代', 'バス')).toBe(true)
+    expect(rules(run({ txs: [tx({ itemId: 'k', remark: 'バスケット 工具入れ', hasFile: true })] }))).not.toContain('K1')
+    expect(rules(run({ txs: [tx({ itemId: 'o', remark: 'バス代', hasFile: true })] }))).toContain('K1')
+  })
+  test('科目: ガソリン代の店の名前に JR があっても止めない', () => {
+    expect(rules(run({ txs: [tx({ itemId: 'g', remark: 'ガソリン JR川口駅前店', hasFile: true })] }))).not.toContain('K1')
+  })
+
+  const f = (rule: MfExpenseFlag['rule'], txId: string, level: MfExpenseFlag['level'] = 'confirm'): MfExpenseFlag => ({ rule, txId, level, message: '' })
+  const review = (flags: MfExpenseFlag[]) => ({ note: '確認', byName: 'A', at: '2026-11-09T00:00:00Z', flagKeys: mfConfirmFlagKeys(flags) })
+
+  test('確認のあとに増えた指摘は要確認に戻す', () => {
+    const before = [f('T6', 'a')]
+    const after = [f('T6', 'a'), f('R5', 'b')]
+    expect(mfReviewIsCurrent(review(before), before)).toBe(true)
+    expect(mfReviewIsCurrent(review(before), after)).toBe(false)
+    expect(mfCheckState({ confirmCount: 1, review: review(before), flags: before })).toBe('reviewed')
+    expect(mfCheckState({ confirmCount: 2, review: review(before), flags: after })).toBe('confirm')
+  })
+  test('確認のあとに減った指摘・参考の指摘では戻さない。古いメモは今のまま', () => {
+    const before = [f('T6', 'a'), f('R5', 'b')]
+    expect(mfReviewIsCurrent(review(before), [f('T6', 'a')])).toBe(true)
+    expect(mfReviewIsCurrent(review(before), [...before, f('R2', 'c', 'info')])).toBe(true)
+    expect(mfReviewIsCurrent({ note: '確認', byName: 'A', at: '' }, before)).toBe(true)
+  })
+
+  test('領収書を読めていない申請はチェック済みにしない', () => {
+    expect(mfCheckState({ confirmCount: 0, flags: [] })).toBe('clean')
+    expect(mfCheckState({ confirmCount: 0, flags: [], receiptPending: 2 })).toBe('receipt')
+    expect(mfCheckState({ confirmCount: 0, flags: [f('R4', 'a', 'info')] })).toBe('receipt')
+    expect(mfCheckState({ confirmCount: 0, flags: [f('R2', 'a', 'info')] })).toBe('clean')
+    expect(mfCheckState({ confirmCount: 1, flags: [f('T1', 'a')], receiptPending: 2 })).toBe('confirm')
+  })
+  test('添付が差し替えられたら古い読み取りを使わない', () => {
+    const r = { fileId: 'old' }
+    expect(mfIsReceiptReadCurrent({ fileId: 'old' }, r)).toBe(true)
+    expect(mfIsReceiptReadCurrent({ fileId: 'new' }, r)).toBe(false)
+    expect(mfIsReceiptReadCurrent({ fileId: 'new' }, undefined)).toBe(false)
+    expect(mfIsReceiptReadCurrent({}, r)).toBe(true)
+  })
+  test('交通費の領収書の金額が読めなければ、問題なしにしない', () => {
+    const reads: Record<string, MfReceiptRead> = { x1: { fileId: '', readable: true, date: '2026-10-05', amount: null, readAt: '', model: '' } }
+    expect(rules(run({ txs: [tx({ hasFile: true })], receiptReads: reads }))).toContain('R4')
   })
 })
 
@@ -234,6 +302,19 @@ describe('同じ現場の交通費の差（T5）', () => {
   })
 })
 
+describe('T5 の差し戻しの文', () => {
+  test('1行の金額ではなく、その日の合計を伝える', () => {
+    const flags: MfExpenseFlag[] = [{ rule: 'T5', level: 'confirm', txId: 'x1', usual: 1420, dayTotal: 2210, message: '' }]
+    const txs = [tx({ amount: 710 })]
+    const c = (lang: 'ja' | 'vi') => buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang, flags, txs })
+    expect(c('ja')).toContain('合計は 2,210円')
+    expect(c('vi')).toContain('2,210 yên')
+    // 古い保存データには合計が無い
+    const old = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags: [{ ...flags[0], dayTotal: undefined }], txs })
+    expect(old).not.toContain('合計は')
+  })
+})
+
 describe('同じ区間の社内の最安（T6）', () => {
   test('区間の読み取り', () => {
     expect(mfRouteKey('秋津~笹塚 往復電車代')).toBe('秋津~笹塚 往復')
@@ -257,6 +338,14 @@ describe('同じ区間の社内の最安（T6）', () => {
     expect(f).toHaveLength(1)
     expect(f[0]).toMatchObject({ level: 'confirm', txId: 'a', usual: 1402 })
     expect(f[0].message).toContain('2 明細')
+  })
+  test('差し戻しの文に、同じ区間のほかの明細の数が入る', () => {
+    const txs = [line('a', 1560), line('b', 1560), line('c', 1560)]
+    const flags = run({ txs, routeMinFares }).filter(x => x.rule === 'T6')
+    expect(flags[0].moreLines).toBe(2)
+    const c = (lang: 'ja' | 'vi') => buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang, flags, txs })
+    expect(c('ja')).toContain('ほかの 2 明細も')
+    expect(c('vi')).toContain('2 khoản khác')
   })
   test('小さな差も既定で出す。見逃す差を決めればそこまでは出さない', () => {
     expect(rules(run({ txs: [line('a', 1412)], routeMinFares }))).toContain('T6')

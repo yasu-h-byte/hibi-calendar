@@ -56,20 +56,21 @@ function ruleMessage(flag: MfExpenseFlag, tx: MfExpenseTx, targetYm: string, tod
     case 'R5': {
       const a = Math.round(flag.receipt?.amount || 0).toLocaleString('en-US')
       return ja
-        ? `付いている領収書は ${a}円 です。駐輪場代は電車代と分けて、「駐車場・駐輪場代」で申請してください。`
-        : `Hóa đơn đính kèm là ${a} yên. Vui lòng tách tiền gửi xe khỏi tiền tàu và nộp ở mục「駐車場・駐輪場代」.`
+        ? `付いている領収書は ${a}円 で、申請の金額と違います。駐輪場代が入っている場合は、電車代と分けて「駐車場・駐輪場代」で申請してください。入っていない場合は、金額を確認してください。`
+        : `Hóa đơn đính kèm là ${a} yên, khác với số tiền trong đơn. Nếu có cộng tiền gửi xe, vui lòng tách khỏi tiền tàu và nộp ở mục「駐車場・駐輪場代」. Nếu không, vui lòng kiểm tra lại số tiền.`
     }
     case 'T5': {
       const a = Math.round(flag.usual || 0).toLocaleString('en-US')
-      return ja
-        ? `同じ現場の他の日は ${a}円 です。金額が正しいか確認してください。`
-        : `Những ngày khác ở cùng công trường là ${a} yên. Vui lòng kiểm tra lại số tiền.`
+      // 1行の金額ではなく、その日の合計で比べている。古い保存データには合計が無い
+      const total = flag.dayTotal === undefined ? '' : Math.round(flag.dayTotal).toLocaleString('en-US')
+      if (ja) return `${total ? `この日の交通費の合計は ${total}円 です。` : ''}同じ現場の他の日は ${a}円 です。金額が正しいか確認してください。`
+      return `${total ? `Tổng tiền đi lại ngày này là ${total} yên. ` : ''}Những ngày khác ở cùng công trường là ${a} yên. Vui lòng kiểm tra lại số tiền.`
     }
     case 'T6': {
       const a = Math.round(flag.usual || 0).toLocaleString('en-US')
-      return ja
-        ? `同じ区間の社内の最安は ${a}円 です。一番安い経路で申請してください。`
-        : `Giá thấp nhất trong công ty cho cùng tuyến là ${a} yên. Vui lòng nộp theo tuyến rẻ nhất.`
+      const more = flag.moreLines || 0
+      if (ja) return `同じ区間の社内の最安は ${a}円 です。一番安い経路で申請してください。${more > 0 ? `同じ区間のほかの ${more} 明細も同じように直してください。` : ''}`
+      return `Giá thấp nhất trong công ty cho cùng tuyến là ${a} yên. Vui lòng nộp theo tuyến rẻ nhất.${more > 0 ? ` Vui lòng sửa tương tự cho ${more} khoản khác của cùng tuyến.` : ''}`
     }
     case 'K1':
       return ja
