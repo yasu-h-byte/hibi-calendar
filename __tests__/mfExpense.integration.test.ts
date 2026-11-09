@@ -315,6 +315,7 @@ function settings(over: Record<string, unknown> = {}) {
   })
 }
 
+const approved = (id: string) => fsDoc<Record<string, any>>(`expenseApprovedChecks/${id}`)
 const hfuKeys = () => Array.from(h.docs.keys()).filter(k => /_hfu$|\/hfu_/.test(k))
 const noHfuTraffic = () => mf.callsTo(new RegExp(`/offices/${HFU}/`))
 
@@ -1488,3 +1489,54 @@ describe('8. 月またぎと日時', () => {
   })
 })
 
+
+
+describe('承認済みの申請', () => {
+  const load = async (ym: string, budget?: number) => {
+    const { runMfApprovedCheck } = await import('@/lib/mf-expense-run.server')
+    return runMfApprovedCheck(ym, 'tester', budget)
+  }
+  function stage() {
+    report(HIBI, 'ap1', 'm-h1', '2026-11-05', [tx('p1', '2026-10-05', 500, 'i-t', '秋津~笹塚 往復電車代')], { status: 'approved', approved_at: '2026-11-07T10:00:00+09:00' } as never)
+    report(HIBI, 'ap2', 'm-h1', '2026-10-05', [tx('p2', '2026-09-05', 500, 'i-t', '秋津~笹塚 往復電車代')], { status: 'approved' })
+    report(HIBI, 'wait', 'm-h1', '2026-11-06', [tx('p3', '2026-10-06', 500, 'i-t', '秋津~笹塚 往復電車代')])
+    report(HIBI, 'rej', 'm-h1', '2026-11-06', [tx('p4', '2026-10-07', 500, 'i-t', '秋津~笹塚 往復電車代')], { status: 'rejected' })
+    worked(101, 'siteA', '202610', [6])
+    at('2026-11-10T09:00:00')
+  }
+
+  test('その月の承認済みだけを、別の保存先に入れる。休みの日の交通費も指摘する', async () => {
+    stage()
+    await cron() // 従業員の結びつけは朝のチェックで読み込まれる
+    const r = await load('202610')
+    expect(r).toMatchObject({ ok: true, status: 'done', count: 1 })
+    expect(approved('ap1')!.open).toBe(false)
+    expect((approved('ap1')!.flags as { rule: string }[]).map(f => f.rule)).toContain('T1')
+    expect(approved('ap2')).toBeUndefined()
+    expect(approved('wait')).toBeUndefined()
+    expect(approved('rej')).toBeUndefined()
+    expect(fsDoc('expenseChecks/ap1')).toBeUndefined()
+  })
+  test('毎朝の一覧と閉じる処理に影響しない', async () => {
+    stage()
+    await load('202610')
+    await cron()
+    expect(approved('ap1')).toBeDefined()
+    expect(approved('ap1')!.open).toBe(false)
+  })
+  test('二度目は明細を読み直さない。承認が取り消されたら消す', async () => {
+    stage()
+    await load('202610')
+    const before = mf.callsTo(/ex_reports\/ap1\/ex_transactions/).length
+    await load('202610')
+    expect(mf.callsTo(/ex_reports\/ap1\/ex_transactions/).length).toBe(before)
+    mf.offices[HIBI].reports.find(x => x.id === 'ap1')!.status = 'canceled'
+    await load('202610')
+    expect(approved('ap1')).toBeUndefined()
+  })
+  test('MF のメンテナンス中は読まない', async () => {
+    stage()
+    at('2026-11-10T03:00:00')
+    expect(await load('202610')).toMatchObject({ ok: false, status: 'maintenance' })
+  })
+})

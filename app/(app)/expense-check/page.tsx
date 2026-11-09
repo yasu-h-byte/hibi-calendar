@@ -10,7 +10,7 @@ import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { can } from '@/lib/permissions'
 import { notify } from '@/lib/notify'
-import { confirmDanger } from '@/lib/confirm-dialog'
+import { confirmDanger, confirmDialog } from '@/lib/confirm-dialog'
 import { Chip, FieldError, PageHeader, RowButton, SearchBox, TodoCard, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { currentYmJst, todayJstIso } from '@/lib/date-utils'
@@ -65,7 +65,7 @@ interface PageData {
   redirectUri: string
 }
 
-type Tab = 'reports' | 'routes' | 'reminders' | 'members' | 'items' | 'rules'
+type Tab = 'reports' | 'approved' | 'routes' | 'reminders' | 'members' | 'items' | 'rules'
 
 const yen = (n: number) => `${Math.round(n).toLocaleString('ja-JP')}円`
 const fmtDay = (iso: string) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : '日付なし')
@@ -211,6 +211,7 @@ export default function ExpenseCheckPage() {
             label="表示の切り替え" active={tab} onChange={setTab}
             tabs={[
               { key: 'reports', label: '申請', badge: counts.flagged },
+              { key: 'approved', label: '承認済み' },
               { key: 'routes', label: '区間の比較' },
               { key: 'reminders', label: '声かけ', badge: counts.reminders },
               { key: 'members', label: '従業員の結びつけ', badge: counts.unlinked },
@@ -220,6 +221,7 @@ export default function ExpenseCheckPage() {
           />
 
           {tab === 'reports' && <ReportsTab checks={data.checks} canEdit={canEdit} post={post} reload={load} />}
+          {tab === 'approved' && <ApprovedTab canEdit={canEdit} post={post} reload={load} password={password || ''} readerOn={data.receiptState.configured} />}
           {tab === 'routes' && <RoutesTab table={data.routeTable} />}
           {tab === 'reminders' && <RemindersTab reminders={data.reminders} />}
           {tab === 'members' && <MembersTab members={data.members} workers={data.workers} canEdit={canEdit} post={post} reload={load} />}
@@ -403,7 +405,7 @@ function StateChip({ c }: { c: Check }) {
     case 'clean': return <Chip tone="green">✓ チェック済み</Chip>
     case 'receipt': return <Chip tone="gray">領収書 未確認</Chip>
     case 'reviewed': return <Chip tone="blue">確認済み</Chip>
-    default: return <Chip tone="amber">要確認 {c.confirmCount}</Chip>
+    default: return <Chip tone="amber">{c.status === 'approved' ? '指摘' : '要確認'} {c.confirmCount}</Chip>
   }
 }
 
@@ -459,6 +461,74 @@ function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdi
         </div>
       )}
       <div className={cardCls}>{sorted.map(c => <ReportRow key={c.reportId} c={c} canEdit={canEdit} post={post} reload={reload} />)}</div>
+    </div>
+  )
+}
+
+/** 承認まで終わった申請を月ごとに、承認待ちと同じ決まりで見る（見るだけ）。領収書は費用がかかるので、押したときだけ読む */
+function ApprovedTab({ canEdit, post, reload, password, readerOn }: { canEdit: boolean; post: Post; reload: () => Promise<void>; password: string; readerOn: boolean }) {
+  const months = [-1, -2, -3, -4].map(d => shiftYm(currentYmJst(), d))
+  const [ym, setYm] = useState(months[0])
+  const [checks, setChecks] = useState<Check[] | null>(null)
+  const [busy, setBusy] = useState<'' | 'load' | 'receipts'>('')
+  const [onlyFlagged, setOnlyFlagged] = useState(true)
+
+  const fetchMonth = useCallback(async (month: string) => {
+    setChecks(null)
+    try {
+      const r = await fetchWithAuth(`/api/mf-expense/approved?ym=${month}`, { password })
+      const j = await r.json().catch(() => null)
+      if (!r.ok) { notify.failed('読み込み', j?.error); setChecks([]); return }
+      setChecks(j.checks || [])
+    } catch (e) { notify.failed('読み込み', e); setChecks([]) }
+  }, [password])
+  useEffect(() => { fetchMonth(ym) }, [ym, fetchMonth])
+
+  const act = async (action: 'load' | 'receipts') => {
+    setBusy(action)
+    const r = await postJson<Record<string, unknown>>('/api/mf-expense/approved', { ym, action }, { password })
+    setBusy('')
+    const message = typeof r.data?.message === 'string' ? r.data.message : undefined
+    if (!r.ok) notify.failed(action === 'load' ? '承認済みの読み込み' : '領収書の読み取り', r.error || message)
+    else notify.success(message || '読み込みました')
+    await fetchMonth(ym)
+  }
+  const pending = (checks || []).reduce((s, c) => s + (c.receiptPending || 0), 0)
+  const readReceipts = async () => {
+    const ok = await confirmDialog({ title: `領収書を ${Math.min(pending, 100)} 枚読みますか？`, description: '読んだ枚数の分だけ費用がかかります。一度読んだ領収書は読み直しません。1回に読むのは100枚までです。', confirmLabel: '読む' })
+    if (ok) act('receipts')
+  }
+
+  const all = checks || []
+  const shown = [...all].filter(c => !onlyFlagged || mfCheckState(c) !== 'clean').sort((a, b) => reportRank(a) - reportRank(b) || b.confirmCount - a.confirmCount)
+  const countOf = (s: MfCheckState) => all.filter(c => mfCheckState(c) === s).length
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-hibi-sub dark:text-gray-400">承認まで終わった申請を、承認待ちと同じ決まりで見直せます。見るだけの画面で、MF の申請は変わりません。道具代の対象・残額は見ていません。今は日比建設だけです。</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <select className={inputCls} aria-label="何月分か" value={ym} onChange={e => setYm(e.target.value)}>
+          {months.map(m => <option key={m} value={m}>{Number(m.slice(0, 4))}年{Number(m.slice(4, 6))}月分</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200">
+          <input type="checkbox" checked={onlyFlagged} onChange={e => setOnlyFlagged(e.target.checked)} />指摘のあるものだけ
+        </label>
+        <span className="ml-auto flex items-center gap-2">
+          {canEdit && <RowButton tone="main" busy={busy === 'load'} busyLabel="読み込んでいます" onClick={() => act('load')}>この月を読み込む</RowButton>}
+          {canEdit && readerOn && pending > 0 && <RowButton tone="ghost" busy={busy === 'receipts'} busyLabel="領収書を読んでいます" onClick={readReceipts}>領収書を読む（{pending} 枚）</RowButton>}
+        </span>
+      </div>
+      {checks === null
+        ? <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>読み込んでいます</div>
+        : all.length === 0
+          ? <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>この月はまだ読み込んでいません。{canEdit ? '「この月を読み込む」を押してください' : ''}</div>
+          : (
+            <>
+              <div className="text-sm text-gray-800 dark:text-gray-200">承認済み {all.length} 件・指摘あり {countOf('confirm')} 件・領収書 未確認 {countOf('receipt')} 件・問題なし {countOf('clean')} 件</div>
+              {shown.length === 0
+                ? <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>指摘のある申請はありません</div>
+                : <div className={cardCls}>{shown.map(c => <ReportRow key={c.reportId} c={c} canEdit={false} post={post} reload={reload} />)}</div>}
+            </>
+          )}
     </div>
   )
 }
