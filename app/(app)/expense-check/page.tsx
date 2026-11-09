@@ -14,8 +14,8 @@ import { confirmDanger } from '@/lib/confirm-dialog'
 import { Chip, FieldError, PageHeader, RowButton, SearchBox, TodoCard, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
 import {
-  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_RULE_LABEL, mfExpenseSettingsError,
-  type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
+  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfExpenseSettingsError, normalizeMfReviewNote,
+  type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
 interface Check {
@@ -30,6 +30,7 @@ interface Check {
   flags: MfExpenseFlag[]
   confirmCount: number
   infoCount: number
+  review?: MfExpenseReview
 }
 
 interface PageData {
@@ -139,7 +140,8 @@ export default function ExpenseCheckPage() {
     const unlinked = (data?.members || []).filter(m => m.active && m.how === null).length
     const unsetItems = (data?.items || []).filter(i => i.active && !data?.settings.itemKinds[i.id]).length
     return {
-      flagged: checks.filter(c => c.confirmCount > 0).length,
+      flagged: checks.filter(c => c.confirmCount > 0 && !c.review).length,
+      reviewed: checks.filter(c => c.confirmCount > 0 && c.review).length,
       clean: checks.filter(c => c.confirmCount === 0).length,
       unlinked,
       unsetItems,
@@ -166,7 +168,7 @@ export default function ExpenseCheckPage() {
       {conn.connected && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <TodoCard icon="alert" tone={counts.flagged > 0 ? 'warn' : 'ok'} title="要確認の申請" big={`${counts.flagged} 件`} sub={`問題なし ${counts.clean} 件`} onClick={() => setTab('reports')} />
+            <TodoCard icon="alert" tone={counts.flagged > 0 ? 'warn' : 'ok'} title="要確認の申請" big={`${counts.flagged} 件`} sub={`確認済み ${counts.reviewed} 件・問題なし ${counts.clean} 件`} onClick={() => setTab('reports')} />
             <TodoCard icon="bell" tone={counts.reminders > 0 ? 'info' : 'ok'} title="声かけ" big={`${counts.reminders} 人`} sub="出し忘れ・差し戻したまま" onClick={() => setTab('reminders')} />
             <TodoCard icon="users" tone={counts.unlinked > 0 ? 'warn' : 'ok'} title="結びつけが未確定" big={`${counts.unlinked} 人`} sub="未確定の人は出面と比べられません" onClick={() => setTab('members')} />
             <TodoCard icon="receipt" tone={counts.unsetItems > 0 ? 'warn' : 'ok'} title="種類が未設定の科目" big={`${counts.unsetItems} 個`} sub="未設定の科目はチェックしません" onClick={() => setTab('items')} />
@@ -183,7 +185,7 @@ export default function ExpenseCheckPage() {
             ]}
           />
 
-          {tab === 'reports' && <ReportsTab checks={data.checks} />}
+          {tab === 'reports' && <ReportsTab checks={data.checks} canEdit={canEdit} post={post} reload={load} />}
           {tab === 'reminders' && <RemindersTab reminders={data.reminders} />}
           {tab === 'members' && <MembersTab members={data.members} workers={data.workers} canEdit={canEdit} post={post} reload={load} />}
           {tab === 'items' && <ItemsTab data={data} canEdit={canEdit} post={post} reload={load} />}
@@ -251,7 +253,50 @@ function FlagLine({ flag }: { flag: MfExpenseFlag }) {
   )
 }
 
-function ReportRow({ c }: { c: Check }) {
+/** 要確認の申請に「確認した・理由」を残す欄。最終承認の人が、確認済みか見落としかを見分けるためのもの */
+function ReviewBox({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
+  const [note, setNote] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const send = async (value: string | null) => {
+    setBusy(true)
+    const r = await post({ action: 'saveReview', reportId: c.reportId, note: value })
+    if (!r.ok) { setBusy(false); notify.failed('確認の記録', r.error); return }
+    await reload()
+    setBusy(false)
+    setNote('')
+    setError('')
+  }
+  const save = () => {
+    const n = normalizeMfReviewNote(note)
+    if (!n.ok) { setError(n.error); return }
+    send(n.note)
+  }
+  if (c.review) {
+    return (
+      <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[0.8125rem] text-gray-800 dark:text-gray-200">
+        <span><b>確認済み:</b> {c.review.note}<span className="text-xs text-hibi-sub dark:text-gray-400">（{c.review.byName}・{fmtAt(c.review.at)}）</span></span>
+        {canEdit && <RowButton tone="ghost" busy={busy} busyLabel="取り消しています" onClick={() => send(null)}>取り消す</RowButton>}
+      </div>
+    )
+  }
+  if (!canEdit) return null
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <input
+          className={`${inputCls} flex-1 min-w-0`} value={note} maxLength={MF_REVIEW_NOTE_MAX}
+          aria-label={`${c.memberName} の申請の確認メモ`} placeholder="確かめた内容や理由を1行で（MF には書き込みません）"
+          onChange={e => { setNote(e.target.value); setError('') }}
+        />
+        <RowButton tone="main" busy={busy} busyLabel="記録しています" onClick={save}>確認した</RowButton>
+      </div>
+      {error && <FieldError>{error}</FieldError>}
+    </div>
+  )
+}
+
+function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
   const [open, setOpen] = useState(false)
   const shownFlags = [...c.flags].sort((a, b) => (a.level === b.level ? 0 : a.level === 'confirm' ? -1 : 1))
   return (
@@ -261,10 +306,11 @@ function ReportRow({ c }: { c: Check }) {
         <span className="justify-self-end text-sm font-bold text-gray-900 dark:text-gray-100 tabular-nums">{yen(c.total)}</span>
         <span className="text-xs text-hibi-sub dark:text-gray-400 truncate">{c.title || '題名なし'}（申請 {fmtDay(c.submittedIso)}・明細 {c.txs.length} 件）</span>
         <span className="justify-self-end">
-          {c.confirmCount > 0 ? <Chip tone="amber">要確認 {c.confirmCount}</Chip> : <Chip tone="green">✓ チェック済み</Chip>}
+          {c.confirmCount === 0 ? <Chip tone="green">✓ チェック済み</Chip> : c.review ? <Chip tone="blue">確認済み</Chip> : <Chip tone="amber">要確認 {c.confirmCount}</Chip>}
         </span>
       </button>
       {shownFlags.length > 0 && <div className="space-y-1">{shownFlags.map((f, i) => <FlagLine key={i} flag={f} />)}</div>}
+      {c.confirmCount > 0 && <ReviewBox c={c} canEdit={canEdit} post={post} reload={reload} />}
       {open && (
         <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 divide-y divide-hibi-line dark:divide-gray-700">
           {c.txs.map(t => (
@@ -280,10 +326,13 @@ function ReportRow({ c }: { c: Check }) {
   )
 }
 
-function ReportsTab({ checks }: { checks: Check[] }) {
+/** 未確認の要確認 → 確認済み → 問題なし の順 */
+const reportRank = (c: Check) => (c.confirmCount === 0 ? 2 : c.review ? 1 : 0)
+
+function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
   if (checks.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>承認待ちの申請はありません</div>
-  const sorted = [...checks].sort((a, b) => b.confirmCount - a.confirmCount || b.infoCount - a.infoCount || a.submittedIso.localeCompare(b.submittedIso))
-  return <div className={cardCls}>{sorted.map(c => <ReportRow key={c.reportId} c={c} />)}</div>
+  const sorted = [...checks].sort((a, b) => reportRank(a) - reportRank(b) || b.confirmCount - a.confirmCount || b.infoCount - a.infoCount || a.submittedIso.localeCompare(b.submittedIso))
+  return <div className={cardCls}>{sorted.map(c => <ReportRow key={c.reportId} c={c} canEdit={canEdit} post={post} reload={reload} />)}</div>
 }
 
 function RemindersTab({ reminders }: { reminders: MfReminderEntry[] }) {

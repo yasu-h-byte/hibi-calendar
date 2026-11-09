@@ -69,7 +69,7 @@ export const BACKUP_EXCLUDED: readonly { coll: string; reason: string }[] = [
   { coll: 'loginThrottle', reason: 'ログインの失敗回数（15 分で消える一時的な記録・lib/login-throttle.server.ts）' },
   { coll: 'leaveIndex', reason: '有給の索引（出面から作り直せる・POST /api/leave/index・lib/leave-index.server.ts）' },
   { coll: 'mfExpenseSecrets', reason: 'MF経費のトークン（暗号化済み）。バックアップに鍵を複製しない。消えたら代表がつなぎ直す' },
-  { coll: 'expenseChecks', reason: 'MF経費の申請のチェック結果（毎朝 MF から作り直せる）' },
+  { coll: 'expenseChecks', reason: 'MF経費の申請のチェック結果（毎朝 MF から作り直せる。確認メモは操作ログにも残る）' },
   { coll: 'expenseHistory', reason: 'MF経費の過去明細の控え（MF から読み直せる）' },
   { coll: 'workerPhotos', reason: '顔写真（撮り直せる・大きい）' },
 ]

@@ -12,7 +12,7 @@ import 'server-only'
  * 明細を読むのは新しい・更新された申請だけ。チェックは毎回全部やり直す（出面・道具代・結びつけの修正を反映するため）。
  */
 import { db } from '@/lib/firebase'
-import { collection, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where } from '@/lib/fsdb'
+import { collection, deleteField, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where } from '@/lib/fsdb'
 import { getAttData, getAttDataCached, getMainData } from '@/lib/compute.server'
 import { isClosedMonthYm, parseDKey, type RawWorker } from '@/lib/compute'
 import { isWorkingDay } from '@/lib/attendance'
@@ -25,8 +25,8 @@ import {
 import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import {
-  buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, linkMfMembers, normalizeMfExpenseSettings, shiftYm, ymOfIso,
-  type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
+  buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, linkMfMembers, normalizeMfExpenseSettings, shiftYm, ymOfIso,
+  type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
   type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
@@ -42,6 +42,8 @@ export interface ExpenseCheckDoc {
   title: string
   status: string
   submittedIso: string
+  /** MF の提出日時そのまま（出し直しの見分け用） */
+  submittedAt?: string
   updatedAt: string
   memberId: string
   memberName: string
@@ -54,6 +56,8 @@ export interface ExpenseCheckDoc {
   infoCount: number
   open: boolean
   checkedAt: string
+  /** 総務の「確認した・理由」。毎朝のチェックでは消さない */
+  review?: MfExpenseReview
 }
 
 export interface MfExpenseRunState {
@@ -114,6 +118,28 @@ export async function loadMfRunState(): Promise<MfExpenseRunState> {
 export async function loadOpenExpenseChecks(): Promise<ExpenseCheckDoc[]> {
   const snap = await getDocs(query(collection(db, 'expenseChecks'), where('open', '==', true)))
   return snap.docs.map(d => d.data() as ExpenseCheckDoc)
+}
+
+/**
+ * 要確認の申請に「確認した・理由」を残す。note=null で取り消し。MF には書かない。
+ * 開いている要確認の申請だけ受け付け、持ち主の名前を返す（見つからなければ null）
+ */
+export async function saveExpenseReview(reportId: string, note: string | null, actor: number | 'super-admin' | string): Promise<string | null> {
+  const ref = doc(db, 'expenseChecks', reportId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return null
+  const cur = snap.data() as ExpenseCheckDoc
+  if (!cur.open || !(cur.confirmCount > 0)) return null
+  if (note === null) {
+    await updateDoc(ref, { review: deleteField() })
+    return cur.memberName
+  }
+  const main = await getMainData()
+  const worker = (main.workers as RawWorker[]).find(w => String(w.id) === String(actor))
+  const byName = actor === 'super-admin' ? '日比靖仁' : worker?.name || String(actor)
+  const review: MfExpenseReview = { note, byName, at: new Date().toISOString() }
+  await updateDoc(ref, { review })
+  return cur.memberName
 }
 
 /** 1人分の結びつけを人が決める。workerId=null は「作業員ではない」 */
@@ -383,6 +409,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       title: clip(r.title, 100),
       status: r.status || '',
       submittedIso,
+      submittedAt: r.submitted_at || '',
       updatedAt,
       memberId,
       memberName: link?.name || '（MF の従業員が不明）',
@@ -396,7 +423,9 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       open: true,
       checkedAt: new Date().toISOString(),
     }
-    await setDoc(doc(db, 'expenseChecks', r.id), check)
+    // merge にして確認メモ（review）をチェックの結果で上書きしない。出し直された申請のメモだけ消す
+    const keepReview = isSameMfSubmission(before, { submittedAt: check.submittedAt || '', submittedIso })
+    await setDoc(doc(db, 'expenseChecks', r.id), keepReview ? check : { ...check, review: deleteField() }, { merge: true })
     results.push(check)
   }
 

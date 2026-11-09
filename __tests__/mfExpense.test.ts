@@ -6,7 +6,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
-  MF_HOT_HISTORY_TTL_MS, isMfHistoryFresh, shiftYm, targetYmOf,
+  MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, normalizeMfReviewNote, shiftYm, targetYmOf,
   type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
@@ -142,6 +142,29 @@ describe('申請のチェック', () => {
     expect(rules(pending)).toContain('U1')
     expect(rules(pending)).not.toContain('T1')
     expect(rules(run({ link: 'excluded', txs: [tx({ date: '2026-10-06' })] }))).toEqual([])
+  })
+})
+
+describe('確認メモ', () => {
+  test('空は受け付けず、前後の空白と改行は整える', () => {
+    expect(normalizeMfReviewNote('  ').ok).toBe(false)
+    expect(normalizeMfReviewNote(null).ok).toBe(false)
+    expect(normalizeMfReviewNote(' 本人に\n確認 ')).toEqual({ ok: true, note: '本人に 確認' })
+  })
+  test('長すぎるメモは受け付けない', () => {
+    expect(normalizeMfReviewNote('あ'.repeat(MF_REVIEW_NOTE_MAX)).ok).toBe(true)
+    expect(normalizeMfReviewNote('あ'.repeat(MF_REVIEW_NOTE_MAX + 1)).ok).toBe(false)
+  })
+  test('同じ提出のあいだは残し、出し直されたら消す', () => {
+    const now = { submittedAt: '2026-11-09T10:00:00+09:00', submittedIso: '2026-11-09' }
+    expect(isSameMfSubmission(undefined, now)).toBe(false)
+    expect(isSameMfSubmission({ ...now }, now)).toBe(true)
+    expect(isSameMfSubmission({ submittedAt: '2026-11-09T08:00:00+09:00', submittedIso: '2026-11-09' }, now)).toBe(false)
+  })
+  test('提出日時を持たない古い控えは提出日で比べる', () => {
+    const now = { submittedAt: '2026-11-09T10:00:00+09:00', submittedIso: '2026-11-09' }
+    expect(isSameMfSubmission({ submittedIso: '2026-11-09' }, now)).toBe(true)
+    expect(isSameMfSubmission({ submittedIso: '2026-11-08' }, now)).toBe(false)
   })
 })
 
