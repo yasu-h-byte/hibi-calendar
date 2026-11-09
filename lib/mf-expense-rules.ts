@@ -24,7 +24,15 @@ export const MF_ITEM_KIND_LABEL: Record<MfItemKind, string> = {
 
 export const MF_ITEM_KINDS = Object.keys(MF_ITEM_KIND_LABEL) as MfItemKind[]
 
+/** どの会社の MF か。日比建設は全員、HFU は技能実習生だけ（2026-11-09 代表） */
+export type MfOrg = 'hibi' | 'hfu'
+export const MF_ORG_LABEL: Record<MfOrg, string> = { hibi: '日比建設', hfu: 'HFU' }
+/** HFU はこの月の分から見る（2026-11-09 代表） */
+export const MF_HFU_FROM_YM = '202611'
+
 export interface MfExpenseSettings {
+  /** HFU の技能実習生もチェックするか。科目と結びつけの準備ができてから入れる */
+  hfuEnabled: boolean
   /** MF の経費科目 ID → 種類。未設定の科目は科目で決まるチェックをしない（誤った指摘を出さない） */
   itemKinds: Record<string, MfItemKind>
   /** T3・T4 の「いつもと大きく違う」の幅（%） */
@@ -43,6 +51,7 @@ export interface MfExpenseSettings {
 }
 
 export const DEFAULT_MF_EXPENSE_SETTINGS: MfExpenseSettings = {
+  hfuEnabled: false,
   itemKinds: {},
   amountPct: 30,
   siteTransitMargin: 300,
@@ -60,6 +69,7 @@ export function normalizeMfExpenseSettings(raw: Partial<MfExpenseSettings> | nul
   const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
   const words = (v: unknown, fallback: string[]) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : fallback)
   return {
+    hfuEnabled: raw?.hfuEnabled === true,
     itemKinds: raw?.itemKinds || {},
     amountPct: num(raw?.amountPct, d.amountPct),
     siteTransitMargin: num(raw?.siteTransitMargin, d.siteTransitMargin),
@@ -698,6 +708,8 @@ export interface MfReminderPerson {
 }
 
 export interface MfReminderEntry {
+  /** 画面に渡すときだけ付ける */
+  org?: MfOrg
   rule: 'M1' | 'M2'
   level: MfFlagLevel
   memberId: string
@@ -738,6 +750,8 @@ export function buildMonthlyReminders(args: {
 export type MfLinkHow = 'number' | 'manual' | 'excluded'
 
 export interface MfMemberLink {
+  /** 画面に渡すときだけ付ける（保存先が会社ごとに分かれているので、保存はしない） */
+  org?: MfOrg
   mfId: string
   number: string
   name: string
@@ -749,6 +763,35 @@ export interface MfMemberLink {
   candidates: number[]
   /** 番号は一致したが氏名が違う（確かめてほしい目印） */
   nameDiffers?: boolean
+}
+
+/** その会社のチェックの対象の作業員か */
+export function isMfWorkerInOrg(org: MfOrg, w: { org?: unknown; visa?: string | null }): boolean {
+  if (org === 'hibi') return w.org === '日比' || w.org === 'hibi'
+  return String(w.org || '').toLowerCase() === 'hfu' && (w.visa || '').startsWith('jisshu')
+}
+
+/** MF の事業者の一覧から HFU を見つける（登記の名前は「エイチエフユナイテッド株式会社」） */
+export function mfHfuOffice<T extends { id: string; name: string }>(offices: T[], hibiOfficeId: string): T | undefined {
+  return offices.find(o => o.id !== hibiOfficeId && (o.name.includes('エイチエフユナイテッド') || /HFU/i.test(o.name)))
+}
+
+const isLinkedMember = (m: MfMemberLink | undefined): boolean => !!m && m.how !== 'excluded' && m.workerId !== null
+
+/**
+ * HFU の申請を読むか。技能実習生に結びついた人と、結びつけ待ち（氏名の近い実習生がいる人）だけ。
+ * 本部・不動産の人の明細は読まない
+ */
+export function mfHfuReportInScope(m: MfMemberLink | undefined): boolean {
+  return isLinkedMember(m) || (!!m && m.how === null && m.candidates.length > 0)
+}
+
+/** 区間の比較に入れる HFU の人（結びついた実習生だけ。本部の人の通勤は現場の比較にならない） */
+export const mfHfuMemberCounts = isLinkedMember
+
+/** 人が結びつけを決める必要があるか。HFU で候補のいない人は実習生ではないので数えない */
+export function mfMemberNeedsLink(m: MfMemberLink): boolean {
+  return m.active && m.how === null && !(m.org === 'hfu' && m.candidates.length === 0)
 }
 
 export interface MfWorkerForLink {

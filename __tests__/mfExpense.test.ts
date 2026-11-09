@@ -7,8 +7,9 @@ import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
   buildMfRouteMinFares, buildMfRouteTable, mfRouteKey, MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
+  isMfWorkerInOrg, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfMemberNeedsLink, normalizeMfExpenseSettings,
   mfCheckState, mfConfirmFlagKeys, mfIsReceiptReadCurrent, mfReviewIsCurrent, mfTextHasWord,
-  type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
+  type MfMemberLink, type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
 import { buildMfRejectComment, hasMfRejectComment } from '@/lib/mf-expense-comment'
@@ -200,6 +201,48 @@ describe('領収書の読み取り結果との比較', () => {
     expect(ja).toContain('領収書の金額は 700円')
     const vi = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'vi', flags, txs: [receiptTx] })
     expect(vi).toContain('Ngày trên hóa đơn là 2026/10/03')
+  })
+})
+
+describe('HFU の技能実習生', () => {
+  const member = (over: Partial<MfMemberLink> = {}): MfMemberLink => ({ mfId: 'm', number: '', name: 'A', active: true, workerId: null, how: null, candidates: [], ...over })
+
+  test('HFU は技能実習生だけ。日比建設は今までどおり全員', () => {
+    expect(isMfWorkerInOrg('hfu', { org: 'hfu', visa: 'jisshu' })).toBe(true)
+    expect(isMfWorkerInOrg('hfu', { org: 'HFU', visa: 'jisshu3' })).toBe(true)
+    expect(isMfWorkerInOrg('hfu', { org: 'hfu', visa: 'none' })).toBe(false)
+    expect(isMfWorkerInOrg('hfu', { org: 'hfu', visa: 'tokutei1' })).toBe(false)
+    expect(isMfWorkerInOrg('hfu', { org: 'hibi', visa: 'jisshu' })).toBe(false)
+    expect(isMfWorkerInOrg('hibi', { org: 'hibi', visa: 'none' })).toBe(true)
+    expect(isMfWorkerInOrg('hibi', { org: '日比', visa: 'jisshu' })).toBe(true)
+    expect(isMfWorkerInOrg('hibi', { org: 'hfu', visa: 'jisshu' })).toBe(false)
+  })
+  test('MF の事業者から HFU を見つける。日比建設を HFU と間違えない', () => {
+    const offices = [{ id: 'h', name: 'エイチエフユナイテッド株式会社' }, { id: 'n', name: '株式会社日比建設' }]
+    expect(mfHfuOffice(offices, 'n')?.id).toBe('h')
+    expect(mfHfuOffice([{ id: 'n', name: '株式会社日比建設' }], 'n')).toBeUndefined()
+  })
+  test('結びついた実習生と、候補のいる人の申請だけ読む。本部の人は読まない', () => {
+    expect(mfHfuReportInScope(member({ workerId: 1, how: 'number' }))).toBe(true)
+    expect(mfHfuReportInScope(member({ candidates: [1] }))).toBe(true)
+    expect(mfHfuReportInScope(member())).toBe(false)
+    expect(mfHfuReportInScope(member({ how: 'excluded' }))).toBe(false)
+    expect(mfHfuReportInScope(undefined)).toBe(false)
+  })
+  test('区間の比較には結びついた実習生だけ入れる', () => {
+    expect(mfHfuMemberCounts(member({ workerId: 1, how: 'manual' }))).toBe(true)
+    expect(mfHfuMemberCounts(member({ candidates: [1] }))).toBe(false)
+  })
+  test('HFU の候補のいない人は「未確定」に数えない。日比建設は今までどおり数える', () => {
+    expect(mfMemberNeedsLink(member({ org: 'hfu' }))).toBe(false)
+    expect(mfMemberNeedsLink(member({ org: 'hfu', candidates: [1] }))).toBe(true)
+    expect(mfMemberNeedsLink(member({ org: 'hibi' }))).toBe(true)
+    expect(mfMemberNeedsLink(member())).toBe(true)
+    expect(mfMemberNeedsLink(member({ active: false }))).toBe(false)
+  })
+  test('スイッチの既定は切。保存した値だけ入る', () => {
+    expect(normalizeMfExpenseSettings(null).hfuEnabled).toBe(false)
+    expect(normalizeMfExpenseSettings({ hfuEnabled: true }).hfuEnabled).toBe(true)
   })
 })
 

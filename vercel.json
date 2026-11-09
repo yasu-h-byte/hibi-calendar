@@ -12,8 +12,16 @@
       "schedule": "0 22 * * *"
     },
     {
+      "path": "/api/mf-expense/cron?org=hfu",
+      "schedule": "5 22 * * *"
+    },
+    {
       "path": "/api/mf-expense/cron",
       "schedule": "10 22 * * *"
+    },
+    {
+      "path": "/api/mf-expense/cron?org=hfu",
+      "schedule": "15 22 * * *"
     },
     {
       "path": "/api/mf-expense/receipts",
