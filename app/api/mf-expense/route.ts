@@ -10,7 +10,7 @@ import {
   createMfAuthorizeUrl, disconnectMf, getMfConnectionStatus, isMfConfigured, selectMfOffice, MF_REDIRECT_URI,
 } from '@/lib/mf-expense-client.server'
 import {
-  loadHibiWorkerOptions, loadMfItems, loadMfMembers, loadMfReminders, loadMfRunState, loadMfSettings,
+  loadHibiWorkerOptions, loadMfItems, loadMfMembers, loadMfReceiptState, loadMfReminders, loadMfRunState, loadMfSettings,
   loadOpenExpenseChecks, runMfExpenseCheck, saveExpenseReview, saveMfMemberLink, saveMfSettings,
 } from '@/lib/mf-expense-run.server'
 import { mfExpenseSettingsError, normalizeMfExpenseSettings, normalizeMfReviewNote } from '@/lib/mf-expense-rules'
@@ -22,13 +22,13 @@ export async function GET(request: NextRequest) {
   const denied = await requireCap(request, 'expenseCheck.view')
   if (denied) return denied
   try {
-    const [connection, runState, settings, items, members, reminders, checks] = await Promise.all([
+    const [connection, runState, settings, items, members, reminders, checks, receiptState] = await Promise.all([
       getMfConnectionStatus(), loadMfRunState(), loadMfSettings(), loadMfItems(), loadMfMembers(),
-      loadMfReminders(), loadOpenExpenseChecks(),
+      loadMfReminders(), loadOpenExpenseChecks(), loadMfReceiptState(),
     ])
     const workers = await loadHibiWorkerOptions(Object.values(members).map(m => m.workerId))
     return NextResponse.json({
-      connection, runState, settings, items, members: Object.values(members), reminders, checks, workers,
+      connection, runState, receiptState, settings, items, members: Object.values(members), reminders, checks, workers,
       redirectUri: MF_REDIRECT_URI,
     })
   } catch (e) {

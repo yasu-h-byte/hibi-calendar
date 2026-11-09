@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_receipt',
+    title: '「経費の事前チェック」で領収書の日付と金額を確かめるようにしました',
+    content:
+      '領収書の画像を AI が読み取り、申請の日付・金額とずれていれば「参考」として表示します。しばらくは精度を確かめる期間です。'
+      + '目で見た結果と違うものがあれば、代表に教えてください。読み取れなかった領収書は「読み取れませんでした」と出るので、目で確かめてください。',
+    category: 'new',
+    publishedAt: '2026-11-09T16:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_comment',
     title: '「経費の事前チェック」で差し戻しコメントを作れるようにしました',
     content:

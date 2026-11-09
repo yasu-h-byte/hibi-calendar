@@ -16,6 +16,14 @@
       "schedule": "10 22 * * *"
     },
     {
+      "path": "/api/mf-expense/receipts",
+      "schedule": "20 22 * * *"
+    },
+    {
+      "path": "/api/mf-expense/receipts",
+      "schedule": "40 22 * * *"
+    },
+    {
       "path": "/api/backup/snapshot",
       "schedule": "0 17 * * *"
     },

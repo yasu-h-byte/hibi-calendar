@@ -254,6 +254,8 @@ export interface MfApi {
   get<T>(path: string, query?: Record<string, string>): Promise<T>
   /** next をたどって全ページ読む。key は配列が入っている項目名 */
   getAll<T>(path: string, key: string, query?: Record<string, string>): Promise<T[]>
+  /** 添付ファイルをそのまま読む（領収書の読み取り用） */
+  getFile(path: string): Promise<{ bytes: Buffer; contentType: string }>
 }
 
 /**
@@ -311,6 +313,22 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
     return (await res.json()) as T
   }
 
+  async function fetchFile(pathOnly: string, attempt = 0): Promise<{ bytes: Buffer; contentType: string }> {
+    if (Date.now() > deadline) throw new MfTimeBudgetError('時間切れ')
+    if (accessExpires - Date.now() < 5 * 60_000) await refresh()
+    const res = await fetch(`${MF_ORIGIN}${pathOnly}`, { method: 'GET', headers: { Authorization: `Bearer ${tokens.access}` }, cache: 'no-store' })
+    if (res.status === 401 && attempt === 0) {
+      await refresh()
+      return fetchFile(pathOnly, attempt + 1)
+    }
+    if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+      await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+      return fetchFile(pathOnly, attempt + 1)
+    }
+    if (!res.ok) throw new Error(`MF の添付の読み取りに失敗しました（${res.status}）`)
+    return { bytes: Buffer.from(await res.arrayBuffer()), contentType: res.headers.get('content-type') || '' }
+  }
+
   const withQuery = (path: string, query?: Record<string, string>) => {
     const q = query && Object.keys(query).length > 0 ? `?${new URLSearchParams(query).toString()}` : ''
     return `${path}${q}`
@@ -321,6 +339,7 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
     officeId,
     officeName: conn.officeName || '',
     get: <T,>(path: string, query?: Record<string, string>) => fetchJson<T>(withQuery(officePath(path), query)),
+    getFile: (path: string) => fetchFile(officePath(path)),
     async getAll<T>(path: string, key: string, query?: Record<string, string>): Promise<T[]> {
       const rows: T[] = []
       let next: string | null = withQuery(officePath(path), query)
