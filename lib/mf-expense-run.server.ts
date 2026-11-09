@@ -286,8 +286,9 @@ async function syncHistory(api: MfApi, months: string[], hotFrom: string): Promi
   return rows
 }
 
-async function loadWorkDays(months: string[]): Promise<Map<number, Set<string>>> {
+async function loadWorkDays(months: string[]): Promise<{ days: Map<number, Set<string>>; sites: Map<number, Map<string, Set<string>>> }> {
   const byWorker = new Map<number, Set<string>>()
+  const sites = new Map<number, Map<string, Set<string>>>()
   for (const ym of months) {
     // 確定済みの月だけキャッシュを使う（CLAUDE.md「出面ドキュメントは同一リクエスト内で二度読まない」）
     const att = isClosedMonthYm(ym) ? await getAttDataCached(ym) : await getAttData(ym)
@@ -299,9 +300,13 @@ async function loadWorkDays(months: string[]): Promise<Map<number, Set<string>>>
       const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(Number(p.day)).padStart(2, '0')}`
       if (!byWorker.has(wid)) byWorker.set(wid, new Set())
       byWorker.get(wid)!.add(iso)
+      if (!sites.has(wid)) sites.set(wid, new Map())
+      const perDay = sites.get(wid)!
+      if (!perDay.has(iso)) perDay.set(iso, new Set())
+      perDay.get(iso)!.add(p.sid)
     }
   }
-  return byWorker
+  return { days: byWorker, sites }
 }
 
 interface ToolBudgetDocLike {
@@ -474,7 +479,18 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
     historyByMember.get(h.memberId)!.push(h)
   }
 
-  const workDays = await loadWorkDays(months)
+  const { days: workDays, sites: workSites } = await loadWorkDays(months)
+  const siteNames = new Map((main.sites as { id: string; name: string }[]).map(s => [s.id, s.name]))
+  /** その人の「1日に1現場の日」だけ（T5）。2現場の日はどちらの交通費か分からない */
+  const siteOfDayFor = (workerId: number): Record<string, { id: string; name: string }> => {
+    const out: Record<string, { id: string; name: string }> = {}
+    for (const [iso, set] of Array.from(workSites.get(workerId) || [])) {
+      if (set.size !== 1) continue
+      const id = Array.from(set)[0]
+      out[iso] = { id, name: siteNames.get(id) || id }
+    }
+    return out
+  }
   const loadedYms = new Set(months)
   const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
   const toolBudget = (tbSnap.exists() ? tbSnap.data() : {}) as ToolBudgetDocLike
@@ -522,6 +538,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       loadedYms,
       tool: worker ? toolContextFor(worker, toolBudget, today) : null,
       receiptReads: receiptReadsByReport.get(r.id),
+      siteOfDay: worker ? siteOfDayFor(worker.id) : undefined,
     })
     const reads = receiptReadsByReport.get(r.id) || {}
     const savedTxs = txs.map(({ receipt: _old, ...t }) => {

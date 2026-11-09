@@ -166,6 +166,13 @@ describe('領収書の読み取り結果との比較', () => {
     expect(rules(withRead(read({ amount: 700 })))).toContain('R3')
     expect(rules(withRead(read({ amount: 1000 }), { remark: '折半' }))).not.toContain('R3')
   })
+  test('交通費の金額のずれは、駐輪場代を分ける指摘にする', () => {
+    const flags = withRead(read({ amount: 110 }), { itemId: 't', amount: 1530 })
+    expect(rules(flags)).toContain('R5')
+    expect(rules(flags)).not.toContain('R3')
+    const c = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags, txs: [{ ...receiptTx, itemId: 't', amount: 1530 }] })
+    expect(c).toContain('駐輪場代は電車代と分けて')
+  })
   test('確信が持てない項目は比べない', () => {
     const f = rules(withRead(read({ date: null, amount: 700 })))
     expect(f).not.toContain('R2')
@@ -186,6 +193,36 @@ describe('領収書の読み取り結果との比較', () => {
     expect(ja).toContain('領収書の金額は 700円')
     const vi = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'vi', flags, txs: [receiptTx] })
     expect(vi).toContain('Ngày trên hóa đơn là 2026/10/03')
+  })
+})
+
+describe('同じ現場の交通費の差（T5）', () => {
+  const siteA = { id: 'a', name: 'A現場' }
+  const siteB = { id: 'b', name: 'B現場' }
+  const day = (d: number, amount: number) => tx({ id: `t${d}`, date: `2026-10-${String(d).padStart(2, '0')}`, amount })
+  const workDays = new Set(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08'])
+  const siteOfDay = { '2026-10-05': siteA, '2026-10-06': siteA, '2026-10-07': siteA, '2026-10-08': siteA }
+
+  test('一番多い金額と違う日を要確認で出す', () => {
+    const f = run({ workDays, siteOfDay, txs: [day(5, 1420), day(6, 1420), day(7, 1420), day(8, 2000)] }).filter(x => x.rule === 'T5')
+    expect(f).toHaveLength(1)
+    expect(f[0]).toMatchObject({ level: 'confirm', txId: 't8', usual: 1420 })
+    expect(f[0].message).toContain('A現場')
+  })
+  test('金額がそろっていれば出さない', () => {
+    expect(rules(run({ workDays, siteOfDay, txs: [day(5, 1420), day(6, 1420), day(7, 1420), day(8, 1420)] }))).not.toContain('T5')
+  })
+  test('別の現場どうしは比べない', () => {
+    const mixed = { ...siteOfDay, '2026-10-08': siteB }
+    expect(rules(run({ workDays, siteOfDay: mixed, txs: [day(5, 1420), day(6, 1420), day(7, 1420), day(8, 2000)] }))).not.toContain('T5')
+  })
+  test('3日未満や、一番多い金額が決まらないときは出さない', () => {
+    expect(rules(run({ workDays, siteOfDay, txs: [day(5, 1420), day(6, 2000)] }))).not.toContain('T5')
+    expect(rules(run({ workDays, siteOfDay, txs: [day(5, 1420), day(6, 1420), day(7, 2000), day(8, 2000)] }))).not.toContain('T5')
+  })
+  test('1日に複数の明細があれば合計で比べる', () => {
+    const txs = [day(5, 1420), day(6, 1420), day(7, 710), tx({ id: 't7b', date: '2026-10-07', amount: 710 })]
+    expect(rules(run({ workDays, siteOfDay, txs }))).not.toContain('T5')
   })
 })
 

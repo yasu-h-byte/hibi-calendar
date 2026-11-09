@@ -9,7 +9,7 @@ import type { MfExpenseFlag, MfExpenseTx, MfRuleId } from './mf-expense-rules'
 
 export type MfCommentLang = 'ja' | 'vi'
 
-const REJECT_RULES = new Set<MfRuleId>(['T1', 'D1', 'D2', 'R1', 'R2', 'R3', 'K1', 'G3'])
+const REJECT_RULES = new Set<MfRuleId>(['T1', 'D1', 'D2', 'R1', 'R2', 'R3', 'R5', 'T5', 'K1', 'G3'])
 
 const WRAP: Record<MfCommentLang, { open: string; close: string }> = {
   ja: { open: 'お疲れさまです。次の点を確認して、直してからもう一度申請してください。', close: 'よろしくお願いします。' },
@@ -52,6 +52,18 @@ function ruleMessage(flag: MfExpenseFlag, tx: MfExpenseTx, targetYm: string, tod
     case 'R3': {
       const a = Math.round(flag.receipt?.amount || 0).toLocaleString('en-US')
       return ja ? `領収書の金額は ${a}円 です。申請の金額を領収書に合わせてください。` : `Số tiền trên hóa đơn là ${a} yên. Vui lòng sửa số tiền trong đơn cho đúng với hóa đơn.`
+    }
+    case 'R5': {
+      const a = Math.round(flag.receipt?.amount || 0).toLocaleString('en-US')
+      return ja
+        ? `付いている領収書は ${a}円 です。駐輪場代は電車代と分けて、「駐車場・駐輪場代」で申請してください。`
+        : `Hóa đơn đính kèm là ${a} yên. Vui lòng tách tiền gửi xe khỏi tiền tàu và nộp ở mục「駐車場・駐輪場代」.`
+    }
+    case 'T5': {
+      const a = Math.round(flag.usual || 0).toLocaleString('en-US')
+      return ja
+        ? `同じ現場の他の日は ${a}円 です。金額が正しいか確認してください。`
+        : `Những ngày khác ở cùng công trường là ${a} yên. Vui lòng kiểm tra lại số tiền.`
     }
     case 'K1':
       return ja
