@@ -7,7 +7,7 @@ import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
   buildMfRouteMinFares, buildMfRouteTable, mfRouteKey, MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
-  isMfWorkerInOrg, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfMemberNeedsLink, normalizeMfExpenseSettings,
+  mfParkingInFare, mfRunProblem, isMfWorkerInOrg, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfMemberNeedsLink, normalizeMfExpenseSettings,
   mfCheckState, mfConfirmFlagKeys, mfIsReceiptReadCurrent, mfReviewIsCurrent, mfTextHasWord,
   type MfMemberLink, type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
@@ -204,6 +204,55 @@ describe('領収書の読み取り結果との比較', () => {
   })
 })
 
+describe('2026-11-09 総チェックの再発防止', () => {
+  const read2 = (amount: number): Record<string, MfReceiptRead> => ({ a: { fileId: '', readable: true, date: '2026-10-05', amount, readAt: '', model: '' } })
+  const fare = (over: Partial<MfExpenseTx> = {}) => tx({ id: 'a', hasFile: true, remark: '秋津~笹塚 往復電車代', ...over })
+
+  test('駐輪場代が混ざった明細は、電車代の分で最安と比べる', () => {
+    const routeMinFares = { '秋津~笹塚 往復': 2086 }
+    expect(mfParkingInFare(2306, 220)).toBe(220)
+    expect(mfParkingInFare(1400, 700)).toBe(0)
+    expect(mfParkingInFare(1000, 1200)).toBe(0)
+    expect(mfParkingInFare(1000, null)).toBe(0)
+    // 2,306円 − 駐輪場代220円 = 最安どおり
+    expect(rules(run({ txs: [fare({ amount: 2306 })], receiptReads: read2(220), routeMinFares }))).not.toContain('T6')
+    const over = run({ txs: [fare({ amount: 2450 })], receiptReads: read2(220), routeMinFares }).find(f => f.rule === 'T6')
+    expect(over?.message).toContain('2,230円')
+  })
+
+  test('電車代の科目の少額で区間の無い明細は、駐輪場代の疑いにまとめて出す', () => {
+    const lines = [tx({ id: 'a', amount: 110, hasFile: true, remark: 'Cycle 商店' }), tx({ id: 'b', amount: 110, hasFile: true, remark: 'Cycle 商店' })]
+    const f = run({ txs: lines }).filter(x => x.rule === 'K2')
+    expect(f).toHaveLength(1)
+    expect(f[0]).toMatchObject({ level: 'confirm', moreLines: 1 })
+    const c = (lang: 'ja' | 'vi') => buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang, flags: f, txs: lines })
+    expect(c('ja')).toContain('駐車場・駐輪場代')
+    expect(c('vi')).toContain('駐車場・駐輪場代')
+  })
+  test('駐輪の字があれば金額や添付によらず出す。本物の電車代・バス代には出さない', () => {
+    expect(rules(run({ txs: [tx({ amount: 800, remark: '秋津駅 駐輪場 定期' })] }))).toContain('K2')
+    expect(rules(run({ txs: [tx({ amount: 220, hasFile: true, remark: '秋津~笹塚 片道' })] }))).not.toContain('K2')
+    expect(rules(run({ txs: [tx({ amount: 220, hasFile: true, remark: 'バス代' })] }))).not.toContain('K2')
+    expect(rules(run({ txs: [tx({ amount: 220, remark: 'Cycle 商店' })] }))).not.toContain('K2')
+  })
+
+  test('種類が未設定の科目は、要確認にして科目ごとに1回だけ出す', () => {
+    const f = run({ txs: [tx({ id: 'a', itemId: 'new', itemName: '新しい科目' }), tx({ id: 'b', itemId: 'new', itemName: '新しい科目' })] }).filter(x => x.rule === 'U2')
+    expect(f).toHaveLength(1)
+    expect(f[0].level).toBe('confirm')
+    expect(rules(run())).not.toContain('U2')
+  })
+
+  test('朝のチェックが止まったら知らせる。8時より前は待つ', () => {
+    const ok = { completedDate: '2026-11-10', lastError: null }
+    expect(mfRunProblem(ok, '2026-11-10', 9, '経費')).toBeNull()
+    expect(mfRunProblem({ completedDate: '2026-11-09', lastError: null }, '2026-11-10', 7, '経費')).toBeNull()
+    expect(mfRunProblem({ completedDate: '2026-11-09', lastError: null }, '2026-11-10', 8, '経費')).toContain('終わっていません')
+    expect(mfRunProblem({ completedDate: null, lastError: null }, '2026-11-10', 12, '経費')).toContain('終わっていません')
+    expect(mfRunProblem({ completedDate: '2026-11-10', lastError: 'x' }, '2026-11-10', 7, '経費')).toContain('失敗')
+  })
+})
+
 describe('HFU の技能実習生', () => {
   const member = (over: Partial<MfMemberLink> = {}): MfMemberLink => ({ mfId: 'm', number: '', name: 'A', active: true, workerId: null, how: null, candidates: [], ...over })
 
@@ -380,14 +429,14 @@ describe('同じ区間の社内の最安（T6）', () => {
     const f = run({ txs: [line('a', 1560), line('b', 1560)], routeMinFares }).filter(x => x.rule === 'T6')
     expect(f).toHaveLength(1)
     expect(f[0]).toMatchObject({ level: 'confirm', txId: 'a', usual: 1402 })
-    expect(f[0].message).toContain('2 明細')
+    expect(f[0].message).toContain('2 件')
   })
   test('差し戻しの文に、同じ区間のほかの明細の数が入る', () => {
     const txs = [line('a', 1560), line('b', 1560), line('c', 1560)]
     const flags = run({ txs, routeMinFares }).filter(x => x.rule === 'T6')
     expect(flags[0].moreLines).toBe(2)
     const c = (lang: 'ja' | 'vi') => buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang, flags, txs })
-    expect(c('ja')).toContain('ほかの 2 明細も')
+    expect(c('ja')).toContain('ほかの 2 件も')
     expect(c('vi')).toContain('2 khoản khác')
   })
   test('小さな差も既定で出す。見逃す差を決めればそこまでは出さない', () => {
@@ -406,7 +455,7 @@ describe('同じ区間の社内の最安（T6）', () => {
   test('差し戻しコメントに最安の金額が入る', () => {
     const txs = [line('a', 1560)]
     const flags = run({ txs, routeMinFares })
-    expect(buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags, txs })).toContain('社内の最安は 1,402円')
+    expect(buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags, txs })).toContain('社内で一番安い金額は 1,402円')
   })
 })
 
@@ -431,12 +480,12 @@ describe('差し戻しコメント', () => {
     const msg = (date: string) => buildMfRejectComment({ ...base, lang: 'ja', flags: [flag('D1', 'a')], txs: [t({ id: 'a', date })] })
     expect(msg('')).toContain('日付を入れてください')
     expect(msg('2026-12-01')).toContain('未来の日付')
-    expect(msg('2026-09-30')).toContain('申請の月より前')
+    expect(msg('2026-09-30')).toContain('この申請（10月分）の月と違います')
   })
   test('同じ明細の指摘はまとめる', () => {
     const c = buildMfRejectComment({ ...base, lang: 'ja', flags: [flag('T1', 'a'), flag('R1', 'a')], txs: [t({ id: 'a', date: '2026-10-05' })] })
     expect(c.match(/・2026/g)).toHaveLength(1)
-    expect(c).toContain('出面がありません')
+    expect(c).toContain('現場に出た記録がありません')
     expect(c).toContain('領収書が付いていません')
   })
   test('本人が直せない指摘だけなら文面を作らない', () => {

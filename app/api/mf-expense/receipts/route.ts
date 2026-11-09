@@ -16,7 +16,8 @@ async function run(actor: string) {
   const conn = await getMfConnectionStatus()
   if (!conn.connected) return NextResponse.json({ ok: true, status: 'notConnected' })
   const result = await runMfReceiptReads()
-  if (result.read > 0) {
+  // 読めた回に加えて、前の回の再チェックが失敗して結果がまだ出ていないときもやり直す
+  if (result.read > 0 || result.recheck) {
     await runMfExpenseCheck({ actor, force: true })
     if ((await loadMfSettings()).hfuEnabled) await runMfExpenseCheck({ actor, force: true, org: 'hfu' })
   }

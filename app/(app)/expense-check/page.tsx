@@ -169,7 +169,8 @@ export default function ExpenseCheckPage() {
     const checks = data?.checks || []
     const countOf = (s: MfCheckState) => checks.filter(c => mfCheckState(c) === s).length
     const unlinked = (data?.members || []).filter(mfMemberNeedsLink).length
-    const unsetItems = (data?.items || []).filter(i => i.active && !data?.settings.itemKinds[i.id]).length
+    const used = new Set(checks.flatMap(c => c.txs.map(t => t.itemId)))
+    const unsetItems = (data?.items || []).filter(i => (i.active || used.has(i.id)) && !data?.settings.itemKinds[i.id]).length
     return {
       flagged: countOf('confirm'),
       reviewed: countOf('reviewed'),
@@ -262,7 +263,7 @@ function ConnectionCard({ data, isOwner, canEdit, running, connecting, reading, 
           <div>接続先: <b>{c.officeName || '事業者が選ばれていません'}</b>{data.settings.hfuEnabled && <>・<b>HFU（技能実習生・{Number(MF_HFU_FROM_YM.slice(4, 6))}月分から）</b></>}{c.authorizedMember && <span className="text-hibi-sub dark:text-gray-400">（{c.authorizedMember} さんの権限）</span>}</div>
           <div className="text-xs text-hibi-sub dark:text-gray-400">最後のチェック: {fmtAt(s.lastRunAt)}{s.partial && '（途中まで）'}{sh && `・HFU ${fmtAt(sh.lastRunAt)}${sh.partial ? '（途中まで）' : ''}`}</div>
           <div className="text-xs text-hibi-sub dark:text-gray-400">
-            {rs.configured ? `領収書の読み取り: ${fmtAt(rs.lastRunAt)}${rs.remaining > 0 ? `（残り ${rs.remaining} 枚）` : ''}` : '領収書の読み取り: 鍵が未設定のため止まっています'}
+            {rs.configured ? `領収書の読み取り: ${fmtAt(rs.lastRunAt)}${rs.remaining > 0 ? `（残り ${rs.remaining} 枚）` : ''}` : '領収書の読み取りは止まっています（代表に連絡してください）'}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -590,7 +591,9 @@ function ItemsTab({ data, canEdit, post, reload }: { data: PageData; canEdit: bo
     const r = await post({ action: 'saveSettings', settings: { ...data.settings, itemKinds: kinds } })
     return r.ok ? { ok: true } : { ok: false, error: r.error }
   }
-  const items = data.items.filter(i => i.active)
+  // MF で利用不可にされても、申請に使われている科目は選べるようにする
+  const used = new Set(data.checks.flatMap(c => c.txs.map(t => t.itemId)))
+  const items = data.items.filter(i => i.active || used.has(i.id))
   if (items.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>「今すぐチェック」を押すと MF の経費科目を読み込みます</div>
   return (
     <div className="space-y-3">
