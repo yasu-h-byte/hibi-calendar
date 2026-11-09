@@ -498,6 +498,8 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
   const kindOf = (itemId: string): MfItemKind | undefined => settings.itemKinds[itemId]
   const others = history.filter(h => h.reportId !== reportId)
   const hasAttendance = link === 'worker'
+  const workYms = new Set(Array.from(workDays).map(ymOfIso))
+  const hasWorkIn = (ym: string) => workYms.has(ym)
   const pct = settings.amountPct / 100
 
   if (link === 'pending') {
@@ -574,7 +576,8 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     }
 
     // T1: 交通費の日に出勤が無い
-    if (kind === 'transit' && hasAttendance && tx.date && loadedYms.has(ymOfIso(tx.date)) && tx.date <= today && !workDays.has(tx.date)) {
+    // その月に出面が1日も無い人（事務など現場に出ない人）は、出面と比べる意味が無いので見ない（2026-11-10 実データ: 森田さんの交通費が全部指摘された）
+    if (kind === 'transit' && hasAttendance && tx.date && loadedYms.has(ymOfIso(tx.date)) && tx.date <= today && !workDays.has(tx.date) && hasWorkIn(ymOfIso(tx.date))) {
       flags.push({ rule: 'T1', level: 'confirm', txId: tx.id, message: `${label}: この日は現場に出た記録がありません（休み・欠勤・現場都合休の可能性があります）` })
     }
 

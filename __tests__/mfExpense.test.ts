@@ -253,6 +253,16 @@ describe('2026-11-09 総チェックの再発防止', () => {
   })
 })
 
+describe('その月に出面が無い人', () => {
+  test('事務など現場に出ない人の交通費には、交通費と出勤日を出さない', () => {
+    expect(rules(run({ workDays: new Set() }))).not.toContain('T1')
+    expect(rules(run({ workDays: new Set(['2026-09-05']) }))).not.toContain('T1')
+  })
+  test('その月に1日でも出面があれば、今までどおり休みの日の交通費を出す', () => {
+    expect(rules(run({ workDays: new Set(['2026-10-06']) }))).toContain('T1')
+  })
+})
+
 describe('HFU の技能実習生', () => {
   const member = (over: Partial<MfMemberLink> = {}): MfMemberLink => ({ mfId: 'm', number: '', name: 'A', active: true, workerId: null, how: null, candidates: [], ...over })
 
