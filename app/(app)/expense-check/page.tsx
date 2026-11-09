@@ -14,14 +14,16 @@ import { confirmDanger } from '@/lib/confirm-dialog'
 import { Chip, FieldError, PageHeader, RowButton, SearchBox, TodoCard, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
 import {
-  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfExpenseSettingsError, normalizeMfReviewNote,
-  type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
+  MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfExpenseSettingsError, normalizeMfReviewNote,
+  type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
 interface Check {
   reportId: string
   number: number | null
   title: string
+  status?: string
+  approvals?: MfApprovalStep[]
   submittedIso: string
   memberName: string
   total: number
@@ -296,6 +298,28 @@ function ReviewBox({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
   )
 }
 
+/** 「森田 ✓ → 日比（待ち）」の形で承認の進み具合を出す */
+function ApprovalLine({ c }: { c: Check }) {
+  const steps = c.approvals || []
+  const named = steps.filter(a => a.name)
+  if (named.length === 0) {
+    const label = mfApprovalWaitingLabel(c.status || '', steps)
+    return label ? <span className="col-span-2 text-xs text-hibi-sub dark:text-gray-400">{label}</span> : null
+  }
+  return (
+    <span className="col-span-2 text-xs text-hibi-sub dark:text-gray-400">
+      承認:{' '}
+      {named.map((a, i) => (
+        <span key={`${a.step}-${i}`}>
+          {i > 0 && ' → '}
+          <span className={a.active ? 'font-bold text-gray-800 dark:text-gray-100' : ''}>{a.name}</span>
+          {a.approvedAt ? ' ✓' : a.active ? '（待ち）' : ''}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
   const [open, setOpen] = useState(false)
   const shownFlags = [...c.flags].sort((a, b) => (a.level === b.level ? 0 : a.level === 'confirm' ? -1 : 1))
@@ -308,6 +332,7 @@ function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
         <span className="justify-self-end">
           {c.confirmCount === 0 ? <Chip tone="green">✓ チェック済み</Chip> : c.review ? <Chip tone="blue">確認済み</Chip> : <Chip tone="amber">要確認 {c.confirmCount}</Chip>}
         </span>
+        <ApprovalLine c={c} />
       </button>
       {shownFlags.length > 0 && <div className="space-y-1">{shownFlags.map((f, i) => <FlagLine key={i} flag={f} />)}</div>}
       {c.confirmCount > 0 && <ReviewBox c={c} canEdit={canEdit} post={post} reload={reload} />}
@@ -332,7 +357,21 @@ const reportRank = (c: Check) => (c.confirmCount === 0 ? 2 : c.review ? 1 : 0)
 function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
   if (checks.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>承認待ちの申請はありません</div>
   const sorted = [...checks].sort((a, b) => reportRank(a) - reportRank(b) || b.confirmCount - a.confirmCount || b.infoCount - a.infoCount || a.submittedIso.localeCompare(b.submittedIso))
-  return <div className={cardCls}>{sorted.map(c => <ReportRow key={c.reportId} c={c} canEdit={canEdit} post={post} reload={reload} />)}</div>
+  const waiting = new Map<string, number>()
+  for (const c of checks) {
+    const label = mfApprovalWaitingLabel(c.status || '', c.approvals)
+    if (label) waiting.set(label, (waiting.get(label) || 0) + 1)
+  }
+  return (
+    <div className="space-y-3">
+      {waiting.size > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Array.from(waiting).map(([label, n]) => <Chip key={label} tone="blue">{label} {n} 件</Chip>)}
+        </div>
+      )}
+      <div className={cardCls}>{sorted.map(c => <ReportRow key={c.reportId} c={c} canEdit={canEdit} post={post} reload={reload} />)}</div>
+    </div>
+  )
 }
 
 function RemindersTab({ reminders }: { reminders: MfReminderEntry[] }) {

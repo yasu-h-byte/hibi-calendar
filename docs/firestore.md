@@ -486,7 +486,7 @@ workSchedule?: {
 
 | 場所 | 中身 | バックアップ |
 |---|---|---|
-| `expenseChecks/{MFの申請ID}` | 申請ごとの結果（明細・指摘 flags・`open`。承認待ちから消えたら `open:false`）＋総務の確認メモ `review`（`note`・`byName`・`at`。毎朝のチェックでは消さず、出し直された申請では消す） | しない（結果は MF から作り直せる。確認メモは操作ログにも残る） |
+| `expenseChecks/{MFの申請ID}` | 申請ごとの結果（明細・指摘 flags・`open`。承認待ちから消えたら `open:false`）＋MF の承認の段階 `approvals`（`step`・`name`・`approvedAt`・`active`。チェックのたびに読み直す）＋総務の確認メモ `review`（`note`・`byName`・`at`。毎朝のチェックでは消さず、出し直された申請では消す） | しない（結果は MF から作り直せる。確認メモは操作ログにも残る） |
 | `expenseHistory/{YYYYMM}` | 過去の明細の控え `rows`（T3・T4・D2・M1 用） | しない（MF から読み直せる） |
 | `mfExpense/settings` | 科目の種類 `itemKinds`・決まりの数字 | する |
 | `mfExpense/members` | MF の従業員と作業員の結びつけ | する |
