@@ -107,6 +107,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 0-2. 経費の事前チェックが止まっている（2026-11-09 総チェック）。失敗は画面を開いた人にしか見えず、cron が動かなければ記録も残らない
+    if (await callerCan(request, 'expenseCheck.edit')) {
+      try {
+        const { loadMfHealthProblems } = await import('@/lib/mf-expense-run.server')
+        const problems = await loadMfHealthProblems()
+        if (problems.length > 0) notifications.push({ id: 'mf-expense-stale', icon: 'alert', message: problems.join('／'), type: 'error', href: '/expense-check' })
+      } catch (e) {
+        console.error('MF expense health check error:', e)
+      }
+    }
+
     // 1. 就業カレンダー未署名（今月＋翌月）。2026-09-26: 就業カレンダー画面と同じ集計に一本化
     //   （lib/calendar-matrix.ts projectSignSites ＋ lib/calendar-sign-status.ts summarizeSignStatus）。
     //   旧: ベルだけ「その現場の配置者」しか数えず、全員×全現場モデルの署名漏れ（新しい現場の分など）が抜けて

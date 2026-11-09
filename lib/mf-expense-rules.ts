@@ -100,7 +100,7 @@ export function mfExpenseSettingsError(s: MfExpenseSettings): string | null {
 //  指摘
 // ────────────────────────────────────────
 
-export type MfRuleId = 'U1' | 'X1' | 'T1' | 'T3' | 'T5' | 'T6' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
+export type MfRuleId = 'U1' | 'U2' | 'K2' | 'X1' | 'T1' | 'T3' | 'T5' | 'T6' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
 
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
@@ -185,6 +185,22 @@ export function mfIsReceiptReadCurrent(tx: Pick<MfExpenseTx, 'fileId'>, read: Pi
   return !!read && !(tx.fileId && read.fileId && tx.fileId !== read.fileId)
 }
 
+/** これ以下の金額は駐輪場代の可能性を見る（実データの5か月分で、区間の無い500円以下の交通費はすべて駐輪場だった・2026-11-09 総チェック） */
+export const MF_PARKING_SUSPECT_MAX = 500
+
+/** 交通費の明細に混ざっている駐輪場代。領収書が申請額より小さく少額なら、その領収書の分（電車代 1,420円＋駐輪場代 110円 → 110） */
+export function mfParkingInFare(amount: number, receiptAmount: number | null | undefined): number {
+  if (receiptAmount === null || receiptAmount === undefined || receiptAmount <= 0) return 0
+  return receiptAmount < Math.round(amount) && receiptAmount <= MF_PARKING_SUSPECT_MAX ? receiptAmount : 0
+}
+
+/** 朝のチェックが止まっていないか。読む側で時刻を見るので、cron そのものが動かなかった日も分かる（通知ベル） */
+export function mfRunProblem(state: { completedDate: string | null; lastError: string | null }, today: string, jstHour: number, label: string): string | null {
+  if (state.lastError) return `${label}のチェックが失敗しています`
+  if (jstHour >= 8 && state.completedDate !== today) return `${label}の今朝のチェックが終わっていません`
+  return null
+}
+
 /** 駐輪場の明細には駅名が書かれるので、電車の言葉で「科目違い」にしない（駐輪場代を分けて出し直した人が止まらないように） */
 const MF_PARKING_WORDS = ['駐輪', '駐車']
 const KATAKANA = /[ァ-ヶー]/
@@ -242,6 +258,8 @@ export const MF_RULE_LABEL: Record<MfRuleId, string> = {
   R4: '領収書の読み取り',
   R5: '交通費と駐輪場代',
   X1: '明細の読み取り',
+  U2: '科目が未設定',
+  K2: '駐輪場代の疑い',
   T5: '同じ現場の交通費',
   T6: '同じ区間の最安',
   T1: '交通費と出勤日',
@@ -528,7 +546,9 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
           flags.push({
             rule: transit ? 'R5' : 'R3', level: transit ? 'confirm' : MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { amount: read.amount },
             message: transit
-              ? `${label}: 付いている領収書は ${yen(read.amount)} です。駐輪場代などが入っていたら分けて申請してもらってください`
+              ? (mfParkingInFare(tx.amount, read.amount) > 0
+                ? `${label}: 付いている領収書は ${yen(read.amount)} です（電車代 ${yen(tx.amount - read.amount)}＋駐輪場代 ${yen(read.amount)} かもしれません）。写真を確かめて、分けて申請してもらってください`
+                : `${label}: 付いている領収書は ${yen(read.amount)} で、申請の金額と違います。写真を確かめてください`)
               : `${label}: 領収書の金額は ${yen(read.amount)} です`,
           })
         }
@@ -555,7 +575,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
 
     // T1: 交通費の日に出勤が無い
     if (kind === 'transit' && hasAttendance && tx.date && loadedYms.has(ymOfIso(tx.date)) && tx.date <= today && !workDays.has(tx.date)) {
-      flags.push({ rule: 'T1', level: 'confirm', txId: tx.id, message: `${label}: この日の出面がありません（休み・欠勤の可能性があります）` })
+      flags.push({ rule: 'T1', level: 'confirm', txId: tx.id, message: `${label}: この日は現場に出た記録がありません（休み・欠勤・現場都合休の可能性があります）` })
     }
 
     // T3: いつもの金額と大きく違う（同じ経路・同じ科目の直近3か月）
@@ -610,19 +630,47 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
 
   // T6: 同じ区間で社内の最安より高い（2026-11-09 代表・最安ルートの決まり）。申請ごと・区間ごとに1回だけ出す
   if (input.routeMinFares) {
-    const over = new Map<string, { first: MfExpenseTx; lines: number; min: number }>()
+    // 駐輪場代が混ざった明細は、電車代の分だけで比べる（混ざったままだと差額が水増しされ、最安どおりの人にも出る）
+    const fareOf = (t: MfExpenseTx): number => {
+      const read = t.hasFile ? input.receiptReads?.[t.id] : undefined
+      return t.amount - (mfIsReceiptReadCurrent(t, read) ? mfParkingInFare(t.amount, read?.amount) : 0)
+    }
+    const over = new Map<string, { first: MfExpenseTx; fare: number; lines: number; min: number }>()
     for (const t of txs) {
       if (kindOf(t.itemId) !== 'transit') continue
       const key = mfRouteKey(t.remark)
       const min = key ? input.routeMinFares[key] : undefined
-      if (!key || min === undefined || t.amount - min <= settings.routeMargin) continue
+      const fare = fareOf(t)
+      if (!key || min === undefined || fare - min <= settings.routeMargin) continue
       const cur = over.get(key)
       if (cur) cur.lines++
-      else over.set(key, { first: t, lines: 1, min })
+      else over.set(key, { first: t, fare, lines: 1, min })
     }
-    for (const [key, { first, lines, min }] of Array.from(over)) {
-      flags.push({ rule: 'T6', level: 'confirm', txId: first.id, usual: min, moreLines: lines - 1, message: `${key}: ${yen(first.amount)}（${lines} 明細）。同じ区間の社内の最安は ${yen(min)} です` })
+    for (const [key, { first, fare, lines, min }] of Array.from(over)) {
+      flags.push({ rule: 'T6', level: 'confirm', txId: first.id, usual: min, moreLines: lines - 1, message: `${key}: ${yen(fare)}（${lines} 件）。同じ区間で社内で一番安い金額は ${yen(min)} です` })
     }
+  }
+
+  // K2: 電車代の科目で出ている駐輪場代。領収書と金額が合うので R5 には掛からず、店名に「駐輪」が無いことも多い（2026-11-09 総チェック）
+  const parkingLines = txs.filter(t => {
+    if (kindOf(t.itemId) !== 'transit' || t.amount <= 0) return false
+    if (MF_PARKING_WORDS.some(w => t.remark.includes(w))) return true
+    return t.hasFile && t.amount <= MF_PARKING_SUSPECT_MAX && mfRouteKey(t.remark) === null && !settings.transitWords.some(w => mfTextHasWord(t.remark, w))
+  })
+  if (parkingLines.length > 0) {
+    const first = parkingLines[0]
+    const more = parkingLines.length - 1
+    flags.push({
+      rule: 'K2', level: 'confirm', txId: first.id, moreLines: more,
+      message: `${first.date ? fmtDay(first.date) : '日付なし'} ${first.itemName} ${yen(first.amount)}${more > 0 ? `（ほか ${more} 件）` : ''}: 電車代の科目に、駐輪場代のような少額の明細があります。駐輪場代なら「駐車場・駐輪場代」で申請してもらってください`,
+    })
+  }
+
+  // U2: 種類が未設定の科目。領収書や科目のチェックをしていないので、黙って「チェック済み」にしない（2026-11-09 総チェック）
+  const unsetItems = new Map<string, MfExpenseTx>()
+  for (const t of txs) if (!kindOf(t.itemId) && !unsetItems.has(t.itemId)) unsetItems.set(t.itemId, t)
+  for (const t of Array.from(unsetItems.values())) {
+    flags.push({ rule: 'U2', level: 'confirm', txId: t.id, message: `${t.itemName || '科目なし'}: 種類が未設定の科目です。「科目の種類」タブで選ぶまで、領収書などのチェックをしていません` })
   }
 
   // ここから先は「その月まとめて」見る決まり。この申請と、同じ人の他の申請の両方を合わせる

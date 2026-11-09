@@ -154,6 +154,21 @@ interface TokenResponse {
   expires_in?: number
 }
 
+/** MF にトークンを断られた（status が 400/401/403 なら本当に切れている。それ以外は一時的な障害） */
+class MfTokenError extends Error {
+  constructor(message: string, readonly status: number) { super(message) }
+}
+
+/** MF が返す「次のページ」。同じ API の中だけをたどり、形が違えば途中で黙って止めずにエラーにする */
+export function mfNextPath(next: unknown): string | null {
+  if (next === null || next === undefined || next === '') return null
+  if (typeof next === 'string') {
+    if (next.startsWith('/api/external/')) return next
+    if (next.startsWith(`${MF_ORIGIN}/api/external/`)) return next.slice(MF_ORIGIN.length)
+  }
+  throw new Error('MF の応答の形が想定と違います（次のページ）')
+}
+
 async function requestToken(params: Record<string, string>): Promise<Required<Pick<TokenResponse, 'access_token'>> & TokenResponse> {
   const res = await fetch(`${MF_ORIGIN}/oauth/token`, {
     method: 'POST',
@@ -163,7 +178,7 @@ async function requestToken(params: Record<string, string>): Promise<Required<Pi
   })
   const json = (await res.json().catch(() => null)) as TokenResponse | null
   // 応答の中身はログにもエラーにも出さない（トークンが入っているかもしれない）
-  if (!res.ok || !json?.access_token) throw new Error(`MF のトークン発行に失敗しました（${res.status}）`)
+  if (!res.ok || !json?.access_token) throw new MfTokenError(`MF のトークン発行に失敗しました（${res.status}）`, res.status)
   return json as Required<Pick<TokenResponse, 'access_token'>> & TokenResponse
 }
 
@@ -257,7 +272,7 @@ export interface MfApi {
   forOffice(office: MfOffice): MfApi
   get<T>(path: string, query?: Record<string, string>): Promise<T>
   /** next をたどって全ページ読む。key は配列が入っている項目名 */
-  getAll<T>(path: string, key: string, query?: Record<string, string>): Promise<T[]>
+  getAll<T>(path: string, key: string, query?: Record<string, string>, opts?: { requireKey?: boolean }): Promise<T[]>
   /** 添付ファイルをそのまま読む（領収書の読み取り用） */
   getFile(path: string): Promise<{ bytes: Buffer; contentType: string }>
 }
@@ -288,7 +303,9 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
     let t
     try {
       t = await requestToken({ client_id: c!.id, client_secret: c!.secret, grant_type: 'refresh_token', refresh_token: tokens.refresh })
-    } catch {
+    } catch (e) {
+      // MF の一時的な障害（5xx・通信エラー）で「つなぎ直して」と出さない。次の回に自然に直る
+      if (!(e instanceof MfTokenError) || ![400, 401, 403].includes(e.status)) throw new Error('MF経費が一時的に応答しません。次の回にやり直します')
       await setDoc(connectionRef(), { needsReconnect: true, lastError: 'MF との接続が切れました。代表がつなぎ直してください' }, { merge: true })
       throw new MfReconnectError('MF との接続が切れました。代表がつなぎ直してください')
     }
@@ -347,15 +364,14 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
       forOffice: makeApi,
       get: <T,>(path: string, query?: Record<string, string>) => fetchJson<T>(withQuery(officePath(path), query)),
       getFile: (path: string) => fetchFile(officePath(path)),
-      async getAll<T>(path: string, key: string, query?: Record<string, string>): Promise<T[]> {
+      async getAll<T>(path: string, key: string, query?: Record<string, string>, opts?: { requireKey?: boolean }): Promise<T[]> {
         const rows: T[] = []
         let next: string | null = withQuery(officePath(path), query)
         for (let guard = 0; next && guard < 500; guard++) {
           const json: Record<string, unknown> = await fetchJson<Record<string, unknown>>(next)
+          if (opts?.requireKey && !Array.isArray(json[key])) throw new Error('MF の応答の形が想定と違います')
           rows.push(...((json[key] as T[] | undefined) || []))
-          const nextPath: unknown = json.next
-          // MF が返す「次のページ」は同じ API の中だけをたどる
-          next = typeof nextPath === 'string' && nextPath.startsWith('/api/external/') ? nextPath : null
+          next = mfNextPath(json.next)
         }
         return rows
       },

@@ -25,10 +25,10 @@ import {
   receiptPeriodOf, toolBudgetAnchorOf, toolBudgetCarryIn, type ToolBudgetRecordLike,
 } from '@/lib/tool-budget-period'
 import { purchasesBudgetUse } from '@/lib/tool-subsidy'
-import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
+import { MfReconnectError, MfTimeBudgetError, getMfConnectionStatus, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import { MF_RECEIPT_MODEL, isReceiptFatalError, isReceiptReaderConfigured, readReceiptFile } from '@/lib/mf-expense-receipt.server'
 import {
-  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, mfConfirmFlagKeys, mfIsReceiptReadCurrent, isMfWorkerInOrg, linkMfMembers, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, MF_HFU_FROM_YM, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
+  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, mfConfirmFlagKeys, mfIsReceiptReadCurrent, isMfWorkerInOrg, linkMfMembers, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfParkingInFare, mfRunProblem, MF_HFU_FROM_YM, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
   type MfOrg, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
   type MfRawApproval, type MfRouteTableRow, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
@@ -428,6 +428,8 @@ export interface MfReceiptRunResult {
   message: string
   read: number
   remaining: number
+  /** 読んだ結果がまだ一覧に出ていない申請がある（再チェックが失敗した回のやり直し） */
+  recheck?: boolean
 }
 
 export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
@@ -447,11 +449,12 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
   let read = 0
   let remaining = 0
   let lastError: string | null = null
+  let recheck = false
   try {
     const deadline = Date.now() + RECEIPT_BUDGET_MS
     const api = await openMfApi(deadline)
     const hfuOffice = mfHfuOffice(api.offices, api.officeId)
-    const hfuApi = hfuOffice ? api.forOffice(hfuOffice) : null
+    const hfuApi = hfuOffice && (await loadMfSettings()).hfuEnabled ? api.forOffice(hfuOffice) : null
     const apiFor = (org: MfOrg | undefined) => (org === 'hfu' ? hfuApi : api)
     const checks = (await loadOpenExpenseChecks()).filter(c => apiFor(c.org)).sort((a, b) => a.submittedIso.localeCompare(b.submittedIso))
     const reads = await loadReceiptReads(checks.map(c => c.reportId))
@@ -463,6 +466,7 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
       })
       .map(t => ({ reportId: c.reportId, txId: t.id, fileId: t.fileId || '', org: c.org })))
     remaining = queue.length
+    recheck = checks.some(c => (c.receiptPending || 0) > queue.filter(q => q.reportId === c.reportId).length)
 
     let stop = false
     for (let i = 0; i < queue.length && i < RECEIPT_MAX_PER_RUN && !stop && Date.now() < deadline; i += RECEIPT_PARALLEL) {
@@ -480,7 +484,9 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
           remaining--
         } catch (e) {
           if (e instanceof MfTimeBudgetError) { stop = true; return }
-          lastError = e instanceof Error ? e.message.slice(0, 200) : '領収書を読めませんでした'
+          lastError = isReceiptFatalError(e)
+            ? '領収書を読むための鍵か残高に問題があります。代表に連絡してください'
+            : e instanceof Error ? e.message.slice(0, 200) : '領収書を読めませんでした'
           console.error('領収書の読み取りエラー:', e)
           if (e instanceof MfReconnectError || isReceiptFatalError(e)) stop = true
         }
@@ -490,8 +496,8 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
     lastError = e instanceof Error ? e.message.slice(0, 200) : '領収書を読めませんでした'
   }
   await setDoc(receiptStateRef(), { runningUntil: 0, lastRunAt: new Date().toISOString(), lastError, lastRead: read, remaining }, { merge: true })
-  if (lastError && read === 0) return { ok: false, status: 'error', message: lastError, read, remaining }
-  return { ok: true, status: 'done', message: `領収書を ${read} 枚読みました${remaining > 0 ? `（残り ${remaining} 枚）` : ''}`, read, remaining }
+  if (lastError && read === 0) return { ok: false, status: 'error', message: lastError, read, remaining, recheck }
+  return { ok: true, status: 'done', message: `領収書を ${read} 枚読みました${remaining > 0 ? `（残り ${remaining} 枚）` : ''}`, read, remaining, recheck }
 }
 
 async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg): Promise<{ partial: boolean; summary: NonNullable<MfExpenseRunState['summary']> }> {
@@ -529,7 +535,8 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
   const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
   const toolBudget = (tbSnap.exists() ? tbSnap.data() : {}) as ToolBudgetDocLike
 
-  const allReports = await api.getAll<RawMfReport>('v1/offices/{office}/approving_ex_reports', 'ex_reports')
+  // 形の違う応答を「承認待ちが0件」と取り違えると、全申請を閉じてしまう
+  const allReports = await api.getAll<RawMfReport>('v1/offices/{office}/approving_ex_reports', 'ex_reports', undefined, { requireKey: true })
   // HFU は技能実習生の申請だけ読む（本部・不動産の人の明細は読まない）
   const reports = org === 'hfu' ? allReports.filter(r => mfHfuReportInScope(members[r.office_member_id || ''])) : allReports
   const reportIds = new Set(reports.map(r => r.id))
@@ -539,7 +546,13 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
   // 区間の比較は2社一緒（2026-11-09 代表）。HFU は結びついた実習生の分だけ入れる
   const countsForRoute = (rows: MfHistoryTx[], rowOrg: MfOrg, who: Record<string, MfMemberLink>) =>
     rowOrg === 'hibi' ? rows : rows.filter(h => mfHfuMemberCounts(who[h.memberId]))
-  let allHistory = countsForRoute(Array.from(historyByMember.values()).flat(), org, members)
+  // 領収書から駐輪場代の混入が分かる明細は、電車代の分で比べる（差額の水増しを防ぐ）
+  const readsByTx = new Map(Array.from(receiptReadsByReport.values()).flatMap(r => Object.entries(r)))
+  const fareOnly = (h: MfHistoryTx): MfHistoryTx => {
+    const parking = settings.itemKinds[h.itemId] === 'transit' ? mfParkingInFare(h.amount, readsByTx.get(h.id)?.amount) : 0
+    return parking > 0 ? { ...h, amount: h.amount - parking } : h
+  }
+  let allHistory = countsForRoute(Array.from(historyByMember.values()).flat(), org, members).map(fareOnly)
   let everyone = members
   if (settings.hfuEnabled) {
     const other: MfOrg = org === 'hibi' ? 'hfu' : 'hibi'
@@ -607,7 +620,7 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
     if (readFailed) flags.push({ rule: 'X1', level: 'confirm', message: 'この申請の明細を MF から読めませんでした。MF で中身を確かめてください（次のチェックで読み直します）' })
     const reads = receiptReadsByReport.get(r.id) || {}
     const savedTxs = txs.map(({ receipt: _old, ...t }) => {
-      const read = t.hasFile ? reads[t.id] : undefined
+      const read = t.hasFile && mfIsReceiptReadCurrent(t, reads[t.id]) ? reads[t.id] : undefined
       return read ? { ...t, receipt: { readable: read.readable, date: read.date, amount: read.amount } } : t
     })
 
@@ -630,7 +643,8 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
       flags,
       confirmCount: flags.filter(f => f.level === 'confirm').length,
       infoCount: flags.filter(f => f.level === 'info').length,
-      receiptPending: isReceiptReaderConfigured() ? txs.filter(t => t.hasFile && !mfIsReceiptReadCurrent(t, reads[t.id])).length : 0,
+      // 鍵が無い間も数える（読んでいない申請を「チェック済み」にしない）
+      receiptPending: txs.filter(t => t.hasFile && !mfIsReceiptReadCurrent(t, reads[t.id])).length,
       open: true,
       checkedAt: new Date().toISOString(),
       approvals: summarizeMfApprovals(r.ex_report_approvals),
@@ -693,6 +707,20 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
     partial,
     summary: { open: results.length, flagged: results.filter(c => c.confirmCount > 0).length, fetched },
   }
+}
+
+/** 通知ベルに出す問題（朝のチェックが止まった・接続が切れた・領収書を読めない）。無ければ空 */
+export async function loadMfHealthProblems(): Promise<string[]> {
+  const conn = await getMfConnectionStatus()
+  if (!conn.configured || !conn.connected) return []
+  if (conn.needsReconnect) return ['MF経費との接続が切れています。代表がつなぎ直してください']
+  const today = todayJstIso()
+  const hour = jstWallClock().getHours()
+  const [settings, hibi, receipt] = await Promise.all([loadMfSettings(), loadMfRunState(), loadMfReceiptState()])
+  const problems = [mfRunProblem(hibi, today, hour, '経費の事前チェック')]
+  if (settings.hfuEnabled) problems.push(mfRunProblem(await loadMfRunState('hfu'), today, hour, '経費の事前チェック（HFU）'))
+  if (receipt.lastError) problems.push(`領収書の読み取りで問題があります（${receipt.lastError}）`)
+  return problems.filter((p): p is string => !!p)
 }
 
 export async function runMfExpenseCheck(opts: { actor: string; force: boolean; org?: MfOrg }): Promise<MfRunResult> {

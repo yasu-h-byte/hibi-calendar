@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_full',
+    title: '「経費の事前チェック」で、駐輪場代の見逃しを減らし、止まったらベルで知らせます',
+    content:
+      '電車代の科目で出ている駐輪場代のような少額の明細を「駐輪場代の疑い」で出します。最安との比較は、駐輪場代を除いた電車代で見ます。'
+      + '朝のチェックが止まったときや MF との接続が切れたときは、通知ベルに出ます。',
+    category: 'new',
+    publishedAt: '2026-11-09T22:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_audit',
     title: '「経費の事前チェック」を点検して直しました',
     content:
