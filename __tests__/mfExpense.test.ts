@@ -72,11 +72,9 @@ describe('申請のチェック', () => {
     expect(rules(run({ txs: [tx({ date: '2026-10-06' })] }))).toContain('T1')
   })
 
-  test('T2: 出勤日に交通費が無い。ガソリンの人には出さない', () => {
+  test('出勤日に交通費が無くても何も出さない（乗り合わせの日があるため）', () => {
     const workDays = new Set(['2026-10-05', '2026-10-06'])
-    expect(rules(run({ workDays }))).toContain('T2')
-    const gas = tx({ id: 'g1', itemId: 'g', date: '2026-10-20', amount: 3000, hasFile: true, remark: '' })
-    expect(rules(run({ workDays, txs: [tx(), gas] }))).not.toContain('T2')
+    expect(run({ workDays })).toEqual([])
   })
 
   test('T3: 同じ経路の直近の金額と 30% を超えて違う（2件以上あるときだけ）', () => {
