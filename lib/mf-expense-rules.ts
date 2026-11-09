@@ -462,10 +462,10 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
         // 折半・半額は申請額が領収書と違って当たり前なので比べない
         const isSplit = settings.splitWords.some(w => `${tx.remark} ${tx.memo}`.includes(w))
         if (read.amount !== null && !isSplit && read.amount !== Math.round(tx.amount)) {
-          // 交通費のずれは、電車代に駐輪場代を足した明細が多い。駐輪場代は分けて申請する決まり（2026-11-09 代表）
+          // 交通費のずれは、電車代に駐輪場代を足した明細が多い。駐輪場代は分けて申請する決まりで、差し戻すので要確認にする（2026-11-09 代表）
           const transit = kind === 'transit'
           flags.push({
-            rule: transit ? 'R5' : 'R3', level: MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { amount: read.amount },
+            rule: transit ? 'R5' : 'R3', level: transit ? 'confirm' : MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { amount: read.amount },
             message: transit
               ? `${label}: 付いている領収書は ${yen(read.amount)} です。駐輪場代などが入っていたら分けて申請してもらってください`
               : `${label}: 領収書の金額は ${yen(read.amount)} です`,

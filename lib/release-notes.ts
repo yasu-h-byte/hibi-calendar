@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_parking_confirm',
+    title: '「経費の事前チェック」で、駐輪場代が一緒の交通費を「要確認」にしました',
+    content:
+      '電車代に駐輪場代を足している申請は、差し戻して分けてもらう決まりになったので、これまでの参考の札から「要確認」に変えました。すでに出ている10月分も対象です。'
+      + '交通費は一番安いルートの金額までです。やり方は事務業務マニュアルの「経費の事前チェック」を見てください。',
+    category: 'info',
+    publishedAt: '2026-11-09T20:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_site_transit',
     title: '「経費の事前チェック」で、同じ現場の交通費の差を見るようにしました',
     content:
