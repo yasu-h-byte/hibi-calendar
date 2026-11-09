@@ -12,7 +12,7 @@ import 'server-only'
  * 明細を読むのは新しい・更新された申請だけ。チェックは毎回全部やり直す（出面・道具代・結びつけの修正を反映するため）。
  */
 import { db } from '@/lib/firebase'
-import { collection, deleteField, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where } from '@/lib/fsdb'
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where } from '@/lib/fsdb'
 import { getAttData, getAttDataCached, getMainData } from '@/lib/compute.server'
 import { isClosedMonthYm, parseDKey, type RawWorker } from '@/lib/compute'
 import { wasAtSite } from '@/lib/attendance'
@@ -65,6 +65,8 @@ export interface ExpenseCheckDoc {
   commentLang?: MfCommentLang
   /** MF の承認の段階（チェックのたびに読み直す） */
   approvals?: MfApprovalStep[]
+  /** 承認された日（承認済みの申請だけ） */
+  approvedIso?: string
   /** 添付があるのに、まだ読めていない領収書の枚数（0より大きい間は「問題なし」と言わない） */
   receiptPending?: number
   /** 総務の「確認した・理由」。毎朝のチェックでは消さない */
@@ -206,6 +208,7 @@ interface RawMfTx {
 
 interface RawMfReport {
   id: string
+  approved_at?: string | null
   number?: number | null
   title?: string | null
   status?: string | null
@@ -304,6 +307,51 @@ async function syncHistory(api: MfApi, months: string[], hotFrom: string, org: M
     rows.push(...monthRows)
   }
   return rows
+}
+
+/** その人の「1日に1現場の日」だけ（T5）。2現場の日はどちらの交通費か分からない */
+function siteOfDayLookup(workSites: Map<number, Map<string, Set<string>>>, sites: { id: string; name: string }[]) {
+  const siteNames = new Map(sites.map(s => [s.id, s.name]))
+  return (workerId: number): Record<string, { id: string; name: string }> => {
+    const out: Record<string, { id: string; name: string }> = {}
+    for (const [iso, set] of Array.from(workSites.get(workerId) || [])) {
+      if (set.size !== 1) continue
+      const id = Array.from(set)[0]
+      out[iso] = { id, name: siteNames.get(id) || id }
+    }
+    return out
+  }
+}
+
+/**
+ * 区間の比較に使う明細。領収書から駐輪場代の混入が分かる明細は電車代の分にし（差額の水増しを防ぐ）、
+ * 比較は2社一緒（2026-11-09 代表）。HFU は結びついた実習生の分だけ入れる
+ */
+async function buildRouteHistory(args: {
+  own: MfHistoryTx[]
+  org: MfOrg
+  members: Record<string, MfMemberLink>
+  settings: MfExpenseSettings
+  months: string[]
+  readsByReport: Map<string, Record<string, MfReceiptRead>>
+}): Promise<{ allHistory: MfHistoryTx[]; everyone: Record<string, MfMemberLink> }> {
+  const { own, org, members, settings, months, readsByReport } = args
+  const countsForRoute = (rows: MfHistoryTx[], rowOrg: MfOrg, who: Record<string, MfMemberLink>) =>
+    rowOrg === 'hibi' ? rows : rows.filter(h => mfHfuMemberCounts(who[h.memberId]))
+  const readsByTx = new Map(Array.from(readsByReport.values()).flatMap(r => Object.entries(r)))
+  const fareOnly = (h: MfHistoryTx): MfHistoryTx => {
+    const parking = settings.itemKinds[h.itemId] === 'transit' ? mfParkingInFare(h.amount, readsByTx.get(h.id)?.amount) : 0
+    return parking > 0 ? { ...h, amount: h.amount - parking } : h
+  }
+  let allHistory = countsForRoute(own, org, members).map(fareOnly)
+  let everyone = members
+  if (settings.hfuEnabled) {
+    const other: MfOrg = org === 'hibi' ? 'hfu' : 'hibi'
+    const otherMembers = await loadMfMembers(other)
+    allHistory = [...allHistory, ...countsForRoute(await loadStoredHistory(months, other), other, otherMembers)]
+    everyone = { ...otherMembers, ...members }
+  }
+  return { allHistory, everyone }
 }
 
 /** もう一方の会社の控え（区間の比較を2社一緒にするため。MF は読みに行かない） */
@@ -432,7 +480,8 @@ export interface MfReceiptRunResult {
   recheck?: boolean
 }
 
-export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
+/** approvedYm を渡すと、承認待ちの代わりにその月の承認済みの申請の領収書を読む（画面のボタンだけ） */
+export async function runMfReceiptReads(opts: { approvedYm?: string } = {}): Promise<MfReceiptRunResult> {
   if (!isReceiptReaderConfigured()) return { ok: true, status: 'notConfigured', message: '領収書を読む鍵がまだ設定されていません', read: 0, remaining: 0 }
   const hour = jstWallClock().getHours()
   if (hour >= 1 && hour < 6) return { ok: false, status: 'maintenance', message: 'MF経費は毎日 1時〜6時はメンテナンス中です', read: 0, remaining: 0 }
@@ -456,7 +505,8 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
     const hfuOffice = mfHfuOffice(api.offices, api.officeId)
     const hfuApi = hfuOffice && (await loadMfSettings()).hfuEnabled ? api.forOffice(hfuOffice) : null
     const apiFor = (org: MfOrg | undefined) => (org === 'hfu' ? hfuApi : api)
-    const checks = (await loadOpenExpenseChecks()).filter(c => apiFor(c.org)).sort((a, b) => a.submittedIso.localeCompare(b.submittedIso))
+    const source = opts.approvedYm ? await loadMfApprovedChecks(opts.approvedYm) : await loadOpenExpenseChecks()
+    const checks = source.filter(c => apiFor(c.org)).sort((a, b) => a.submittedIso.localeCompare(b.submittedIso))
     const reads = await loadReceiptReads(checks.map(c => c.reportId))
     const queue = checks.flatMap(c => c.txs
       .filter(t => {
@@ -495,7 +545,8 @@ export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
   } catch (e) {
     lastError = e instanceof Error ? e.message.slice(0, 200) : '領収書を読めませんでした'
   }
-  await setDoc(receiptStateRef(), { runningUntil: 0, lastRunAt: new Date().toISOString(), lastError, lastRead: read, remaining }, { merge: true })
+  // 承認済みの読み取りは、毎朝の読み取りの状況（残り枚数・通知ベル）に混ぜない
+  await setDoc(receiptStateRef(), opts.approvedYm ? { runningUntil: 0 } : { runningUntil: 0, lastRunAt: new Date().toISOString(), lastError, lastRead: read, remaining }, { merge: true })
   if (lastError && read === 0) return { ok: false, status: 'error', message: lastError, read, remaining, recheck }
   return { ok: true, status: 'done', message: `領収書を ${read} 枚読みました${remaining > 0 ? `（残り ${remaining} 枚）` : ''}`, read, remaining, recheck }
 }
@@ -520,17 +571,7 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
   }
 
   const { days: workDays, sites: workSites } = await loadWorkDays(months)
-  const siteNames = new Map((main.sites as { id: string; name: string }[]).map(s => [s.id, s.name]))
-  /** その人の「1日に1現場の日」だけ（T5）。2現場の日はどちらの交通費か分からない */
-  const siteOfDayFor = (workerId: number): Record<string, { id: string; name: string }> => {
-    const out: Record<string, { id: string; name: string }> = {}
-    for (const [iso, set] of Array.from(workSites.get(workerId) || [])) {
-      if (set.size !== 1) continue
-      const id = Array.from(set)[0]
-      out[iso] = { id, name: siteNames.get(id) || id }
-    }
-    return out
-  }
+  const siteOfDayFor = siteOfDayLookup(workSites, main.sites as { id: string; name: string }[])
   const loadedYms = new Set(months)
   const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
   const toolBudget = (tbSnap.exists() ? tbSnap.data() : {}) as ToolBudgetDocLike
@@ -543,23 +584,9 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
   const openChecks = await loadOpenExpenseChecks(org)
   const previous = new Map(openChecks.map(c => [c.reportId, c]))
   const receiptReadsByReport = await loadReceiptReads(reports.map(r => r.id))
-  // 区間の比較は2社一緒（2026-11-09 代表）。HFU は結びついた実習生の分だけ入れる
-  const countsForRoute = (rows: MfHistoryTx[], rowOrg: MfOrg, who: Record<string, MfMemberLink>) =>
-    rowOrg === 'hibi' ? rows : rows.filter(h => mfHfuMemberCounts(who[h.memberId]))
-  // 領収書から駐輪場代の混入が分かる明細は、電車代の分で比べる（差額の水増しを防ぐ）
-  const readsByTx = new Map(Array.from(receiptReadsByReport.values()).flatMap(r => Object.entries(r)))
-  const fareOnly = (h: MfHistoryTx): MfHistoryTx => {
-    const parking = settings.itemKinds[h.itemId] === 'transit' ? mfParkingInFare(h.amount, readsByTx.get(h.id)?.amount) : 0
-    return parking > 0 ? { ...h, amount: h.amount - parking } : h
-  }
-  let allHistory = countsForRoute(Array.from(historyByMember.values()).flat(), org, members).map(fareOnly)
-  let everyone = members
-  if (settings.hfuEnabled) {
-    const other: MfOrg = org === 'hibi' ? 'hfu' : 'hibi'
-    const otherMembers = await loadMfMembers(other)
-    allHistory = [...allHistory, ...countsForRoute(await loadStoredHistory(months, other), other, otherMembers)]
-    everyone = { ...otherMembers, ...members }
-  }
+  const { allHistory, everyone } = await buildRouteHistory({
+    own: Array.from(historyByMember.values()).flat(), org, members, settings, months, readsByReport: receiptReadsByReport,
+  })
   const routeMinFares = buildMfRouteMinFares(allHistory, settings)
   await setDoc(doc(db, 'mfExpense', 'routeTable'), {
     months: buildMfRouteTable(allHistory, settings, routeMinFares, id => everyone[id]?.name || '（不明）'),
@@ -708,6 +735,143 @@ async function runOnce(api: MfApi, deadline: number, today: string, org: MfOrg):
     summary: { open: results.length, flagged: results.filter(c => c.confirmCount > 0).length, fetched },
   }
 }
+
+// ────────────────────────────────────────
+//  承認まで終わった申請（画面のボタンで月ごとに読む・見るだけ・2026-11-10 代表）
+// ────────────────────────────────────────
+
+const APPROVED_COLL = 'expenseApprovedChecks'
+/** 承認済みは毎朝動かさず画面のボタンで読むので、API の上限（300秒）まで余裕を見て長めに取る */
+const APPROVED_BUDGET_MS = 200_000
+const APPROVED_RECHECK_BUDGET_MS = 60_000
+
+export async function loadMfApprovedChecks(ym: string): Promise<ExpenseCheckDoc[]> {
+  const snap = await getDocs(query(collection(db, APPROVED_COLL), where('targetYm', '==', ym)))
+  return snap.docs.map(d => d.data() as ExpenseCheckDoc)
+}
+
+export interface MfApprovedRunResult {
+  ok: boolean
+  status: 'done' | 'partial' | 'maintenance' | 'notConnected' | 'error'
+  message: string
+  count: number
+}
+
+/**
+ * その月の分の承認済みの申請を読み、承認待ちと同じ決まりで見る。別のコレクションに保存し、毎朝の一覧には混ぜない。
+ * 道具代の残額は見ない（承認済みの分がすでに台帳に入っていて、残額の比較が成り立たない）。今は日比建設だけ
+ */
+export async function runMfApprovedCheck(ym: string, actor: string, budgetMs = APPROVED_BUDGET_MS): Promise<MfApprovedRunResult> {
+  const hour = jstWallClock().getHours()
+  if (hour >= 1 && hour < 6) return { ok: false, status: 'maintenance', message: 'MF経費は毎日 1時〜6時はメンテナンス中です。6時以降にもう一度押してください', count: 0 }
+  const today = todayJstIso()
+  const org: MfOrg = 'hibi'
+  const deadline = Date.now() + budgetMs
+  try {
+    const api = await openMfApi(deadline)
+    const main = await getMainData({ fresh: true })
+    const workers = orgWorkers(main.workers as RawWorker[], org)
+    const workerById = new Map(workers.map(w => [w.id, w]))
+    const [settings, members] = await Promise.all([loadMfSettings(), loadMfMembers(org)])
+
+    const currentYm = ymOfIso(today)
+    const months = [-4, -3, -2, -1, 0].map(d => shiftYm(currentYm, d))
+    const history = await syncHistory(api, months, shiftYm(currentYm, -1), org)
+    const historyByMember = new Map<string, MfHistoryTx[]>()
+    for (const h of history) historyByMember.set(h.memberId, [...(historyByMember.get(h.memberId) || []), h])
+    const { days: workDays, sites: workSites } = await loadWorkDays(months)
+    const siteOfDayFor = siteOfDayLookup(workSites, main.sites as { id: string; name: string }[])
+
+    // その月の分は、月の初めから翌月末までに提出される（月末に当月分を出す人がいるので、その月の初めから）
+    const reports = (await api.getAll<RawMfReport>('v1/offices/{office}/expense_reports', 'expense_reports', {
+      'query_object[submitted_at_from]': monthRange(ym).from,
+      'query_object[submitted_at_to]': monthRange(shiftYm(ym, 1)).to,
+    }, { requireKey: true })).filter(r => r.status === 'approved')
+
+    const existing = new Map((await loadMfApprovedChecks(ym)).map(c => [c.reportId, c]))
+    const readsByReport = await loadReceiptReads(reports.map(r => r.id))
+    const { allHistory } = await buildRouteHistory({ own: history, org, members, settings, months, readsByReport })
+    const routeMinFares = buildMfRouteMinFares(allHistory, settings)
+
+    let count = 0
+    let partial = false
+    const seen = new Set<string>()
+    for (const r of reports) {
+      const updatedAt = r.updated_at || ''
+      const before = existing.get(r.id)
+      let txs = before && before.updatedAt === updatedAt ? before.txs : null
+      let readFailed = false
+      if (!txs) {
+        if (Date.now() > deadline) { partial = true; break }
+        try {
+          txs = (await api.getAll<RawMfTx>(`v1/offices/{office}/ex_reports/${encodeURIComponent(r.id)}/ex_transactions`, 'ex_transactions')).map(toTx)
+        } catch (e) {
+          if (e instanceof MfTimeBudgetError) { partial = true; break }
+          if (e instanceof MfReconnectError) throw e
+          console.error(`承認済みの申請 ${r.id} の明細を読めませんでした:`, e)
+          txs = before?.txs ?? []
+          readFailed = true
+        }
+      }
+      const memberId = r.office_member_id || ''
+      const link = members[memberId]
+      const worker = link?.workerId != null ? workerById.get(link.workerId) : undefined
+      const submittedIso = r.submitted_at ? jstIsoOf(new Date(r.submitted_at)) : today
+      const { flags, targetYm } = checkExpenseReport({
+        reportId: r.id, submittedIso, today, txs,
+        history: historyByMember.get(memberId) || [],
+        settings,
+        link: link?.how === 'excluded' ? 'excluded' : worker ? 'worker' : 'pending',
+        workDays: worker ? workDays.get(worker.id) || new Set() : new Set(),
+        loadedYms: new Set(months),
+        tool: null,
+        receiptReads: readsByReport.get(r.id),
+        siteOfDay: worker ? siteOfDayFor(worker.id) : undefined,
+        routeMinFares,
+      })
+      // 提出日の幅は広めなので、ほかの月の分は読み飛ばす。読めなかった申請は月が分からないので残す
+      if (targetYm !== ym && !readFailed) continue
+      if (readFailed) flags.push({ rule: 'X1', level: 'confirm', message: 'この申請の明細を MF から読めませんでした。もう一度「この月を読み込む」を押してください' })
+      seen.add(r.id)
+      const reads = readsByReport.get(r.id) || {}
+      const savedTxs = txs.map(({ receipt: _old, ...t }) => {
+        const read = t.hasFile && mfIsReceiptReadCurrent(t, reads[t.id]) ? reads[t.id] : undefined
+        return read ? { ...t, receipt: { readable: read.readable, date: read.date, amount: read.amount } } : t
+      })
+      const check: ExpenseCheckDoc = {
+        org, reportId: r.id, number: r.number ?? null, title: clip(r.title, 100), status: r.status || '',
+        submittedIso, submittedAt: r.submitted_at || '', updatedAt: readFailed ? '' : updatedAt,
+        ...(r.approved_at ? { approvedIso: jstIsoOf(new Date(r.approved_at)) } : {}),
+        memberId, memberName: link?.name || '（MF の従業員が不明）', workerId: worker?.id ?? null,
+        total: txs.reduce((s, t) => s + t.amount, 0), targetYm: ym, txs: savedTxs, flags,
+        confirmCount: flags.filter(f => f.level === 'confirm').length,
+        infoCount: flags.filter(f => f.level === 'info').length,
+        receiptPending: txs.filter(t => t.hasFile && !mfIsReceiptReadCurrent(t, reads[t.id])).length,
+        open: false, checkedAt: new Date().toISOString(),
+        approvals: summarizeMfApprovals(r.ex_report_approvals),
+        commentLang: worker && !isJapaneseVisa(worker.visa) ? 'vi' : 'ja',
+      }
+      await setDoc(doc(db, APPROVED_COLL, r.id), check)
+      count++
+    }
+    // 承認が取り消された申請は消す（途中で区切った回は、読めていないだけかもしれないので消さない）
+    if (!partial) {
+      for (const id of Array.from(existing.keys())) if (!seen.has(id)) await deleteDoc(doc(db, APPROVED_COLL, id))
+    }
+    await logActivity(actor, 'mf-expense', `承認済みの申請を読み込み: ${ym} ${count}件${partial ? '（途中まで）' : ''}`)
+    return {
+      ok: true, status: partial ? 'partial' : 'done', count,
+      message: partial ? `${count} 件まで読みました。もう一度押すと続きを読みます` : `承認済みの申請を ${count} 件読みました`,
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '読み込みに失敗しました'
+    if (e instanceof MfTimeBudgetError) return { ok: true, status: 'partial', message: '時間がかかり途中で区切りました。もう一度押すと続きを読みます', count: 0 }
+    await logActivity(actor, 'mf-expense', `承認済みの読み込み失敗: ${message}`)
+    return { ok: false, status: e instanceof MfReconnectError ? 'notConnected' : 'error', message, count: 0 }
+  }
+}
+
+export { APPROVED_RECHECK_BUDGET_MS }
 
 /** 通知ベルに出す問題（朝のチェックが止まった・接続が切れた・領収書を読めない）。無ければ空 */
 export async function loadMfHealthProblems(): Promise<string[]> {
