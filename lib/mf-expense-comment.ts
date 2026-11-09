@@ -9,7 +9,7 @@ import type { MfExpenseFlag, MfExpenseTx, MfRuleId } from './mf-expense-rules'
 
 export type MfCommentLang = 'ja' | 'vi'
 
-const REJECT_RULES = new Set<MfRuleId>(['T1', 'D1', 'D2', 'R1', 'K1', 'G3'])
+const REJECT_RULES = new Set<MfRuleId>(['T1', 'D1', 'D2', 'R1', 'R2', 'R3', 'K1', 'G3'])
 
 const WRAP: Record<MfCommentLang, { open: string; close: string }> = {
   ja: { open: 'お疲れさまです。次の点を確認して、直してからもう一度申請してください。', close: 'よろしくお願いします。' },
@@ -30,9 +30,9 @@ function dateMessage(tx: MfExpenseTx, targetYm: string, today: string, lang: MfC
   return ja ? '申請の月より前の日付です。日付が正しいか確認してください。' : 'Ngày này thuộc tháng trước tháng của đơn. Vui lòng kiểm tra lại ngày.'
 }
 
-function ruleMessage(rule: MfRuleId, tx: MfExpenseTx, targetYm: string, today: string, lang: MfCommentLang): string {
+function ruleMessage(flag: MfExpenseFlag, tx: MfExpenseTx, targetYm: string, today: string, lang: MfCommentLang): string {
   const ja = lang === 'ja'
-  switch (rule) {
+  switch (flag.rule) {
     case 'T1':
       return ja
         ? 'この日の出面がありません。休みだった場合は、この明細を消してください。出勤していた場合は、教えてください。'
@@ -45,6 +45,14 @@ function ruleMessage(rule: MfRuleId, tx: MfExpenseTx, targetYm: string, today: s
         : 'Khoản này có vẻ bị trùng với một đơn khác. Nếu bị trùng, vui lòng xóa.'
     case 'R1':
       return ja ? '領収書が付いていません。領収書の写真を付けてください。' : 'Chưa đính kèm hóa đơn. Vui lòng đính kèm ảnh hóa đơn.'
+    case 'R2': {
+      const d = (flag.receipt?.date || '').replace(/-/g, '/')
+      return ja ? `領収書の日付は ${d} です。申請の日付を領収書に合わせてください。` : `Ngày trên hóa đơn là ${d}. Vui lòng sửa ngày trong đơn cho đúng với hóa đơn.`
+    }
+    case 'R3': {
+      const a = Math.round(flag.receipt?.amount || 0).toLocaleString('en-US')
+      return ja ? `領収書の金額は ${a}円 です。申請の金額を領収書に合わせてください。` : `Số tiền trên hóa đơn là ${a} yên. Vui lòng sửa số tiền trong đơn cho đúng với hóa đơn.`
+    }
     case 'K1':
       return ja
         ? '内容と科目が合っていないようです。科目を確認してください。'
@@ -79,9 +87,9 @@ export function buildMfRejectComment(input: {
   const { flags, txs, targetYm, today, lang } = input
   const blocks: string[] = []
   for (const tx of txs) {
-    const rules = Array.from(new Set(flags.filter(f => f.txId === tx.id && REJECT_RULES.has(f.rule)).map(f => f.rule)))
-    if (rules.length === 0) continue
-    blocks.push([txHeading(tx, lang), ...rules.map(r => `  ${ruleMessage(r, tx, targetYm, today, lang)}`)].join('\n'))
+    const mine = flags.filter((f, i, all) => f.txId === tx.id && REJECT_RULES.has(f.rule) && all.findIndex(x => x.txId === f.txId && x.rule === f.rule) === i)
+    if (mine.length === 0) continue
+    blocks.push([txHeading(tx, lang), ...mine.map(f => `  ${ruleMessage(f, tx, targetYm, today, lang)}`)].join('\n'))
   }
   if (blocks.length === 0) return ''
   return [WRAP[lang].open, ...blocks, WRAP[lang].close].join('\n\n')

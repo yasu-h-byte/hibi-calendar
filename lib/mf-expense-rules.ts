@@ -80,7 +80,7 @@ export function mfExpenseSettingsError(s: MfExpenseSettings): string | null {
 //  指摘
 // ────────────────────────────────────────
 
-export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T4' | 'D1' | 'D2' | 'R1' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
+export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T4' | 'D1' | 'D2' | 'R1' | 'R2' | 'R3' | 'R4' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
 
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
@@ -153,8 +153,28 @@ export function isSameMfSubmission(
   return before.submittedIso === now.submittedIso
 }
 
+/** 領収書の読み取り結果（expenseReceiptReads）。画像は持たず、読んだ日付と金額だけ */
+export interface MfReceiptRead {
+  fileId: string
+  readable: boolean
+  date: string | null
+  amount: number | null
+  reason?: string
+  readAt: string
+  model: string
+}
+
+/**
+ * 領収書の日付・金額のずれの重さ。読み取りの精度を確かめる間は「参考」で出す（2026-11-09 代表）。
+ * 精度に問題がないと分かったら 'confirm' に変える（ここ1か所）
+ */
+export const MF_RECEIPT_FLAG_LEVEL: MfFlagLevel = 'info'
+
 export const MF_RULE_LABEL: Record<MfRuleId, string> = {
   U1: '作業員が未確定',
+  R2: '領収書の日付',
+  R3: '領収書の金額',
+  R4: '領収書の読み取り',
   T1: '交通費と出勤日',
   T3: '交通費の金額',
   T4: 'ガソリン代',
@@ -175,6 +195,8 @@ export interface MfExpenseFlag {
   message: string
   /** どの明細の指摘か（申請全体の指摘は無し） */
   txId?: string
+  /** 領収書から読み取った値（R2・R3） */
+  receipt?: { date?: string; amount?: number }
 }
 
 /** 保存する明細（MF の項目のうち、チェックと表示に要るものだけ） */
@@ -188,6 +210,10 @@ export interface MfExpenseTx {
   remark: string
   memo: string
   hasFile: boolean
+  /** MF の添付の ID（差し替えの見分け用） */
+  fileId?: string
+  /** 領収書から読み取った内容（読んだ明細だけ） */
+  receipt?: { readable: boolean; date: string | null; amount: number | null }
 }
 
 /** 過去の明細（T3・T4・D2・M1 に使う）。その人が出した他の申請も含む */
@@ -275,6 +301,8 @@ export interface MfReportCheckInput {
   /** 出面を読んだ月（ここに無い月の日付は T1 で見ない） */
   loadedYms: Set<string>
   tool: MfToolContext | null
+  /** 領収書の読み取り結果（明細ID → 結果）。無ければ領収書の中身は見ない */
+  receiptReads?: Record<string, MfReceiptRead>
 }
 
 export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpenseFlag[]; targetYm: string } {
@@ -312,6 +340,23 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     // R1: 領収書なし（交通費など領収書の要らない科目と、未設定の科目は見ない）
     if ((kind === 'gas' || kind === 'tool' || kind === 'other') && !tx.hasFile) {
       flags.push({ rule: 'R1', level: 'confirm', txId: tx.id, message: `${label}: 領収書が添付されていません` })
+    }
+
+    // R2・R3・R4: 領収書の中身と申請の比較。確信が持てない項目は AI が null にするので、読めた項目だけ比べる
+    const read = tx.hasFile ? input.receiptReads?.[tx.id] : undefined
+    if (read) {
+      if (!read.readable || (read.date === null && read.amount === null)) {
+        flags.push({ rule: 'R4', level: 'info', txId: tx.id, message: `${label}: 領収書を読み取れませんでした。目で確かめてください` })
+      } else {
+        if (read.date && tx.date && read.date !== tx.date) {
+          flags.push({ rule: 'R2', level: MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { date: read.date }, message: `${label}: 領収書の日付は ${fmtDay(read.date)} です` })
+        }
+        // 折半・半額は申請額が領収書と違って当たり前なので比べない
+        const isSplit = settings.splitWords.some(w => `${tx.remark} ${tx.memo}`.includes(w))
+        if (read.amount !== null && !isSplit && read.amount !== Math.round(tx.amount)) {
+          flags.push({ rule: 'R3', level: MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { amount: read.amount }, message: `${label}: 領収書の金額は ${yen(read.amount)} です` })
+        }
+      }
     }
 
     // K1: 摘要と科目が合わない

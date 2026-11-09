@@ -51,6 +51,7 @@ interface PageData {
     lastError: string | null
   }
   runState: { lastRunAt: string | null; partial: boolean; lastError: string | null }
+  receiptState: { configured: boolean; lastRunAt: string | null; lastError: string | null; lastRead: number; remaining: number }
   settings: MfExpenseSettings
   items: { id: string; name: string; active: boolean }[]
   members: MfMemberLink[]
@@ -84,6 +85,7 @@ export default function ExpenseCheckPage() {
   const [tab, setTab] = useState<Tab>('reports')
   const [running, setRunning] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [reading, setReading] = useState(false)
 
   const load = useCallback(async () => {
     if (!password) return
@@ -133,6 +135,16 @@ export default function ExpenseCheckPage() {
     await load()
   }
 
+  const readReceipts = async () => {
+    setReading(true)
+    const res = await postJson<Record<string, unknown>>('/api/mf-expense/receipts', {}, { password: password || undefined })
+    setReading(false)
+    const message = typeof res.data?.message === 'string' ? res.data.message : undefined
+    if (!res.ok) notify.failed('領収書の読み取り', res.error || message)
+    else notify.success(message || '領収書を読みました')
+    await load()
+  }
+
   const chooseOffice = async (officeId: string) => {
     const r = await post({ action: 'selectOffice', officeId })
     if (!r.ok) { notify.failed('事業者の選択', r.error); return }
@@ -166,8 +178,8 @@ export default function ExpenseCheckPage() {
       />
 
       <ConnectionCard
-        data={data} isOwner={isOwner} canEdit={canEdit} running={running} connecting={connecting}
-        onConnect={connect} onDisconnect={disconnect} onRun={run} onChooseOffice={chooseOffice}
+        data={data} isOwner={isOwner} canEdit={canEdit} running={running} connecting={connecting} reading={reading}
+        onConnect={connect} onDisconnect={disconnect} onRun={run} onReadReceipts={readReceipts} onChooseOffice={chooseOffice}
       />
 
       {conn.connected && (
@@ -203,11 +215,11 @@ export default function ExpenseCheckPage() {
 
 type Post = (body: unknown) => ReturnType<typeof postJson<Record<string, unknown>>>
 
-function ConnectionCard({ data, isOwner, canEdit, running, connecting, onConnect, onDisconnect, onRun, onChooseOffice }: {
-  data: PageData; isOwner: boolean; canEdit: boolean; running: boolean; connecting: boolean
-  onConnect: () => void; onDisconnect: () => void; onRun: () => void; onChooseOffice: (id: string) => void
+function ConnectionCard({ data, isOwner, canEdit, running, connecting, reading, onConnect, onDisconnect, onRun, onReadReceipts, onChooseOffice }: {
+  data: PageData; isOwner: boolean; canEdit: boolean; running: boolean; connecting: boolean; reading: boolean
+  onConnect: () => void; onDisconnect: () => void; onRun: () => void; onReadReceipts: () => void; onChooseOffice: (id: string) => void
 }) {
-  const { connection: c, runState: s } = data
+  const { connection: c, runState: s, receiptState: rs } = data
   if (!c.configured) {
     return (
       <div className={`${cardCls} p-5 text-sm text-gray-700 dark:text-gray-200`}>
@@ -232,9 +244,13 @@ function ConnectionCard({ data, isOwner, canEdit, running, connecting, onConnect
         <div className="text-sm text-gray-700 dark:text-gray-200 space-y-0.5">
           <div>接続先: <b>{c.officeName || '事業者が選ばれていません'}</b>{c.authorizedMember && <span className="text-hibi-sub dark:text-gray-400">（{c.authorizedMember} さんの権限）</span>}</div>
           <div className="text-xs text-hibi-sub dark:text-gray-400">最後のチェック: {fmtAt(s.lastRunAt)}{s.partial && '（途中まで）'}</div>
+          <div className="text-xs text-hibi-sub dark:text-gray-400">
+            {rs.configured ? `領収書の読み取り: ${fmtAt(rs.lastRunAt)}${rs.remaining > 0 ? `（残り ${rs.remaining} 枚）` : ''}` : '領収書の読み取り: 鍵が未設定のため止まっています'}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {canEdit && c.officeId && <RowButton tone="main" busy={running} busyLabel="チェックしています" onClick={onRun}>今すぐチェック</RowButton>}
+          {canEdit && c.officeId && rs.configured && <RowButton tone="ghost" busy={reading} busyLabel="領収書を読んでいます" onClick={onReadReceipts}>領収書を読む</RowButton>}
           {isOwner && <RowButton tone="ghost" onClick={onDisconnect}>接続を切る</RowButton>}
         </div>
       </div>
@@ -245,6 +261,7 @@ function ConnectionCard({ data, isOwner, canEdit, running, connecting, onConnect
         </select>
       )}
       {s.lastError && <FieldError>前回のチェックは失敗しました: {s.lastError}</FieldError>}
+      {rs.lastError && <FieldError>前回の領収書の読み取りで問題がありました: {rs.lastError}</FieldError>}
     </div>
   )
 }
@@ -379,7 +396,7 @@ function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
           {c.txs.map(t => (
             <div key={t.id} className="px-3 py-1.5 grid grid-cols-[3.5rem_minmax(0,1fr)_auto] gap-2 text-xs text-gray-700 dark:text-gray-300">
               <span className="tabular-nums">{fmtDay(t.date)}</span>
-              <span className="truncate">{t.itemName}・{t.remark || '内容なし'}{!t.hasFile && <span className="text-hibi-sub dark:text-gray-400">（添付なし）</span>}</span>
+              <span className="truncate">{t.itemName}・{t.remark || '内容なし'}{!t.hasFile && <span className="text-hibi-sub dark:text-gray-400">（添付なし）</span>}{t.receipt && <span className="text-hibi-sub dark:text-gray-400">（領収書 {t.receipt.readable ? `${t.receipt.date ? fmtDay(t.receipt.date) : '日付不明'}・${t.receipt.amount !== null ? yen(t.receipt.amount) : '金額不明'}` : '読めず'}）</span>}</span>
               <span className="tabular-nums justify-self-end">{yen(t.amount)}</span>
             </div>
           ))}

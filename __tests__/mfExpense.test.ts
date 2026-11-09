@@ -7,7 +7,7 @@ import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
   MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
-  type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
+  type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
 import { buildMfRejectComment, hasMfRejectComment } from '@/lib/mf-expense-comment'
@@ -144,6 +144,48 @@ describe('申請のチェック', () => {
     expect(rules(pending)).toContain('U1')
     expect(rules(pending)).not.toContain('T1')
     expect(rules(run({ link: 'excluded', txs: [tx({ date: '2026-10-06' })] }))).toEqual([])
+  })
+})
+
+describe('領収書の読み取り結果との比較', () => {
+  const read = (over: Partial<MfReceiptRead> = {}): MfReceiptRead => ({ fileId: 'f', readable: true, date: '2026-10-05', amount: 500, readAt: 'x', model: 'm', ...over })
+  const receiptTx = tx({ itemId: 'o', hasFile: true })
+  const withRead = (r: MfReceiptRead, txOver: Partial<MfExpenseTx> = {}) => run({ txs: [{ ...receiptTx, ...txOver }], receiptReads: { x1: r } })
+
+  test('日付も金額も同じなら何も出さない', () => {
+    expect(rules(withRead(read()))).not.toEqual(expect.arrayContaining(['R2']))
+    expect(rules(withRead(read()))).not.toContain('R3')
+  })
+  test('日付のずれを、読んだ日付つきで参考に出す', () => {
+    const f = withRead(read({ date: '2026-10-03' })).find(x => x.rule === 'R2')
+    expect(f?.level).toBe('info')
+    expect(f?.receipt?.date).toBe('2026-10-03')
+    expect(f?.message).toContain('10/3')
+  })
+  test('金額のずれを出す。折半は比べない', () => {
+    expect(rules(withRead(read({ amount: 700 })))).toContain('R3')
+    expect(rules(withRead(read({ amount: 1000 }), { remark: '折半' }))).not.toContain('R3')
+  })
+  test('確信が持てない項目は比べない', () => {
+    const f = rules(withRead(read({ date: null, amount: 700 })))
+    expect(f).not.toContain('R2')
+    expect(f).toContain('R3')
+  })
+  test('読めなかった領収書は R4 だけ', () => {
+    const f = rules(withRead(read({ readable: false, date: null, amount: null })))
+    expect(f).toContain('R4')
+    expect(f).not.toContain('R2')
+  })
+  test('読み取り結果が無ければ何も増えない', () => {
+    expect(rules(run({ txs: [receiptTx] }))).not.toContain('R4')
+  })
+  test('差し戻しコメントに読んだ日付と金額が入る', () => {
+    const flags = withRead(read({ date: '2026-10-03', amount: 700 }))
+    const ja = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'ja', flags, txs: [receiptTx] })
+    expect(ja).toContain('領収書の日付は 2026/10/03')
+    expect(ja).toContain('領収書の金額は 700円')
+    const vi = buildMfRejectComment({ targetYm: '202610', today: '2026-11-09', lang: 'vi', flags, txs: [receiptTx] })
+    expect(vi).toContain('Ngày trên hóa đơn là 2026/10/03')
   })
 })
 

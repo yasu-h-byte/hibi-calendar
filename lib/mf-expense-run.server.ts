@@ -26,10 +26,11 @@ import {
 } from '@/lib/tool-budget-period'
 import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
+import { MF_RECEIPT_MODEL, isReceiptFatalError, isReceiptReaderConfigured, readReceiptFile } from '@/lib/mf-expense-receipt.server'
 import {
   buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, linkMfMembers, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
   type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
-  type MfRawApproval, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
+  type MfRawApproval, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
 /** Vercel の関数は 60 秒。余裕を見て 45 秒で区切り、残りは次の回に続ける */
@@ -218,6 +219,7 @@ function toTx(t: RawMfTx): MfExpenseTx {
     remark: clip(t.remark),
     memo: clip(t.memo),
     hasFile: !!t.mf_file,
+    fileId: t.mf_file?.id || '',
   }
 }
 
@@ -343,6 +345,116 @@ async function acquireLock(): Promise<boolean> {
   })
 }
 
+// ────────────────────────────────────────
+//  領収書の読み取り（lib/mf-expense-receipt.server.ts）
+// ────────────────────────────────────────
+
+const RECEIPT_BUDGET_MS = 200_000
+const RECEIPT_LOCK_MS = 280_000
+const RECEIPT_PARALLEL = 4
+/** 1回で読む上限（費用の歯止め。残りは次の回に続ける） */
+const RECEIPT_MAX_PER_RUN = 100
+const receiptStateRef = () => doc(db, 'mfExpense', 'receiptState')
+const receiptDocRef = (reportId: string) => doc(db, 'expenseReceiptReads', reportId)
+
+export interface MfReceiptState {
+  configured: boolean
+  lastRunAt: string | null
+  lastError: string | null
+  lastRead: number
+  remaining: number
+}
+
+export async function loadMfReceiptState(): Promise<MfReceiptState> {
+  const snap = await getDoc(receiptStateRef())
+  const d = snap.exists() ? snap.data() : {}
+  return {
+    configured: isReceiptReaderConfigured(),
+    lastRunAt: (d.lastRunAt as string | undefined) ?? null,
+    lastError: (d.lastError as string | undefined) ?? null,
+    lastRead: (d.lastRead as number | undefined) ?? 0,
+    remaining: (d.remaining as number | undefined) ?? 0,
+  }
+}
+
+async function loadReceiptReads(reportIds: string[]): Promise<Map<string, Record<string, MfReceiptRead>>> {
+  const out = new Map<string, Record<string, MfReceiptRead>>()
+  await Promise.all(reportIds.map(async id => {
+    const snap = await getDoc(receiptDocRef(id))
+    if (snap.exists()) out.set(id, (snap.data().reads || {}) as Record<string, MfReceiptRead>)
+  }))
+  return out
+}
+
+export interface MfReceiptRunResult {
+  ok: boolean
+  status: 'done' | 'notConfigured' | 'maintenance' | 'busy' | 'error'
+  message: string
+  read: number
+  remaining: number
+}
+
+export async function runMfReceiptReads(): Promise<MfReceiptRunResult> {
+  if (!isReceiptReaderConfigured()) return { ok: true, status: 'notConfigured', message: '領収書を読む鍵がまだ設定されていません', read: 0, remaining: 0 }
+  const hour = jstWallClock().getHours()
+  if (hour >= 1 && hour < 6) return { ok: false, status: 'maintenance', message: 'MF経費は毎日 1時〜6時はメンテナンス中です', read: 0, remaining: 0 }
+
+  const locked = await runTransaction(db, async tx => {
+    const snap = await tx.get(receiptStateRef())
+    const until = snap.exists() ? (snap.data().runningUntil as number | undefined) : undefined
+    if (until && until > Date.now()) return false
+    tx.set(receiptStateRef(), { runningUntil: Date.now() + RECEIPT_LOCK_MS }, { merge: true })
+    return true
+  })
+  if (!locked) return { ok: false, status: 'busy', message: 'いま領収書を読んでいる途中です', read: 0, remaining: 0 }
+
+  let read = 0
+  let remaining = 0
+  let lastError: string | null = null
+  try {
+    const deadline = Date.now() + RECEIPT_BUDGET_MS
+    const api = await openMfApi(deadline)
+    const checks = (await loadOpenExpenseChecks()).sort((a, b) => a.submittedIso.localeCompare(b.submittedIso))
+    const reads = await loadReceiptReads(checks.map(c => c.reportId))
+    const queue = checks.flatMap(c => c.txs
+      .filter(t => {
+        if (!t.hasFile) return false
+        const done = reads.get(c.reportId)?.[t.id]
+        return !done || !!(t.fileId && done.fileId && t.fileId !== done.fileId)
+      })
+      .map(t => ({ reportId: c.reportId, txId: t.id, fileId: t.fileId || '' })))
+    remaining = queue.length
+
+    let stop = false
+    for (let i = 0; i < queue.length && i < RECEIPT_MAX_PER_RUN && !stop && Date.now() < deadline; i += RECEIPT_PARALLEL) {
+      await Promise.all(queue.slice(i, i + RECEIPT_PARALLEL).map(async item => {
+        try {
+          const file = await api.getFile(`v1/offices/{office}/ex_transactions/${encodeURIComponent(item.txId)}/mf_file`)
+          const result = await readReceiptFile(file.bytes, file.contentType)
+          const saved: MfReceiptRead = {
+            fileId: item.fileId, readable: result.readable, date: result.date, amount: result.amount,
+            ...(result.reason ? { reason: result.reason } : {}),
+            readAt: new Date().toISOString(), model: MF_RECEIPT_MODEL,
+          }
+          await setDoc(receiptDocRef(item.reportId), { reads: { [item.txId]: saved } }, { merge: true })
+          read++
+          remaining--
+        } catch (e) {
+          if (e instanceof MfTimeBudgetError) { stop = true; return }
+          lastError = e instanceof Error ? e.message.slice(0, 200) : '領収書を読めませんでした'
+          console.error('領収書の読み取りエラー:', e)
+          if (e instanceof MfReconnectError || isReceiptFatalError(e)) stop = true
+        }
+      }))
+    }
+  } catch (e) {
+    lastError = e instanceof Error ? e.message.slice(0, 200) : '領収書を読めませんでした'
+  }
+  await setDoc(receiptStateRef(), { runningUntil: 0, lastRunAt: new Date().toISOString(), lastError, lastRead: read, remaining }, { merge: true })
+  if (lastError && read === 0) return { ok: false, status: 'error', message: lastError, read, remaining }
+  return { ok: true, status: 'done', message: `領収書を ${read} 枚読みました${remaining > 0 ? `（残り ${remaining} 枚）` : ''}`, read, remaining }
+}
+
 async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ partial: boolean; summary: NonNullable<MfExpenseRunState['summary']> }> {
   const main = await getMainData({ fresh: true })
   const workers = hibiWorkers(main.workers as RawWorker[])
@@ -371,6 +483,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
   const reportIds = new Set(reports.map(r => r.id))
   const openChecks = await loadOpenExpenseChecks()
   const previous = new Map(openChecks.map(c => [c.reportId, c]))
+  const receiptReadsByReport = await loadReceiptReads(reports.map(r => r.id))
 
   let fetched = 0
   let partial = false
@@ -408,6 +521,12 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       workDays: worker ? workDays.get(worker.id) || new Set() : new Set(),
       loadedYms,
       tool: worker ? toolContextFor(worker, toolBudget, today) : null,
+      receiptReads: receiptReadsByReport.get(r.id),
+    })
+    const reads = receiptReadsByReport.get(r.id) || {}
+    const savedTxs = txs.map(({ receipt: _old, ...t }) => {
+      const read = t.hasFile ? reads[t.id] : undefined
+      return read ? { ...t, receipt: { readable: read.readable, date: read.date, amount: read.amount } } : t
     })
 
     const check: ExpenseCheckDoc = {
@@ -423,7 +542,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       workerId: worker?.id ?? null,
       total: txs.reduce((s, t) => s + t.amount, 0),
       targetYm,
-      txs,
+      txs: savedTxs,
       flags,
       confirmCount: flags.filter(f => f.level === 'confirm').length,
       infoCount: flags.filter(f => f.level === 'info').length,
