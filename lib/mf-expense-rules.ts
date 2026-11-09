@@ -85,6 +85,36 @@ export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T4' | 'D1' | 'D2' | 'R1' | 'K1' | '
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
 
+/** 要確認の申請に総務が残す1行（「確認した・理由」）。MF には書かない（2026-11-09） */
+export interface MfExpenseReview {
+  note: string
+  byName: string
+  at: string
+}
+
+export const MF_REVIEW_NOTE_MAX = 200
+
+/** 確認メモの入力を整える。画面とサーバで同じ判定にする */
+export function normalizeMfReviewNote(raw: unknown): { ok: true; note: string } | { ok: false; error: string } {
+  const note = typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim() : ''
+  if (!note) return { ok: false, error: '確認した内容や理由を書いてください' }
+  if (note.length > MF_REVIEW_NOTE_MAX) return { ok: false, error: `${MF_REVIEW_NOTE_MAX} 文字までで書いてください` }
+  return { ok: true, note }
+}
+
+/**
+ * 毎朝のチェックのあとも確認メモを残してよいか。同じ提出のあいだは残し、出し直された申請は中身が変わるので消す。
+ * submittedAt は 2026-11-09 に足した項目なので、無い古い控えは提出日で比べる
+ */
+export function isSameMfSubmission(
+  before: { submittedAt?: string; submittedIso: string } | undefined,
+  now: { submittedAt: string; submittedIso: string },
+): boolean {
+  if (!before) return false
+  if (before.submittedAt && now.submittedAt) return before.submittedAt === now.submittedAt
+  return before.submittedIso === now.submittedIso
+}
+
 export const MF_RULE_LABEL: Record<MfRuleId, string> = {
   U1: '作業員が未確定',
   T1: '交通費と出勤日',

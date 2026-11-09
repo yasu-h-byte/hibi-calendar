@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_review',
+    title: '「経費の事前チェック」に確認メモの欄を足しました',
+    content:
+      '要確認の申請を確かめたら、内容や理由を1行書いて「確認した」を押してください。一覧で「確認済み」になり、最終承認の人がそのメモを読めます。'
+      + 'MF経費には書き込みません。承認と差し戻しは、これまでどおり MF経費で行います。',
+    category: 'new',
+    publishedAt: '2026-11-09T13:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_no_t2',
     title: '「経費の事前チェック」から交通費のつけ忘れの表示をなくしました',
     content:

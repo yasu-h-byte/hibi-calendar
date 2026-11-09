@@ -11,9 +11,9 @@ import {
 } from '@/lib/mf-expense-client.server'
 import {
   loadHibiWorkerOptions, loadMfItems, loadMfMembers, loadMfReminders, loadMfRunState, loadMfSettings,
-  loadOpenExpenseChecks, runMfExpenseCheck, saveMfMemberLink, saveMfSettings,
+  loadOpenExpenseChecks, runMfExpenseCheck, saveExpenseReview, saveMfMemberLink, saveMfSettings,
 } from '@/lib/mf-expense-run.server'
-import { mfExpenseSettingsError, normalizeMfExpenseSettings } from '@/lib/mf-expense-rules'
+import { mfExpenseSettingsError, normalizeMfExpenseSettings, normalizeMfReviewNote } from '@/lib/mf-expense-rules'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    if (action === 'run' || action === 'saveSettings' || action === 'saveMember') {
+    if (action === 'run' || action === 'saveSettings' || action === 'saveMember' || action === 'saveReview') {
       const denied = await requireCap(request, 'expenseCheck.edit')
       if (denied) return denied
       const actor = await actorLabel(request)
@@ -74,6 +74,20 @@ export async function POST(request: NextRequest) {
         if (err) return NextResponse.json({ error: err }, { status: 400 })
         await saveMfSettings(settings)
         await logActivity(actor, 'mf-expense', '経費の事前チェックの設定を変更しました')
+        return NextResponse.json({ ok: true })
+      }
+      if (action === 'saveReview') {
+        const reportId = typeof body?.reportId === 'string' ? body.reportId : ''
+        if (!/^[\w-]+$/.test(reportId)) return NextResponse.json({ error: '入力が正しくありません' }, { status: 400 })
+        let note: string | null = null
+        if (body?.note !== null) {
+          const n = normalizeMfReviewNote(body?.note)
+          if (!n.ok) return NextResponse.json({ error: n.error }, { status: 400 })
+          note = n.note
+        }
+        const who = await saveExpenseReview(reportId, note, actor)
+        if (who === null) return NextResponse.json({ error: 'この申請はもう要確認の一覧にありません。画面を開き直してください' }, { status: 404 })
+        await logActivity(actor, 'mf-expense', note === null ? `経費の確認を取り消し: ${who}` : `経費を確認: ${who}「${note}」`)
         return NextResponse.json({ ok: true })
       }
       const mfId = typeof body?.mfId === 'string' ? body.mfId : ''
