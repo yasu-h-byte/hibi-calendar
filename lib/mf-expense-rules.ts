@@ -85,6 +85,44 @@ export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T4' | 'D1' | 'D2' | 'R1' | 'K1' | '
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
 
+/** MF の承認の段階（誰が何番目で、今どこで止まっているか）。従業員の情報は名前だけ持つ */
+export interface MfApprovalStep {
+  step: number
+  name: string
+  approvedAt: string | null
+  active: boolean
+}
+
+export interface MfRawApproval {
+  step?: number | null
+  is_active?: boolean | null
+  approved_at?: string | null
+  approve_office_member?: { name?: string | null } | null
+}
+
+export function summarizeMfApprovals(raw: MfRawApproval[] | null | undefined): MfApprovalStep[] {
+  return (raw || [])
+    .map(a => ({
+      step: Number(a.step) || 0,
+      name: (a.approve_office_member?.name || '').slice(0, 60),
+      approvedAt: a.approved_at || null,
+      active: a.is_active === true,
+    }))
+    .sort((a, b) => a.step - b.step)
+}
+
+const MF_WAITING_STEP: Record<string, number> = {
+  waiting_step_one: 1, waiting_step_two: 2, waiting_step_three: 3, waiting_step_four: 4, waiting_step_five: 5,
+}
+
+/** 「今だれの承認待ちか」。名前が取れなければ MF の状態から「第N承認待ち」にする */
+export function mfApprovalWaitingLabel(status: string, approvals: MfApprovalStep[] | undefined): string {
+  const names = (approvals || []).filter(a => a.active && a.name).map(a => a.name)
+  if (names.length > 0) return `${names.join('・')} さんの承認待ち`
+  const n = MF_WAITING_STEP[status]
+  return n ? `第${n}承認待ち` : ''
+}
+
 /** 要確認の申請に総務が残す1行（「確認した・理由」）。MF には書かない（2026-11-09） */
 export interface MfExpenseReview {
   note: string

@@ -6,7 +6,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
-  MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, normalizeMfReviewNote, shiftYm, targetYmOf,
+  MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
   type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
@@ -142,6 +142,27 @@ describe('申請のチェック', () => {
     expect(rules(pending)).toContain('U1')
     expect(rules(pending)).not.toContain('T1')
     expect(rules(run({ link: 'excluded', txs: [tx({ date: '2026-10-06' })] }))).toEqual([])
+  })
+})
+
+describe('承認の段階', () => {
+  const raw = [
+    { step: 2, is_active: false, approved_at: null, approve_office_member: { name: '第二さん', number: '999' } },
+    { step: 1, is_active: true, approved_at: null, approve_office_member: { name: '第一さん' } },
+  ]
+  test('段階の順に並べ、名前だけを持つ', () => {
+    const s = summarizeMfApprovals(raw)
+    expect(s.map(a => a.name)).toEqual(['第一さん', '第二さん'])
+    expect(Object.keys(s[0]).sort()).toEqual(['active', 'approvedAt', 'name', 'step'])
+  })
+  test('今の承認者の名前を出す', () => {
+    expect(mfApprovalWaitingLabel('waiting_step_one', summarizeMfApprovals(raw))).toBe('第一さん さんの承認待ち')
+  })
+  test('名前が取れないときは MF の状態から出す', () => {
+    expect(mfApprovalWaitingLabel('waiting_step_two', [])).toBe('第2承認待ち')
+    expect(mfApprovalWaitingLabel('waiting_step_two', undefined)).toBe('第2承認待ち')
+    expect(mfApprovalWaitingLabel('approved', [])).toBe('')
+    expect(summarizeMfApprovals(null)).toEqual([])
   })
 })
 

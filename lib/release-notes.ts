@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_approval',
+    title: '「経費の事前チェック」に、今だれの承認待ちかを出しました',
+    content:
+      '申請ごとに MF経費の承認の進み具合を表示します。一覧の上には、承認者ごとの件数が出ます。'
+      + '表示が新しくなるのは毎朝のチェックのときと「今すぐチェック」を押したときです。',
+    category: 'new',
+    publishedAt: '2026-11-09T14:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_review',
     title: '「経費の事前チェック」に確認メモの欄を足しました',
     content:

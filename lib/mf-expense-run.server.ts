@@ -25,9 +25,9 @@ import {
 import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import {
-  buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, linkMfMembers, normalizeMfExpenseSettings, shiftYm, ymOfIso,
-  type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
-  type MfReminderEntry, type MfReminderPerson, type MfToolContext,
+  buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, linkMfMembers, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
+  type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
+  type MfRawApproval, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
 /** Vercel の関数は 60 秒。余裕を見て 45 秒で区切り、残りは次の回に続ける */
@@ -56,6 +56,8 @@ export interface ExpenseCheckDoc {
   infoCount: number
   open: boolean
   checkedAt: string
+  /** MF の承認の段階（チェックのたびに読み直す） */
+  approvals?: MfApprovalStep[]
   /** 総務の「確認した・理由」。毎朝のチェックでは消さない */
   review?: MfExpenseReview
 }
@@ -196,6 +198,7 @@ interface RawMfReport {
   office_member_id?: string | null
   submitted_at?: string | null
   updated_at?: string | null
+  ex_report_approvals?: MfRawApproval[] | null
 }
 
 const clip = (s: string | null | undefined, max = 200) => (s || '').slice(0, max)
@@ -422,6 +425,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       infoCount: flags.filter(f => f.level === 'info').length,
       open: true,
       checkedAt: new Date().toISOString(),
+      approvals: summarizeMfApprovals(r.ex_report_approvals),
     }
     // merge にして確認メモ（review）をチェックの結果で上書きしない。出し直された申請のメモだけ消す
     const keepReview = isSameMfSubmission(before, { submittedAt: check.submittedAt || '', submittedIso })
