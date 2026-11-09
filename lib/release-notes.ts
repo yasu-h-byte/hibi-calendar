@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_no_t2',
+    title: '「経費の事前チェック」から交通費のつけ忘れの表示をなくしました',
+    content:
+      '皆で車に乗り合わせて通う日があるため、「出勤した日に交通費がありません」の表示をやめました。'
+      + '電車代が出ているのに出面が無い日（欠勤の疑い）は、これまでどおり「要確認」に出ます。皆さんの操作は変わりません。',
+    category: 'fix',
+    publishedAt: '2026-11-09T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_fix',
     title: '「経費の事前チェック」の誤った「要確認」を直しました',
     content:

@@ -80,7 +80,7 @@ export function mfExpenseSettingsError(s: MfExpenseSettings): string | null {
 //  指摘
 // ────────────────────────────────────────
 
-export type MfRuleId = 'U1' | 'T1' | 'T2' | 'T3' | 'T4' | 'D1' | 'D2' | 'R1' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
+export type MfRuleId = 'U1' | 'T1' | 'T3' | 'T4' | 'D1' | 'D2' | 'R1' | 'K1' | 'G1' | 'G2' | 'G3' | 'M1' | 'M2'
 
 /** confirm = 要確認（総務が見る）／ info = 参考（一覧に出すだけ） */
 export type MfFlagLevel = 'confirm' | 'info'
@@ -88,7 +88,6 @@ export type MfFlagLevel = 'confirm' | 'info'
 export const MF_RULE_LABEL: Record<MfRuleId, string> = {
   U1: '作業員が未確定',
   T1: '交通費と出勤日',
-  T2: '交通費のつけ忘れ',
   T3: '交通費の金額',
   T4: 'ガソリン代',
   D1: '日付',
@@ -325,15 +324,8 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     const targetTxs = allForMonth(targetYm)
     const gasTotal = (rows: { amount: number; itemId: string }[]) => rows.filter(r => kindOf(r.itemId) === 'gas').reduce((s, r) => s + r.amount, 0)
 
-    // T2: 出勤した日なのに交通費が無い。電車などで通う人だけを見る（車の人・交通費の無い人を毎月引っかけない）
-    const transitDays = new Set(targetTxs.filter(r => kindOf(r.itemId) === 'transit').map(r => r.date))
-    if (transitDays.size > 0 && gasTotal(targetTxs) === 0) {
-      const missing = workDaysIn(targetYm).filter(d => !transitDays.has(d)).sort()
-      if (missing.length > 0) {
-        const shown = missing.slice(0, 8).map(fmtDay).join('、')
-        flags.push({ rule: 'T2', level: 'info', message: `出勤した ${missing.length} 日に交通費がありません（${shown}${missing.length > 8 ? ' ほか' : ''}）` })
-      }
-    }
+    // 「出勤した日に交通費が無い」は見ない。皆で車に乗り合わせて通う日があり、つけ忘れと区別できない（2026-11-09 代表）。
+    // 電車代があるのに出面が無い日（欠勤の疑い）は T1 で拾う
 
     // T4: ガソリン代 ÷ 出勤日数が、直近3か月の平均と大きく違う。給油日と出勤日は合わないので月の合計で見る
     if (txs.some(t => kindOf(t.itemId) === 'gas')) {
