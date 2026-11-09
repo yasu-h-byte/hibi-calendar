@@ -10,6 +10,8 @@ import {
   type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
+import { buildMfRejectComment, hasMfRejectComment } from '@/lib/mf-expense-comment'
+
 const settings: MfExpenseSettings = {
   ...DEFAULT_MF_EXPENSE_SETTINGS,
   itemKinds: { t: 'transit', g: 'gas', k: 'tool', o: 'other', n: 'noReceipt' },
@@ -142,6 +144,42 @@ describe('申請のチェック', () => {
     expect(rules(pending)).toContain('U1')
     expect(rules(pending)).not.toContain('T1')
     expect(rules(run({ link: 'excluded', txs: [tx({ date: '2026-10-06' })] }))).toEqual([])
+  })
+})
+
+describe('差し戻しコメント', () => {
+  const t = (over: Partial<MfExpenseTx>) => tx({ itemName: '道具代', amount: 9874, ...over })
+  const base = { targetYm: '202610', today: '2026-11-09' }
+  const flag = (rule: 'D1' | 'R1' | 'T1' | 'G1' | 'U1' | 'T3', txId?: string) => ({ rule, level: 'confirm' as const, message: 'x', txId })
+
+  test('翌月の明細は、その月の申請で出すよう日本語で書く', () => {
+    const c = buildMfRejectComment({ ...base, lang: 'ja', flags: [flag('D1', 'a')], txs: [t({ id: 'a', date: '2026-11-03' })] })
+    expect(c).toContain('・2026/11/03 道具代 9,874円')
+    expect(c).toContain('11月分の申請で出してください')
+    expect(c.startsWith('お疲れさまです')).toBe(true)
+  })
+  test('ベトナム語でも同じ内容を書き、科目名は MF の表示のまま', () => {
+    const c = buildMfRejectComment({ ...base, lang: 'vi', flags: [flag('D1', 'a')], txs: [t({ id: 'a', date: '2026-11-03' })] })
+    expect(c).toContain('・2026/11/03 道具代 9,874 yên')
+    expect(c).toContain('tháng 11')
+    expect(c).not.toMatch(/ください|お疲れさま/)
+  })
+  test('日付なし・未来・前の月を書き分ける', () => {
+    const msg = (date: string) => buildMfRejectComment({ ...base, lang: 'ja', flags: [flag('D1', 'a')], txs: [t({ id: 'a', date })] })
+    expect(msg('')).toContain('日付を入れてください')
+    expect(msg('2026-12-01')).toContain('未来の日付')
+    expect(msg('2026-09-30')).toContain('申請の月より前')
+  })
+  test('同じ明細の指摘はまとめる', () => {
+    const c = buildMfRejectComment({ ...base, lang: 'ja', flags: [flag('T1', 'a'), flag('R1', 'a')], txs: [t({ id: 'a', date: '2026-10-05' })] })
+    expect(c.match(/・2026/g)).toHaveLength(1)
+    expect(c).toContain('出面がありません')
+    expect(c).toContain('領収書が付いていません')
+  })
+  test('本人が直せない指摘だけなら文面を作らない', () => {
+    const flags = [flag('G1', 'a'), flag('U1'), flag('T3', 'a')]
+    expect(hasMfRejectComment(flags)).toBe(false)
+    expect(buildMfRejectComment({ ...base, lang: 'ja', flags, txs: [t({ id: 'a' })] })).toBe('')
   })
 })
 

@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261109_expense_check_comment',
+    title: '「経費の事前チェック」で差し戻しコメントを作れるようにしました',
+    content:
+      '要確認の申請の「差し戻しコメントを作る」を押すと、直してほしい内容の文面ができます。日本人は日本語、ベトナム人はベトナム語で出ます（切り替えもできます）。'
+      + '必要なら直して「コピー」を押し、MF経費の差し戻しのコメントに貼り付けてください。',
+    category: 'new',
+    publishedAt: '2026-11-09T15:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261109_expense_check_approval',
     title: '「経費の事前チェック」に、今だれの承認待ちかを出しました',
     content:

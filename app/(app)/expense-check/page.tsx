@@ -13,6 +13,8 @@ import { notify } from '@/lib/notify'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { Chip, FieldError, PageHeader, RowButton, SearchBox, TodoCard, UnderlineTabs } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
+import { todayJstIso } from '@/lib/date-utils'
+import { buildMfRejectComment, hasMfRejectComment, type MfCommentLang } from '@/lib/mf-expense-comment'
 import {
   MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfExpenseSettingsError, normalizeMfReviewNote,
   type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
@@ -24,6 +26,7 @@ interface Check {
   title: string
   status?: string
   approvals?: MfApprovalStep[]
+  commentLang?: MfCommentLang
   submittedIso: string
   memberName: string
   total: number
@@ -298,6 +301,40 @@ function ReviewBox({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
   )
 }
 
+/** MF の差し戻しに貼るコメントの下書き。言語を切り替えられ、貼る前に直せる */
+function RejectCommentBox({ c }: { c: Check }) {
+  const [open, setOpen] = useState(false)
+  const [lang, setLang] = useState<MfCommentLang>(c.commentLang || 'ja')
+  const [text, setText] = useState('')
+  const make = (l: MfCommentLang) => buildMfRejectComment({ flags: c.flags, txs: c.txs, targetYm: c.targetYm, today: todayJstIso(), lang: l })
+  const start = () => { setText(make(lang)); setOpen(true) }
+  const switchLang = (l: MfCommentLang) => { setLang(l); setText(make(l)) }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      notify.success('コピーしました。MF経費の差し戻しのコメントに貼り付けてください')
+    } catch (e) { notify.failed('コピー', e) }
+  }
+  if (!open) return <div><RowButton tone="ghost" onClick={start}>差し戻しコメントを作る</RowButton></div>
+  return (
+    <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <RowButton tone={lang === 'ja' ? 'main' : 'ghost'} onClick={() => switchLang('ja')}>日本語</RowButton>
+        <RowButton tone={lang === 'vi' ? 'main' : 'ghost'} onClick={() => switchLang('vi')}>ベトナム語</RowButton>
+        <span className="ml-auto flex items-center gap-2">
+          <RowButton tone="main" onClick={copy}>コピー</RowButton>
+          <RowButton tone="ghost" onClick={() => setOpen(false)}>閉じる</RowButton>
+        </span>
+      </div>
+      <textarea
+        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm leading-relaxed"
+        rows={Math.min(14, text.split('\n').length + 1)} value={text} aria-label={`${c.memberName} の差し戻しコメント`}
+        onChange={e => setText(e.target.value)}
+      />
+    </div>
+  )
+}
+
 /** 「森田 ✓ → 日比（待ち）」の形で承認の進み具合を出す */
 function ApprovalLine({ c }: { c: Check }) {
   const steps = c.approvals || []
@@ -336,6 +373,7 @@ function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
       </button>
       {shownFlags.length > 0 && <div className="space-y-1">{shownFlags.map((f, i) => <FlagLine key={i} flag={f} />)}</div>}
       {c.confirmCount > 0 && <ReviewBox c={c} canEdit={canEdit} post={post} reload={reload} />}
+      {canEdit && hasMfRejectComment(c.flags) && <RejectCommentBox c={c} />}
       {open && (
         <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 divide-y divide-hibi-line dark:divide-gray-700">
           {c.txs.map(t => (

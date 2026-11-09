@@ -19,6 +19,8 @@ import { isWorkingDay } from '@/lib/attendance'
 import { isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 import { jstIsoOf, jstWallClock, todayJstIso } from '@/lib/date-utils'
 import { logActivity } from '@/lib/activity'
+import { isJapaneseVisa } from '@/lib/leave-pending'
+import type { MfCommentLang } from '@/lib/mf-expense-comment'
 import {
   receiptPeriodOf, toolBudgetAnchorOf, toolBudgetCarryIn, type ToolBudgetRecordLike,
 } from '@/lib/tool-budget-period'
@@ -56,6 +58,8 @@ export interface ExpenseCheckDoc {
   infoCount: number
   open: boolean
   checkedAt: string
+  /** 差し戻しコメントの言語の初期値（結びついた作業員の在留資格から。不明なら日本語） */
+  commentLang?: MfCommentLang
   /** MF の承認の段階（チェックのたびに読み直す） */
   approvals?: MfApprovalStep[]
   /** 総務の「確認した・理由」。毎朝のチェックでは消さない */
@@ -426,6 +430,7 @@ async function runOnce(api: MfApi, deadline: number, today: string): Promise<{ p
       open: true,
       checkedAt: new Date().toISOString(),
       approvals: summarizeMfApprovals(r.ex_report_approvals),
+      commentLang: worker && !isJapaneseVisa(worker.visa) ? 'vi' : 'ja',
     }
     // merge にして確認メモ（review）をチェックの結果で上書きしない。出し直された申請のメモだけ消す
     const keepReview = isSameMfSubmission(before, { submittedAt: check.submittedAt || '', submittedIso })
