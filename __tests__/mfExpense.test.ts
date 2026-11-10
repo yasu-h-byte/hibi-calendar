@@ -7,7 +7,7 @@ import path from 'path'
 import {
   DEFAULT_MF_EXPENSE_SETTINGS, buildMonthlyReminders, checkExpenseReport, linkMfMembers, mfExpenseSettingsError,
   buildMfRouteMinFares, buildMfRouteTable, mfRouteKey, MF_HOT_HISTORY_TTL_MS, MF_REVIEW_NOTE_MAX, isMfHistoryFresh, isSameMfSubmission, mfApprovalWaitingLabel, normalizeMfReviewNote, shiftYm, summarizeMfApprovals, targetYmOf,
-  mfParkingInFare, mfRunProblem, isMfWorkerInOrg, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfMemberNeedsLink, normalizeMfExpenseSettings,
+  MF_REPORT_GROUPS, mfIsMyTurn, mfReportGroup, mfParkingInFare, mfRunProblem, isMfWorkerInOrg, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfMemberNeedsLink, normalizeMfExpenseSettings,
   mfCheckState, mfConfirmFlagKeys, mfIsReceiptReadCurrent, mfReviewIsCurrent, mfTextHasWord,
   type MfMemberLink, type MfExpenseFlag, type MfExpenseSettings, type MfExpenseTx, type MfReceiptRead, type MfHistoryTx, type MfReportCheckInput, type MfToolContext,
 } from '@/lib/mf-expense-rules'
@@ -250,6 +250,28 @@ describe('2026-11-09 総チェックの再発防止', () => {
     expect(mfRunProblem({ completedDate: '2026-11-09', lastError: null }, '2026-11-10', 8, '経費')).toContain('終わっていません')
     expect(mfRunProblem({ completedDate: null, lastError: null }, '2026-11-10', 12, '経費')).toContain('終わっていません')
     expect(mfRunProblem({ completedDate: '2026-11-10', lastError: 'x' }, '2026-11-10', 7, '経費')).toContain('失敗')
+  })
+})
+
+describe('一覧の振り分けと承認の番', () => {
+  const flag = (level: 'confirm' | 'info') => ({ rule: 'T1' as const, txId: 'a', level, message: '' })
+  const base = { confirmCount: 0, infoCount: 0, flags: [] as ReturnType<typeof flag>[] }
+  test('指摘も参考の札もない申請だけが「そのまま承認してよい」', () => {
+    expect(mfReportGroup(base)).toBe('pass')
+    expect(mfReportGroup({ ...base, infoCount: 1, flags: [{ ...flag('info'), rule: 'T3' as never }] })).toBe('glance')
+    expect(mfReportGroup({ ...base, confirmCount: 1, flags: [flag('confirm')] })).toBe('confirm')
+    expect(mfReportGroup({ ...base, receiptPending: 1 })).toBe('receipt')
+    expect(mfReportGroup({ ...base, confirmCount: 1, flags: [flag('confirm')], review: { note: 'x', byName: 'A', at: '' } })).toBe('reviewed')
+  })
+  test('振り分けは全部の状態を受け持つ', () => {
+    expect(MF_REPORT_GROUPS.map(g => g.key).sort()).toEqual(['confirm', 'glance', 'pass', 'receipt', 'reviewed'])
+  })
+  test('今その人の番の申請だけ「自分の番」になる。空白の違いは無視する', () => {
+    const steps = [{ step: 1, name: '森田 陽子', approvedAt: 'x', active: false }, { step: 2, name: '日比靖仁', approvedAt: null, active: true }]
+    expect(mfIsMyTurn(steps, '日比　靖仁')).toBe(true)
+    expect(mfIsMyTurn(steps, '森田陽子')).toBe(false)
+    expect(mfIsMyTurn(undefined, '日比靖仁')).toBe(false)
+    expect(mfIsMyTurn(steps, '')).toBe(false)
   })
 })
 

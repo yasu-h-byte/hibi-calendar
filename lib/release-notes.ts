@@ -28,6 +28,15 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261110_expense_check_groups',
+    title: '「経費の事前チェック」の一覧を、見る順に振り分けました',
+    content: '開いた人の承認の番の申請が最初に出ます。指摘も参考の札もない申請は「そのまま承認してよい」にまとめ、たたんであります。',
+    category: 'new',
+    publishedAt: '2026-11-10T11:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261110_expense_check_approved',
     title: '「経費の事前チェック」で、承認済みの申請も見直せます',
     content: '「承認済み」タブで月を選んで読み込むと、承認まで終わった申請を同じ決まりで見直せます。見るだけの画面で、MF の申請は変わりません。',

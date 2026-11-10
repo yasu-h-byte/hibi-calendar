@@ -180,6 +180,30 @@ export function mfCheckState(c: { confirmCount: number; review?: MfExpenseReview
   return 'clean'
 }
 
+/** 一覧の振り分け（2026-11-10 代表）。人が見る量を減らすため、指摘も参考の札もない申請は分けてたたむ */
+export type MfReportGroup = 'confirm' | 'reviewed' | 'receipt' | 'glance' | 'pass'
+
+export const MF_REPORT_GROUPS: readonly { key: MfReportGroup; title: string; hint: string }[] = [
+  { key: 'confirm', title: '中を見る申請', hint: '札の文を見て、承認か差し戻しを決めてください' },
+  { key: 'reviewed', title: '確認メモのある申請', hint: 'メモを読んで承認してください' },
+  { key: 'receipt', title: '領収書がまだの申請', hint: 'MF で領収書の写真を見てから承認してください' },
+  { key: 'glance', title: '灰色の札に目を通す申請', hint: '指摘はありません。参考の札だけ見て承認してください' },
+  { key: 'pass', title: 'そのまま承認してよい申請', hint: '指摘も参考の札もありません。中を見ずに承認できます' },
+]
+
+export function mfReportGroup(c: { confirmCount: number; infoCount: number; review?: MfExpenseReview; flags: MfExpenseFlag[]; receiptPending?: number }): MfReportGroup {
+  const state = mfCheckState(c)
+  if (state !== 'clean') return state
+  return c.infoCount > 0 ? 'glance' : 'pass'
+}
+
+/** 今、その人の承認の番か（MF の承認者の氏名とログインした人の氏名で見る。空白の違いは無視） */
+export function mfIsMyTurn(approvals: MfApprovalStep[] | undefined, myName: string): boolean {
+  const norm = (s: string) => s.replace(/[\s　]/g, '')
+  const me = norm(myName)
+  return !!me && (approvals || []).some(a => a.active && norm(a.name) === me)
+}
+
 /** 読み取り結果が今の添付のものか（差し替えられていたら読み直すまで使わない） */
 export function mfIsReceiptReadCurrent(tx: Pick<MfExpenseTx, 'fileId'>, read: Pick<MfReceiptRead, 'fileId'> | undefined): boolean {
   return !!read && !(tx.fileId && read.fileId && tx.fileId !== read.fileId)

@@ -16,7 +16,7 @@ import { SaveButton } from '@/components/ui/SaveButton'
 import { currentYmJst, todayJstIso } from '@/lib/date-utils'
 import { buildMfRejectComment, hasMfRejectComment, type MfCommentLang } from '@/lib/mf-expense-comment'
 import {
-  MF_HFU_FROM_YM, MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_ORG_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, mfCheckState, mfMemberNeedsLink, mfReviewIsCurrent, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
+  MF_HFU_FROM_YM, MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_ORG_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, MF_REPORT_GROUPS, mfCheckState, mfIsMyTurn, mfMemberNeedsLink, mfReportGroup, mfReviewIsCurrent, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
   type MfCheckState, type MfOrg, type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
@@ -220,7 +220,7 @@ export default function ExpenseCheckPage() {
             ]}
           />
 
-          {tab === 'reports' && <ReportsTab checks={data.checks} canEdit={canEdit} post={post} reload={load} />}
+          {tab === 'reports' && <ReportsTab checks={data.checks} canEdit={canEdit} post={post} reload={load} myName={user?.name || ''} />}
           {tab === 'approved' && <ApprovedTab canEdit={canEdit} post={post} reload={load} password={password || ''} readerOn={data.receiptState.configured} />}
           {tab === 'routes' && <RoutesTab table={data.routeTable} />}
           {tab === 'reminders' && <RemindersTab reminders={data.reminders} />}
@@ -445,9 +445,28 @@ function ReportRow({ c, canEdit, post, reload }: { c: Check; canEdit: boolean; p
 const REPORT_RANK: Record<MfCheckState, number> = { confirm: 0, reviewed: 1, receipt: 2, clean: 3 }
 const reportRank = (c: Check) => REPORT_RANK[mfCheckState(c)]
 
-function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdit: boolean; post: Post; reload: () => Promise<void> }) {
+/** 振り分けの1つ分。「そのまま承認してよい」は最初たたんでおく */
+function ReportGroup({ title, hint, rows, canEdit, post, reload, collapsed }: { title: string; hint: string; rows: Check[]; canEdit: boolean; post: Post; reload: () => Promise<void>; collapsed: boolean }) {
+  const [open, setOpen] = useState(!collapsed)
+  return (
+    <div className="space-y-2">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">{title} {rows.length} 件</span>
+        <span className="text-xs text-hibi-sub dark:text-gray-400">{hint}</span>
+        <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">{open ? '閉じる' : '開く'}</span>
+      </button>
+      {open && <div className={cardCls}>{rows.map(c => <ReportRow key={c.reportId} c={c} canEdit={canEdit} post={post} reload={reload} />)}</div>}
+    </div>
+  )
+}
+
+function ReportsTab({ checks, canEdit, post, reload, myName }: { checks: Check[]; canEdit: boolean; post: Post; reload: () => Promise<void>; myName: string }) {
+  const mine = checks.filter(c => mfIsMyTurn(c.approvals, myName))
+  // 同じ画面のまま、開いた人の番の申請を最初に出す（森田さんは1段目、代表は最終承認の分）
+  const [scope, setScope] = useState<'mine' | 'all'>(mine.length > 0 ? 'mine' : 'all')
   if (checks.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>承認待ちの申請はありません</div>
-  const sorted = [...checks].sort((a, b) => reportRank(a) - reportRank(b) || b.confirmCount - a.confirmCount || b.infoCount - a.infoCount || a.submittedIso.localeCompare(b.submittedIso))
+  const shown = scope === 'mine' ? mine : checks
+  const sorted = [...shown].sort((a, b) => b.confirmCount - a.confirmCount || b.infoCount - a.infoCount || a.submittedIso.localeCompare(b.submittedIso))
   const waiting = new Map<string, number>()
   for (const c of checks) {
     const label = mfApprovalWaitingLabel(c.status || '', c.approvals)
@@ -460,7 +479,17 @@ function ReportsTab({ checks, canEdit, post, reload }: { checks: Check[]; canEdi
           {Array.from(waiting).map(([label, n]) => <Chip key={label} tone="blue">{label} {n} 件</Chip>)}
         </div>
       )}
-      <div className={cardCls}>{sorted.map(c => <ReportRow key={c.reportId} c={c} canEdit={canEdit} post={post} reload={reload} />)}</div>
+      {mine.length > 0 && (
+        <div className="flex items-center gap-2">
+          <RowButton tone={scope === 'mine' ? 'main' : 'ghost'} onClick={() => setScope('mine')}>自分の番 {mine.length} 件</RowButton>
+          <RowButton tone={scope === 'all' ? 'main' : 'ghost'} onClick={() => setScope('all')}>全部 {checks.length} 件</RowButton>
+        </div>
+      )}
+      {shown.length === 0 && <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>今、あなたの番の申請はありません</div>}
+      {MF_REPORT_GROUPS.map(g => {
+        const rows = sorted.filter(c => mfReportGroup(c) === g.key)
+        return rows.length > 0 && <ReportGroup key={g.key} title={g.title} hint={g.hint} rows={rows} canEdit={canEdit} post={post} reload={reload} collapsed={g.key === 'pass'} />
+      })}
     </div>
   )
 }
