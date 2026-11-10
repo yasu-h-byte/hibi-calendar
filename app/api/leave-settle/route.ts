@@ -5,6 +5,8 @@ import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } fro
 import { isAlreadyRetired } from '@/lib/workers'
 import { getWorkerByToken } from '@/lib/workers.server'
 import { getMainData, getAttData, invalidateMainCache } from '@/lib/compute.server'
+import { captureMainGuard, MainConflictError, MAIN_CONFLICT_MESSAGE } from '@/lib/main-guard'
+import { guardedMainUpdate } from '@/lib/main-guard.server'
 import { getLeaveBalance } from '@/lib/leave-balance'
 import { selectActiveGrantRecord } from '@/lib/leave-compute'
 import { checkMonthLockedForWorkers } from '@/lib/locks.server'
@@ -259,6 +261,7 @@ export async function POST(request: NextRequest) {
       const mainRef = doc(db, 'demmen', 'main')
       const mainSnap = await getDoc(mainRef)
       if (!mainSnap.exists()) return NextResponse.json({ error: 'データが見つかりません' }, { status: 500 })
+      const guard = captureMainGuard(mainSnap.data())   // 同時に書き換えられたら止める（lib/main-guard.ts）
       const plData = (mainSnap.data().plData || {}) as Record<string, PlRec[]>
       const wRecords = plData[String(r.workerId)] || []
 
@@ -287,7 +290,7 @@ export async function POST(request: NextRequest) {
         target.lastEditedAt = nowIso
         target.lastEditedBy = who.actor
         // 1人分だけ書き換える（/api/leave の買取記録と同じ dot-notation）
-        await updateDoc(mainRef, { [`plData.${String(r.workerId)}`]: wRecords })
+        await guardedMainUpdate(mainRef, guard, { plKeys: [String(r.workerId)] }, { [`plData.${String(r.workerId)}`]: wRecords })
         invalidateMainCache()
         await updateDoc(ref, { status: 'approved', decidedAt: nowIso, decidedBy: who.actor, grantDate: target.grantDate })
         await logActivity(await actorLabel(request), 'leaveSettle.approve', `${label} を承認（${who.actor}）`)
@@ -308,7 +311,7 @@ export async function POST(request: NextRequest) {
         rec.lastEditedBy = who.actor
       }
       if (removed > 0) {
-        await updateDoc(mainRef, { [`plData.${String(r.workerId)}`]: wRecords })
+        await guardedMainUpdate(mainRef, guard, { plKeys: [String(r.workerId)] }, { [`plData.${String(r.workerId)}`]: wRecords })
         invalidateMainCache()
       }
       await updateDoc(ref, { status: 'revoked', decidedAt: nowIso, decidedBy: who.actor })
@@ -318,6 +321,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (e) {
+    if (e instanceof MainConflictError) return NextResponse.json({ error: MAIN_CONFLICT_MESSAGE }, { status: 409 })
     console.error('leave-settle POST error:', e)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }

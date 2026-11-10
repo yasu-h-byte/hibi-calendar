@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { BIZ_UDPGothic } from 'next/font/google'
 import './globals.css'
+import PreviewBanner from '@/components/PreviewBanner'
 
 // 全画面の字（2026-09-30 第2次デザイン刷新「案1 UDホワイト」）。
 //   数字の 1/l/I・3/8 や、濁点・半濁点を読み間違えにくい UD 書体。事務の数字確認とスタッフのスマホの両方に効く。
@@ -61,7 +62,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
       </head>
-      <body className="text-base">{children}</body>
+      <body className="text-base"><PreviewBanner />{children}</body>
     </html>
   )
 }

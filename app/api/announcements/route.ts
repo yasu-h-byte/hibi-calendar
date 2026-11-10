@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, requireCap, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc } from '@/lib/fsdb'
+import { doc, getDoc } from '@/lib/fsdb'
+import { captureMainGuard, MainConflictError, MAIN_CONFLICT_MESSAGE } from '@/lib/main-guard'
+import { guardedMainUpdate } from '@/lib/main-guard.server'
 import { logActivity } from '@/lib/activity'
 
 import { mergeAnnouncements, type Announcement } from '@/lib/release-notes'
@@ -47,6 +49,7 @@ export async function POST(request: NextRequest) {
     if (!snap.exists()) {
       return NextResponse.json({ error: 'Data not found' }, { status: 404 })
     }
+    const guard = captureMainGuard(snap.data())   // 同時に編集されたら止める（後勝ちで消さない・lib/main-guard.ts）
     const announcements = (snap.data().announcements || []) as Announcement[]
 
     if (action === 'add') {
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
         publishedBy: publishedBy || '管理者',
       }
       announcements.push(newAnn)
-      await updateDoc(docRef, { announcements })
+      await guardedMainUpdate(docRef, guard, { fields: ['announcements'] }, { announcements })
       await logActivity(await actorLabel(request), 'announcement.add', `${title}`)
       return NextResponse.json({ success: true, announcement: newAnn })
     }
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
         updated.category = category
       }
       announcements[idx] = updated
-      await updateDoc(docRef, { announcements })
+      await guardedMainUpdate(docRef, guard, { fields: ['announcements'] }, { announcements })
       await logActivity(await actorLabel(request), 'announcement.update', `${updated.title}`)
       return NextResponse.json({ success: true })
     }
@@ -99,13 +102,14 @@ export async function POST(request: NextRequest) {
       if (filtered.length === announcements.length) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
       }
-      await updateDoc(docRef, { announcements: filtered })
+      await guardedMainUpdate(docRef, guard, { fields: ['announcements'] }, { announcements: filtered })
       await logActivity(await actorLabel(request), 'announcement.delete', target?.title || id)
       return NextResponse.json({ success: true })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
+    if (error instanceof MainConflictError) return NextResponse.json({ error: MAIN_CONFLICT_MESSAGE }, { status: 409 })
     console.error('Announcements POST error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }

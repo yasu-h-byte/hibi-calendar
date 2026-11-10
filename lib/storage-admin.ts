@@ -13,6 +13,8 @@
  */
 import { getAdminDb } from './firebase-admin'
 
+import { assertPreviewWritable } from './preview-guard'
+
 export const STAFF_DOCS_BUCKET = 'dedura-kanri.firebasestorage.app'
 
 /** 署名つきURLの有効期限 */
@@ -29,6 +31,7 @@ export function getStaffDocsBucket(): any | null {
 
 /** ブラウザから直接 PUT するための署名つきURL（Content-Type はこの値で固定される） */
 export async function signedUploadUrl(path: string, contentType: string): Promise<string> {
+  assertPreviewWritable(`storage/${path}`)   // お試しサイトでは置かせない（lib/preview-guard.ts）
   const bucket = getStaffDocsBucket()
   if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
   const [url] = await bucket.file(path).getSignedUrl({
@@ -70,6 +73,7 @@ export async function fileMeta(path: string): Promise<{ exists: boolean; size: n
  * 一次への請求書の PDF は小さい（数KB〜数百KB）ので、ブラウザ → API（4MBまで）→ ここで置く。
  */
 export async function uploadBuffer(path: string, data: Buffer, contentType: string): Promise<void> {
+  assertPreviewWritable(`storage/${path}`)
   const bucket = getStaffDocsBucket()
   if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
   await bucket.file(path).save(data, { contentType, resumable: false })
@@ -80,6 +84,7 @@ export async function uploadBuffer(path: string, data: Buffer, contentType: stri
  * 「あるか見てから置く」ではなく、置く瞬間に Storage 側で確かめる（ifGenerationMatch: 0）ので、同時に来ても上書きしない。
  */
 export async function uploadBufferIfAbsent(path: string, data: Buffer, contentType: string): Promise<boolean> {
+  assertPreviewWritable(`storage/${path}`)
   const bucket = getStaffDocsBucket()
   if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
   try {
@@ -106,6 +111,7 @@ export async function downloadFile(path: string): Promise<Buffer> {
 }
 
 export async function deleteFile(path: string): Promise<void> {
+  assertPreviewWritable(`storage/${path}`)
   const bucket = getStaffDocsBucket()
   if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
   await bucket.file(path).delete({ ignoreNotFound: true })
@@ -117,6 +123,7 @@ export async function deleteFile(path: string): Promise<void> {
  */
 export async function deleteFilesWithPrefix(prefix: string): Promise<number> {
   if (!prefix.endsWith('/')) throw new Error('prefix must end with /')
+  assertPreviewWritable(`storage/${prefix}`)
   const bucket = getStaffDocsBucket()
   if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
   const [files] = await bucket.getFiles({ prefix })

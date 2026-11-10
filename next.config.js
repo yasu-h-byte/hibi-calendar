@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // お試しサイト（Vercel の Preview）で書き込みを止めているとき、画面に帯を出すための印（lib/preview-guard.ts・2026-11-10）。
+  //   判定はサーバーと同じ（VERCEL_ENV=preview かつ PREVIEW_ALLOW_WRITES≠1）。ビルド時に決まる
+  env: {
+    NEXT_PUBLIC_PREVIEW_MODE: process.env.VERCEL_ENV !== 'preview' ? '' : (process.env.PREVIEW_ALLOW_WRITES === '1' ? 'write' : 'readonly'),
+  },
   // 依存の同梱の起点（Next 15）。worktree（.claude/worktrees/…）で親リポジトリの lockfile を拾って警告が出るのを止める
   outputFileTracingRoot: __dirname,
   /**

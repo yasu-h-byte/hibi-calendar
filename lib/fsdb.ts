@@ -18,6 +18,7 @@
 import * as web from 'firebase/firestore'
 import { db as webDb } from './firebase'
 import { getAdminDb, getAdminFieldValue } from './firebase-admin'
+import { assertPreviewWritable } from './preview-guard'
 
 // 型はそのまま Web SDK のものを再エクスポート（型注釈用・実行時に影響なし）
 export type {
@@ -134,25 +135,36 @@ export async function getDocs(q: any): Promise<FsQuerySnap> {
 }
 
 // ── 書き込み ──
+// お試しサイト（Vercel の Preview）では、書き込みを既定で止める（lib/preview-guard.ts・2026-11-10）。
+//   書き込みの入口（setDoc / updateDoc / deleteDoc / addDoc / トランザクション）は必ず最初に guardWrite を通すこと
+function guardWrite(ref: any): void {
+  let path: string | undefined
+  try { path = ref?.path } catch { path = undefined }
+  assertPreviewWritable(path)
+}
 export async function setDoc(ref: any, data: any, options?: any): Promise<void> {
+  guardWrite(ref)
   const a = adb()
   if (!a) { await web.setDoc(ref, data, options); invalidateIfMain(ref); return }
   await ref.set(data, options || {})
   invalidateIfMain(ref)
 }
 export async function updateDoc(ref: any, data: any): Promise<void> {
+  guardWrite(ref)
   const a = adb()
   if (!a) { await web.updateDoc(ref, data); invalidateIfMain(ref); return }
   await ref.update(data)
   invalidateIfMain(ref)
 }
 export async function deleteDoc(ref: any): Promise<void> {
+  guardWrite(ref)
   const a = adb()
   if (!a) { await web.deleteDoc(ref); invalidateIfMain(ref); return }
   await ref.delete()
   invalidateIfMain(ref)
 }
 export async function addDoc(collectionRef: any, data: any): Promise<any> {
+  guardWrite(collectionRef)
   const a = adb()
   if (!a) return web.addDoc(collectionRef, data)
   return collectionRef.add(data)
@@ -170,7 +182,8 @@ export async function runTransaction<T>(_db: any, updateFn: (tx: any) => Promise
   const a = adb()
   if (!a) return web.runTransaction(webDb, updateFn as any) as Promise<T>
   let touchedMain = false
-  const markIfMain = (ref: any) => { if (isMainRef(ref)) touchedMain = true }
+  // トランザクションの中の書き込みも、お試しサイトでは止める（guardWrite が投げるとトランザクションごと取りやめになる）
+  const markIfMain = (ref: any) => { guardWrite(ref); if (isMainRef(ref)) touchedMain = true }
   const result = await a.runTransaction(async (tx: any) => {
     const wrappedTx = {
       get: async (ref: any) => wrapDocSnap(await tx.get(ref)),

@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, requireCap, callerCan, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
+import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { parseDKey, isDispatchedAt } from '@/lib/compute'
 import { getMainData, getMultiMonthAttData } from '@/lib/compute.server'
+import { captureMainGuard, MainConflictError, MAIN_CONFLICT_MESSAGE } from '@/lib/main-guard'
+import { guardedMainUpdate, plUpdates } from '@/lib/main-guard.server'
 import { ymKey, attKey } from '@/lib/attendance'
 import type { AttendanceEntry } from '@/types'
 import { writeAttendanceEntry, dayApprovalOf, finalApprovedEditError } from '@/lib/attendance-save'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap, jpDeemedDate, selectCurrentPeriodRecord, selectEndedPeriodRecord, computeRecordBalance } from '@/lib/leave-compute'
-import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
 /**
@@ -121,6 +122,8 @@ export async function POST(request: NextRequest) {
     const docRef = doc(db, 'demmen', 'main')
     const snap = await getDoc(docRef)
     if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    // 読んだ時点の控え。書く瞬間に読み直して、ほかの人が同じ所を書き換えていたら止める（後勝ちで消さない・lib/main-guard.ts）
+    const guard = captureMainGuard(snap.data())
 
     // 現在時刻 (ISO) と 操作者識別子
     const nowIso = new Date().toISOString()
@@ -196,7 +199,7 @@ export async function POST(request: NextRequest) {
       rec.lastEditedBy = actor
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
-      await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
+      await guardedMainUpdate(docRef, guard, { plKeys: [String(workerId)] }, { [`plData.${String(workerId)}`]: wRecords })
       await logActivity(await actorLabel(request), 'leave.buyout', `workerId=${workerId} FY${fy} 買取 ${days}日${amount ? ` ¥${amount}` : ''}（操作者: ${actor}）`)
       return NextResponse.json({ success: true, totalBuyout })
     }
@@ -361,7 +364,7 @@ export async function POST(request: NextRequest) {
       targetRec.lastEditedBy = actor
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
-      await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
+      await guardedMainUpdate(docRef, guard, { plKeys: [String(workerId)] }, { [`plData.${String(workerId)}`]: wRecords })
       await logActivity(await actorLabel(request), 'leave.designate', `workerId=${workerId} に有給P入力 ${written.length}日 (${written.join(', ')})（操作者: ${actor}）`)
       return NextResponse.json({ success: true, written })
     }
@@ -451,7 +454,7 @@ export async function POST(request: NextRequest) {
       // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
-      await updateMapByKey(docRef, 'plData', plData)
+      await guardedMainUpdate(docRef, guard, { plKeys: 'all' }, plUpdates(plData))
       // 2026-06-XX 追加: 健全性チェック用に最終実行時刻を記録
       try {
         const sysRef = doc(db, 'demmen', 'system')
@@ -673,7 +676,7 @@ export async function POST(request: NextRequest) {
       // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
-      await updateMapByKey(docRef, 'plData', plData)
+      await guardedMainUpdate(docRef, guard, { plKeys: 'all' }, plUpdates(plData))
       return NextResponse.json({ success: true, stats })
     }
 
@@ -806,7 +809,7 @@ export async function POST(request: NextRequest) {
       // race-warning: 同時実行は要注意（複数 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
-      await updateMapByKey(docRef, 'plData', plData)
+      await guardedMainUpdate(docRef, guard, { plKeys: 'all' }, plUpdates(plData))
       return NextResponse.json({ success: true, granted })
     }
 
@@ -820,7 +823,7 @@ export async function POST(request: NextRequest) {
       } else {
         workers[wIdx].grantMonth = Number(grantMonth)
       }
-      await updateDoc(docRef, { workers })
+      await guardedMainUpdate(docRef, guard, { fields: ['workers'] }, { workers })
       return NextResponse.json({ success: true })
     }
 
@@ -966,12 +969,12 @@ export async function POST(request: NextRequest) {
         const wIdx = workers.findIndex(w => w.id === Number(workerId))
         if (wIdx >= 0) {
           workers[wIdx].grantMonth = Number(grantMonth)
-          await updateDoc(docRef, { [`plData.${key}`]: records, workers })
+          await guardedMainUpdate(docRef, guard, { plKeys: [key], fields: ['workers'] }, { [`plData.${key}`]: records, workers })
         } else {
-          await updateDoc(docRef, { [`plData.${key}`]: records })
+          await guardedMainUpdate(docRef, guard, { plKeys: [key] }, { [`plData.${key}`]: records })
         }
       } else {
-        await updateDoc(docRef, { [`plData.${key}`]: records })
+        await guardedMainUpdate(docRef, guard, { plKeys: [key] }, { [`plData.${key}`]: records })
       }
 
       await logActivity(await actorLabel(request), 'leave.grant', `workerId=${workerId} に有給付与/編集（操作者: ${actor}）`)
@@ -1041,7 +1044,7 @@ export async function POST(request: NextRequest) {
       // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
-      await updateMapByKey(docRef, 'plData', plData)
+      await guardedMainUpdate(docRef, guard, { plKeys: 'all' }, plUpdates(plData))
       return NextResponse.json({ success: true, updated, skipped, skippedNames })
     }
 
@@ -1183,9 +1186,10 @@ export async function POST(request: NextRequest) {
     }
 
     // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
-    await updateDoc(docRef, { [`plData.${key}`]: records })
+    await guardedMainUpdate(docRef, guard, { plKeys: [key] }, { [`plData.${key}`]: records })
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof MainConflictError) return NextResponse.json({ error: MAIN_CONFLICT_MESSAGE }, { status: 409 })
     console.error('Leave POST error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
