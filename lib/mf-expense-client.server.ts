@@ -298,6 +298,22 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
     throw new MfReconnectError('保存した接続情報を読めません。つなぎ直してください')
   }
   let accessExpires = conn.accessExpiresAt
+  let currentEnc = conn.enc
+
+  /** 同じ時に別の処理（朝のチェック・画面の読み直し）がトークンを更新していたら、その新しいトークンに乗り換える */
+  async function adoptNewerTokens(): Promise<boolean> {
+    await new Promise(r => setTimeout(r, 1500)) // 相手の保存が終わるのを待つ
+    const latest = await loadConnection()
+    if (!latest || latest.enc === currentEnc) return false
+    try {
+      tokens = decryptTokens(latest.enc, c!.secret)
+    } catch {
+      return false
+    }
+    currentEnc = latest.enc
+    accessExpires = latest.accessExpiresAt
+    return true
+  }
 
   async function refresh(): Promise<void> {
     let t
@@ -306,12 +322,14 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
     } catch (e) {
       // MF の一時的な障害（5xx・通信エラー）で「つなぎ直して」と出さない。次の回に自然に直る
       if (!(e instanceof MfTokenError) || ![400, 401, 403].includes(e.status)) throw new Error('MF経費が一時的に応答しません。次の回にやり直します')
+      if (await adoptNewerTokens()) return
       await setDoc(connectionRef(), { needsReconnect: true, lastError: 'MF との接続が切れました。代表がつなぎ直してください' }, { merge: true })
       throw new MfReconnectError('MF との接続が切れました。代表がつなぎ直してください')
     }
     tokens = { access: t.access_token, refresh: t.refresh_token || tokens.refresh }
     accessExpires = expiresAt(t)
-    await setDoc(connectionRef(), { enc: encryptTokens(tokens, c!.secret), accessExpiresAt: accessExpires, needsReconnect: false, lastError: null }, { merge: true })
+    currentEnc = encryptTokens(tokens, c!.secret)
+    await setDoc(connectionRef(), { enc: currentEnc, accessExpiresAt: accessExpires, needsReconnect: false, lastError: null }, { merge: true })
   }
 
   async function fetchJson<T>(pathWithQuery: string, attempt = 0): Promise<T> {

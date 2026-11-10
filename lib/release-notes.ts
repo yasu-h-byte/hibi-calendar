@@ -28,6 +28,15 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261110_expense_check_live',
+    title: '「経費の事前チェック」で、差し戻し・承認がすぐ一覧に反映されます',
+    content: 'MF で差し戻すと、この画面を開き直したときに一覧から外れ、一番下の「差し戻し中（再申請待ち）」に移ります。承認したものも次の人の番に変わります。押すボタンはありません。',
+    category: 'new',
+    publishedAt: '2026-11-10T13:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261110_expense_check_groups',
     title: '「経費の事前チェック」の一覧を、見る順に振り分けました',
     content: '開いた人の承認の番の申請が最初に出ます。指摘も参考の札もない申請は「そのまま承認してよい」にまとめ、たたんであります。',

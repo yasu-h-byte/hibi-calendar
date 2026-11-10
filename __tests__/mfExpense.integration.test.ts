@@ -125,7 +125,7 @@ vi.mock('@/lib/mf-expense-receipt.server', () => ({
 import { GET as cronGET } from '@/app/api/mf-expense/cron/route'
 import { GET as receiptsGET } from '@/app/api/mf-expense/receipts/route'
 import { completeMfConnection } from '@/lib/mf-expense-client.server'
-import { loadMfRouteTable, runMfExpenseCheck, runMfReceiptReads, saveExpenseReview } from '@/lib/mf-expense-run.server'
+import { loadMfRejected, loadMfRouteTable, runMfExpenseCheck, runMfReceiptReads, saveExpenseReview, syncMfExpenseStatus } from '@/lib/mf-expense-run.server'
 import { mfCheckState } from '@/lib/mf-expense-rules'
 
 // ────────────────────────────────────────
@@ -1539,5 +1539,138 @@ describe('承認済みの申請', () => {
     stage()
     at('2026-11-10T03:00:00')
     expect(await load('202610')).toMatchObject({ ok: false, status: 'maintenance' })
+  })
+})
+
+describe('MF の今の状態だけの読み直し（画面を開いたとき）', () => {
+  const stage = async () => {
+    settings()
+    report(HIBI, 'r1', 'm-h1', '2026-11-05', [tx('t1', '2026-10-20', 500, 'i-o', '文具')], {
+      ex_report_approvals: [{ step: 1, is_active: true, approved_at: null, approve_office_member: { name: '森田陽子' } }],
+    })
+    report(HIBI, 'r2', 'm-h2', '2026-11-05', [tx('t2', '2026-10-20', 800, 'i-o', '文具')])
+    await cron()
+    mf.calls.length = 0
+    h.writeLog.length = 0
+    at('2026-11-10T09:00:00')
+  }
+  const mfReport = (id: string) => mf.offices[HIBI].reports.find(x => x.id === id)!
+
+  test('差し戻すと、朝を待たずに一覧から外れ、差し戻し中に入る（明細は読まない）', async () => {
+    await stage()
+    mfReport('r1').status = 'rejected'
+    expect(await syncMfExpenseStatus()).toMatchObject({ synced: true, changed: true })
+    expect(check('r1').open).toBe(false)
+    expect(check('r2').open).toBe(true)
+    expect(await loadMfRejected()).toMatchObject([{ reportId: 'r1', name: '鈴木一郎', submittedIso: '2026-11-05' }])
+    expect(mf.callsTo(/ex_transactions/).length).toBe(0)
+  })
+
+  test('1段目の承認は、一覧に残したまま次の人の番に変わる', async () => {
+    await stage()
+    const r = mfReport('r1')
+    r.status = 'waiting_step_two'
+    r.ex_report_approvals = [
+      { step: 1, is_active: false, approved_at: '2026-11-10T08:50:00+09:00', approve_office_member: { name: '森田陽子' } },
+      { step: 2, is_active: true, approved_at: null, approve_office_member: { name: '日比靖仁' } },
+    ]
+    expect(await syncMfExpenseStatus()).toMatchObject({ changed: true })
+    expect(check('r1').open).toBe(true)
+    expect(check('r1').status).toBe('waiting_step_two')
+    expect(check('r1').approvals[1]).toMatchObject({ name: '日比靖仁', active: true })
+  })
+
+  test('何も変わっていなければ書かない。項目の順が変わって戻っても「変わった」にしない', async () => {
+    await stage()
+    const c = h.docs.get('expenseChecks/r1') as Record<string, any>
+    c.approvals = c.approvals.map((a: Record<string, unknown>) => Object.fromEntries(Object.entries(a).reverse()))
+    expect(await syncMfExpenseStatus()).toMatchObject({ synced: true, changed: false })
+    expect(h.writeLog.filter(w => w.key.startsWith('expenseChecks/'))).toEqual([])
+  })
+
+  test('1分以内は MF を読まない。1分たてば読む', async () => {
+    await stage()
+    await syncMfExpenseStatus()
+    const n = mf.calls.length
+    at('2026-11-10T09:00:30')
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    expect(mf.calls.length).toBe(n)
+    at('2026-11-10T09:01:01')
+    expect((await syncMfExpenseStatus()).synced).toBe(true)
+  })
+
+  test('出し直されると差し戻し中から外れ、次のチェックで一覧に戻って確認メモは消える', async () => {
+    await stage()
+    h.docs.get('expenseChecks/r1')!.review = { note: 'x', byName: 'y', at: '', flagKeys: [] }
+    const r = mfReport('r1')
+    r.status = 'rejected'
+    await syncMfExpenseStatus()
+    r.status = 'waiting_step_one'
+    r.submitted_at = '2026-11-12T10:00:00+09:00'
+    r.updated_at = r.submitted_at
+    at('2026-11-12T09:00:00')
+    expect(await syncMfExpenseStatus()).toMatchObject({ changed: true })
+    expect(await loadMfRejected()).toEqual([])
+    at('2026-11-12T11:00:00')
+    await runMfExpenseCheck({ actor: 'tester', force: true })
+    expect(check('r1').open).toBe(true)
+    expect(check('r1').review).toBeUndefined()
+  })
+
+  test('形の違う応答や MF の障害では申請を閉じない', async () => {
+    await stage()
+    mf.hook = p => (p.endsWith('/approving_ex_reports') ? Response.json({ oops: true }) : undefined)
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    expect(check('r1').open).toBe(true)
+  })
+
+  test('差し戻しの一覧が読めなくても、承認待ちの反映は活かす', async () => {
+    await stage()
+    mfReport('r1').status = 'approved'
+    mf.hook = p => (p.endsWith('/expense_reports') ? new Response('{}', { status: 404 }) : undefined)
+    expect(await syncMfExpenseStatus()).toMatchObject({ synced: true, changed: true })
+    expect(check('r1').open).toBe(false)
+  })
+
+  test('チェックの途中とメンテナンス中は読まない', async () => {
+    await stage()
+    h.docs.get('mfExpense/runState')!.runningUntil = Date.now() + 30_000
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    h.docs.get('mfExpense/runState')!.runningUntil = 0
+    at('2026-11-10T03:00:00')
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    expect(mf.calls.length).toBe(0)
+  })
+
+  test('HFU のスイッチを切っている間は、HFU を読まない', async () => {
+    await stage()
+    report(HFU, 'f1', 'm-f3', '2026-11-05', [tx('x1', '2026-11-01', 500, 'j-t')], { status: 'rejected' })
+    await syncMfExpenseStatus()
+    expect(noHfuTraffic().length).toBe(0)
+    expect(await loadMfRejected('hfu')).toEqual([])
+  })
+
+  test('同じ時に別の処理がトークンを更新していたら、つなぎ直しにせず新しいトークンで続ける', async () => {
+    await stage()
+    h.docs.get('mfExpenseSecrets/connection')!.accessExpiresAt = Date.now() - 1000
+    const stale = h.docs.get('mfExpenseSecrets/connection')!.enc
+    // 相手が先に更新して保存した状態を作る
+    await runMfExpenseCheck({ actor: 'tester', force: true })
+    const fresh = h.docs.get('mfExpenseSecrets/connection')!.enc
+    expect(fresh).not.toBe(stale)
+    h.docs.get('mfExpenseSecrets/connection')!.enc = stale
+    h.docs.get('mfExpenseSecrets/connection')!.accessExpiresAt = Date.now() - 1000
+    let swapped = false
+    mf.hook = (p, m) => {
+      if (p === '/oauth/token' && m === 'POST' && !swapped) {
+        swapped = true
+        h.docs.get('mfExpenseSecrets/connection')!.enc = fresh
+        h.docs.get('mfExpenseSecrets/connection')!.accessExpiresAt = Date.now() + 3600_000
+        return Response.json({ error: 'invalid_grant' }, { status: 400 })
+      }
+      return undefined
+    }
+    expect((await syncMfExpenseStatus()).synced).toBe(true)
+    expect(fsDoc('mfExpenseSecrets/connection')!.needsReconnect).toBe(false)
   })
 })
