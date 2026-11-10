@@ -153,14 +153,14 @@ Next 15 / React 19 / ESLint 9 / firebase 13 に 2026-10-21 更新（`generateMet
 |---|---|
 | `docs/manual-*.md` (原本) | フロントマター「最終更新」+ 改訂履歴の表に新エントリ |
 | `public/manual-*.html` (公開HTML) | 冒頭の「最終更新: YYYY年MM月」+ 改訂履歴の表に新エントリ |
-| `app/(app)/docs/page.tsx` (資料一覧) | 該当エントリの `updated: 'YYYY-MM-DD'` |
+| `lib/docs-catalog.ts` (資料一覧の台帳) | 該当エントリの `updated: 'YYYY-MM-DD'` |
 
 改訂履歴の表には「何を変更したか」を 1-2 行で記載。空のエントリは作らない。
 
 例: 給与計算マニュアル (奥寺さん用) の場合
 - `docs/payroll-manual-okutera.md`
 - `public/manual-payroll-okudera.html`
-- `app/(app)/docs/page.tsx` の `'/manual-payroll-okudera.html'` 行
+- `lib/docs-catalog.ts` の `'/manual-payroll-okudera.html'` 行
 
 ### 関係者の役割
 

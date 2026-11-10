@@ -41,6 +41,8 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   { coll: 'mfExpense', prefix: 'mfexpense', note: 'MF経費の事前チェックの設定・科目の割り当て・従業員の結びつけ（トークンは mfExpenseSecrets で別）' },
   // 2026-10-22 追加
   { coll: 'calendarStatusLog', prefix: 'calstatlog', note: '就業カレンダーの提出・最終承認・差し戻し・取り消しの台帳（append-only・lib/calendar-status-log.server.ts）' },
+  // 2026-11-10 追加
+  { coll: 'helpLog', prefix: 'helplog', note: '「使い方を聞く」の質問と AI の答えの記録（1日の回数の歯止めにも使う）' },
 ]
 
 /**
