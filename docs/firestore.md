@@ -480,6 +480,32 @@ workSchedule?: {
 - **開発（Claude）の返信**: 代表のセッションから Firestore に直接、messages の末尾に `by.kind = 'dev'` の1件を足し、
   `updatedAt` と `unreadForAuthor: true` を付ける（messages は**必ず読んでから全体を書き戻す**。足すだけ・消さない）
 
+## 使い方を聞く `helpLog/{id}`（2026-11-10）
+
+「困ったこと・要望」のいちばん上の欄。質問を書くと AI（Claude）がマニュアルを読んでその場で答える。
+決まりは `lib/help.ts`、AI の呼び出しは `lib/help.server.ts`、通信は `/api/help`、画面は `app/(app)/feedback/HelpAsk.tsx`。
+1回の質問＝1ドキュメント（足すだけ・書き換えない）。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| at | string | ISO 日時 |
+| day | string | 日本時間の日付 `YYYY-MM-DD`（1人1日の回数を数える鍵） |
+| workerId / name / role | number / string / PermRole \| null | 聞いた人（代表は workerId 0） |
+| question | string | 質問（600文字まで） |
+| answered | boolean | 資料から答えられたか（false = 資料に無い・関係のない質問） |
+| answer | string | AI の答え |
+| sources | string[] | もとにした資料の url（`/manual-morita.html` など） |
+| usage | {input, cacheRead, cacheWrite, output} | トークン数（費用の目安） |
+
+- **AI に渡すのは公開マニュアル（`public/*.html`）の文だけ**。Firestore の実データ（出面・給与・有給）は読まない・渡さない
+  （`lib/help.server.ts` は Firestore を import しない。`__tests__/help.test.ts` が確かめる）
+- 読ませる資料は役割ごとに出し分ける（`helpDocsForRole`）。資料の台帳は `lib/docs-catalog.ts`（資料一覧の画面と共通）。
+  役割の決まった資料はその役割の人と代表にだけ・過去資料は読ませない・役割が分からないときは全員向けだけ
+- 聞けるのは `help.ask`（要望欄と同じ試験運用の3人・`FEEDBACK_PILOT_WORKER_IDS`）。記録を見るのは代表（`feedback.manage`）
+- 1人1日20回まで（`HELP_LIMITS.perDay`）。鍵は Vercel の環境変数 `ANTHROPIC_API_KEY`（領収書の読み取りと共通）
+- `public/*.html` は `next.config.js` の `outputFileTracingIncludes` で `/api/help` の関数に同梱する
+- 日次バックアップの対象（`lib/backup-plan.ts`）
+
 ## MF経費の事前チェック（2026-11-08）
 
 決まりは [mf-expense-check.md](mf-expense-check.md)。読み書きは `lib/mf-expense-run.server.ts`・`lib/mf-expense-client.server.ts` だけ。MF の応答は使う項目だけを残す（振込口座などは保存しない）。

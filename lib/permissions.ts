@@ -135,6 +135,8 @@ export const CAPABILITIES = {
   // 困ったこと・要望（2026-10-09 代表）。書けるのはログインしている人全員（見られるのは自分の書き込みだけ）。全部を見て返信・状態を変えるのは代表
   'feedback.post':           { group: '管理', label: '困ったこと・要望を書く（自分の書き込みを見る・返信する）※試験運用中は森田さん・政仁さん・代表だけ', roles: ['foreman', ...ALL_OFFICE] },
   'feedback.manage':         { group: '管理', label: '困ったこと・要望を全部見る・返信する・状態を変える', roles: ['owner'] },
+  // 使い方を聞く（2026-11-10 代表）。AI がマニュアルを読んで答える。要望欄と同じ試験運用の人だけ（lib/help.ts）。質問の記録を見るのは feedback.manage
+  'help.ask':                { group: '管理', label: '使い方を AI に聞く（マニュアルだけをもとに答える）※試験運用中は森田さん・政仁さん・代表だけ', roles: ['foreman', ...ALL_OFFICE] },
 } as const satisfies Record<string, { group: string; label: string; roles: readonly PermRole[] }>
 
 export type Capability = keyof typeof CAPABILITIES
@@ -172,7 +174,7 @@ export const isPayViewerId = (workerId: unknown): boolean =>
  * 全員に開くときは null にする（そのとき lib/release-notes.ts にお知らせを足す）
  */
 export const FEEDBACK_PILOT_WORKER_IDS: readonly number[] | null = [0, 1, 303]
-const FEEDBACK_CAPS: ReadonlySet<Capability> = new Set<Capability>(['feedback.post', 'feedback.manage'])
+const FEEDBACK_CAPS: ReadonlySet<Capability> = new Set<Capability>(['feedback.post', 'feedback.manage', 'help.ask'])
 
 /** 役割と本人（給与の権限・試験運用中の機能のときだけ）の両方で判定する。サーバーは lib/auth.ts の requireCap / callerCan が同じ判定 */
 export function capAllowed(role: PermRole | null, workerId: unknown, cap: Capability): boolean {

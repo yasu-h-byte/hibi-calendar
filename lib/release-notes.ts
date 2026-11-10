@@ -28,6 +28,15 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261110_help_ask',
+    title: '使い方を AI に聞けるようになりました（試験運用）',
+    content: 'メニュー「困ったこと・要望」のいちばん上に「使い方を聞く」の欄ができました。質問を書いて「聞く」を押すと、AI がマニュアルを読んでその場で答えます（出面や給与などの実際のデータは見ません）。答えで解決しないときは「これでは分からない → 代表に送る」を押してください。',
+    category: 'new',
+    publishedAt: '2026-11-10T15:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261110_expense_check_live',
     title: '「経費の事前チェック」で、差し戻し・承認がすぐ一覧に反映されます',
     content: 'MF で差し戻すと、この画面を開き直したときに一覧から外れ、一番下の「差し戻し中（再申請待ち）」に移ります。承認したものも次の人の番に変わります。押すボタンはありません。',

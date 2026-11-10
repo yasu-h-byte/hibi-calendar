@@ -6,12 +6,15 @@
  * - 書いた人: 自分の書き込みだけが並ぶ。行を押すと右にやり取りが開き、返信できる
  * - 代表: 全員の書き込みが並ぶ。返信と状態（受付・対応中・直した・見送り）の切り替え
  * - 返信が来ると、メニューの「困ったこと・要望」に件数が付く（開くと消える）
+ * - いちばん上の「使い方を聞く」は AI がマニュアルを読んでその場で答える（2026-11-10・HelpAsk.tsx / lib/help.ts）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { notify } from '@/lib/notify'
 import { visibleMenuItems } from '@/lib/menu'
+import { can } from '@/lib/permissions'
+import { HelpAsk } from './HelpAsk'
 import { PageHeader, ToolButton, Segment, Chip, SidePanel, CloseButton, FieldError } from '@/components/ui/PageParts'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -120,6 +123,8 @@ export default function FeedbackPage() {
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
+  // 「使い方を聞く」から代表に送るとき: 質問と AI の答えを入れた状態で窓を開く
+  const [newInit, setNewInit] = useState<{ kind: FeedbackKind; text: string } | null>(null)
   const [filter, setFilter] = useState<Filter>('active')
 
   const fetchList = useCallback(async () => {
@@ -152,9 +157,14 @@ export default function FeedbackPage() {
         title="困ったこと・要望"
         sub={me?.manage
           ? '全員の書き込みです。行を押すとやり取りが開きます。返信と状態（受付・対応中・直した・見送り）の切り替えができます'
-          : 'システムで困ったこと・こうしてほしいこと・使い方の質問を書いてください。返事はここに届きます（メニューに件数が付きます）'}
-        actions={<ToolButton icon="pen" onClick={() => setShowNew(true)}>新しく書く</ToolButton>}
+          : '使い方は、まず上の「使い方を聞く」で聞いてみてください。困ったこと・こうしてほしいことは「新しく書く」から。返事はここに届きます（メニューに件数が付きます）'}
+        actions={<ToolButton icon="pen" onClick={() => { setNewInit(null); setShowNew(true) }}>新しく書く</ToolButton>}
       />
+
+      {user && can(user, 'help.ask') && (
+        <HelpAsk password={password} manage={!!me?.manage}
+          onEscalate={text => { setNewInit({ kind: 'question', text }); setShowNew(true) }} />
+      )}
 
       <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
@@ -209,7 +219,7 @@ export default function FeedbackPage() {
           onClose={() => setOpenId(null)} onChanged={fetchList} />
       )}
       {showNew && (
-        <NewModal password={password} pageOptions={pageOptions}
+        <NewModal password={password} pageOptions={pageOptions} init={newInit}
           onClose={() => setShowNew(false)}
           onCreated={id => { setShowNew(false); fetchList(); setOpenId(id) }} />
       )}
@@ -221,16 +231,17 @@ export default function FeedbackPage() {
 //  新しく書く
 // ────────────────────────────────────────
 
-function NewModal({ password, pageOptions, onClose, onCreated }: {
+function NewModal({ password, pageOptions, init, onClose, onCreated }: {
   password: string
   pageOptions: string[]
+  init: { kind: FeedbackKind; text: string } | null
   onClose: () => void
   onCreated: (id: string) => void
 }) {
-  const [kind, setKind] = useState<FeedbackKind>('trouble')
+  const [kind, setKind] = useState<FeedbackKind>(init?.kind ?? 'trouble')
   const [page, setPage] = useState('')
   const [title, setTitle] = useState('')
-  const [text, setText] = useState('')
+  const [text, setText] = useState(init?.text ?? '')
   const [images, setImages] = useState<Attach[]>([])
   const [tried, setTried] = useState(false)
   const err = feedbackTextError(text, images.length)
