@@ -131,6 +131,24 @@ export function summarizeMfApprovals(raw: MfRawApproval[] | null | undefined): M
     .sort((a, b) => a.step - b.step)
 }
 
+/** 承認の段階が変わったか。Firestore から戻ると項目の順が変わることがあるので、項目ごとに比べる */
+export function mfApprovalsDiffer(a: MfApprovalStep[] | undefined, b: MfApprovalStep[] | undefined): boolean {
+  const x = a || []
+  const y = b || []
+  return x.length !== y.length || x.some((s, i) => s.step !== y[i].step || s.name !== y[i].name || s.approvedAt !== y[i].approvedAt || s.active !== y[i].active)
+}
+
+/** MF で差し戻されたまま、本人の出し直しを待っている申請 */
+export interface MfRejectedEntry {
+  org?: MfOrg
+  reportId: string
+  number: number | null
+  title: string
+  memberId: string
+  name: string
+  submittedIso: string
+}
+
 const MF_WAITING_STEP: Record<string, number> = {
   waiting_step_one: 1, waiting_step_two: 2, waiting_step_three: 3, waiting_step_four: 4, waiting_step_five: 5,
 }

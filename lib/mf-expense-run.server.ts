@@ -28,9 +28,9 @@ import { purchasesBudgetUse } from '@/lib/tool-subsidy'
 import { MfReconnectError, MfTimeBudgetError, getMfConnectionStatus, openMfApi, type MfApi } from '@/lib/mf-expense-client.server'
 import { MF_RECEIPT_MODEL, isReceiptFatalError, isReceiptReaderConfigured, readReceiptFile } from '@/lib/mf-expense-receipt.server'
 import {
-  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, mfConfirmFlagKeys, mfIsReceiptReadCurrent, isMfWorkerInOrg, linkMfMembers, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfParkingInFare, mfRunProblem, MF_HFU_FROM_YM, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
+  buildMfRouteMinFares, buildMfRouteTable, buildMonthlyReminders, checkExpenseReport, isMfHistoryFresh, isSameMfSubmission, mfApprovalsDiffer, mfConfirmFlagKeys, mfIsReceiptReadCurrent, isMfWorkerInOrg, linkMfMembers, mfHfuMemberCounts, mfHfuOffice, mfHfuReportInScope, mfParkingInFare, mfRunProblem, MF_HFU_FROM_YM, normalizeMfExpenseSettings, shiftYm, summarizeMfApprovals, ymOfIso,
   type MfOrg, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfHistoryTx, type MfMemberLink,
-  type MfRawApproval, type MfRouteTableRow, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
+  type MfRawApproval, type MfRejectedEntry, type MfRouteTableRow, type MfReceiptRead, type MfReminderEntry, type MfReminderPerson, type MfToolContext,
 } from '@/lib/mf-expense-rules'
 
 /** Vercel の関数は 60 秒。余裕を見て 45 秒で区切り、残りは次の回に続ける */
@@ -885,6 +885,127 @@ export async function loadMfHealthProblems(): Promise<string[]> {
   if (settings.hfuEnabled) problems.push(mfRunProblem(await loadMfRunState('hfu'), today, hour, '経費の事前チェック（HFU）'))
   if (receipt.lastError) problems.push(`領収書の読み取りで問題があります（${receipt.lastError}）`)
   return problems.filter((p): p is string => !!p)
+}
+
+// ────────────────────────────────────────
+//  MF の今の状態だけを読み直す（画面を開いたとき・MF から戻ったとき）
+//  明細は読まない。差し戻し・承認のあと、朝のチェックを待たずに一覧を合わせるためのもの
+// ────────────────────────────────────────
+
+/** 何人が開いても MF を読むのは1分に1回まで */
+const SYNC_INTERVAL_MS = 60_000
+const SYNC_BUDGET_MS = 20_000
+const syncRef = () => doc(db, 'mfExpense', 'syncState')
+const rejectedRef = (org: MfOrg) => doc(db, 'mfExpense', orgDocId('rejected', org))
+const rejectedKey = (rows: MfRejectedEntry[]) => rows.map(e => [e.reportId, e.title, e.name, e.submittedIso].join('|')).join('\n')
+
+export interface MfSyncResult {
+  /** MF を読んだか（1分以内にほかの人が読んだ・メンテナンス中・チェックの途中なら読まない） */
+  synced: boolean
+  /** 一覧の中身が変わったか（変わったときだけ画面を読み直す） */
+  changed: boolean
+  syncedAt: string | null
+}
+
+export async function loadMfSyncedAt(): Promise<string | null> {
+  const snap = await getDoc(syncRef())
+  return snap.exists() ? ((snap.data().syncedAt as string | undefined) ?? null) : null
+}
+
+export async function loadMfRejected(org: MfOrg = 'hibi'): Promise<MfRejectedEntry[]> {
+  const snap = await getDoc(rejectedRef(org))
+  return snap.exists() ? ((snap.data().entries || []) as MfRejectedEntry[]) : []
+}
+
+async function isCheckRunning(org: MfOrg): Promise<boolean> {
+  const snap = await getDoc(stateRef(org))
+  const until = snap.exists() ? (snap.data().runningUntil as number | undefined) : undefined
+  return !!until && until > Date.now()
+}
+
+/** 1分に1回だけ通す。同時に開いた2人が両方 MF を読まないよう、トランザクションで決める */
+async function acquireSyncTurn(): Promise<boolean> {
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(syncRef())
+    const last = snap.exists() ? (snap.data().attemptAt as number | undefined) : undefined
+    if (last && Date.now() - last < SYNC_INTERVAL_MS) return false
+    tx.set(syncRef(), { attemptAt: Date.now() }, { merge: true })
+    return true
+  })
+}
+
+async function syncOrg(api: MfApi, org: MfOrg, open: ExpenseCheckDoc[], today: string): Promise<boolean> {
+  const members = await loadMfMembers(org)
+  const inScope = (r: RawMfReport) => org !== 'hfu' || mfHfuReportInScope(members[r.office_member_id || ''])
+  // 形の違う応答を「承認待ちが0件」と取り違えると、全申請を閉じてしまう
+  const all = await api.getAll<RawMfReport>('v1/offices/{office}/approving_ex_reports', 'ex_reports', undefined, { requireKey: true })
+  const waiting = new Map(all.filter(inScope).map(r => [r.id, r]))
+  let changed = false
+  for (const c of open) {
+    const r = waiting.get(c.reportId)
+    if (!r) {
+      await updateDoc(doc(db, 'expenseChecks', c.reportId), { open: false, closedAt: new Date().toISOString() })
+      changed = true
+      continue
+    }
+    const approvals = summarizeMfApprovals(r.ex_report_approvals)
+    const status = r.status || ''
+    if (status !== c.status || mfApprovalsDiffer(approvals, c.approvals)) {
+      await updateDoc(doc(db, 'expenseChecks', c.reportId), { status, approvals })
+      changed = true
+    }
+  }
+
+  // 差し戻し中の一覧。読めなくても、上の承認待ちの反映は活かす
+  try {
+    const recent = await api.getAll<RawMfReport>('v1/offices/{office}/expense_reports', 'expense_reports', {
+      'query_object[submitted_at_from]': monthRange(shiftYm(ymOfIso(today), -2)).from,
+    }, { requireKey: true })
+    const entries: MfRejectedEntry[] = recent
+      .filter(r => r.status === 'rejected' && inScope(r))
+      .map(r => ({
+        org, reportId: r.id, number: r.number ?? null, title: clip(r.title, 100), memberId: r.office_member_id || '',
+        name: members[r.office_member_id || '']?.name || '（MF の従業員が不明）',
+        submittedIso: r.submitted_at ? jstIsoOf(new Date(r.submitted_at)) : '',
+      }))
+      .sort((a, b) => a.submittedIso.localeCompare(b.submittedIso) || a.reportId.localeCompare(b.reportId))
+    if (rejectedKey(entries) !== rejectedKey(await loadMfRejected(org))) {
+      await setDoc(rejectedRef(org), { entries, updatedAt: new Date().toISOString() })
+      changed = true
+    }
+  } catch (e) {
+    if (e instanceof MfReconnectError) throw e
+    console.error('差し戻し中の一覧を読めませんでした:', e)
+  }
+  return changed
+}
+
+/** 失敗しても画面には何も出さない（朝のチェックが正）。接続切れだけは openMfApi が印を付ける */
+export async function syncMfExpenseStatus(): Promise<MfSyncResult> {
+  const hour = jstWallClock().getHours()
+  const skipped = async (): Promise<MfSyncResult> => ({ synced: false, changed: false, syncedAt: await loadMfSyncedAt() })
+  if (hour >= 1 && hour < 6) return skipped()
+  const settings = await loadMfSettings()
+  if ((await isCheckRunning('hibi')) || (settings.hfuEnabled && (await isCheckRunning('hfu')))) return skipped()
+  if (!(await acquireSyncTurn())) return skipped()
+
+  try {
+    const api = await openMfApi(Date.now() + SYNC_BUDGET_MS)
+    const today = todayJstIso()
+    const open = await loadOpenExpenseChecks()
+    const ofOrg = (org: MfOrg) => open.filter(c => (c.org ?? 'hibi') === org)
+    let changed = await syncOrg(api, 'hibi', ofOrg('hibi'), today)
+    if (settings.hfuEnabled) {
+      const office = mfHfuOffice(api.offices, api.officeId)
+      if (office && await syncOrg(api.forOffice(office), 'hfu', ofOrg('hfu'), today)) changed = true
+    }
+    const syncedAt = new Date().toISOString()
+    await setDoc(syncRef(), { syncedAt }, { merge: true })
+    return { synced: true, changed, syncedAt }
+  } catch (e) {
+    console.error('MF の状態の読み直しに失敗しました:', e)
+    return skipped()
+  }
 }
 
 export async function runMfExpenseCheck(opts: { actor: string; force: boolean; org?: MfOrg }): Promise<MfRunResult> {

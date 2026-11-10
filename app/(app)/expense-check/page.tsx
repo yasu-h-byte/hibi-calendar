@@ -4,7 +4,7 @@
  * MF経費の承認待ちの申請を毎朝読み、引っかかった申請だけを総務に見せる。見るだけの画面で、承認は MF で人が押す。
  * データは /api/mf-expense。決まりは lib/mf-expense-rules.ts。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
@@ -17,7 +17,7 @@ import { currentYmJst, todayJstIso } from '@/lib/date-utils'
 import { buildMfRejectComment, hasMfRejectComment, type MfCommentLang } from '@/lib/mf-expense-comment'
 import {
   MF_HFU_FROM_YM, MF_ITEM_KINDS, MF_ITEM_KIND_LABEL, MF_ORG_LABEL, MF_REVIEW_NOTE_MAX, MF_RULE_LABEL, mfApprovalWaitingLabel, MF_REPORT_GROUPS, mfCheckState, mfIsMyTurn, mfMemberNeedsLink, mfReportGroup, mfReviewIsCurrent, mfExpenseSettingsError, normalizeMfReviewNote, shiftYm,
-  type MfCheckState, type MfOrg, type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
+  type MfCheckState, type MfOrg, type MfRejectedEntry, type MfRouteTableRow, type MfApprovalStep, type MfExpenseFlag, type MfExpenseReview, type MfExpenseSettings, type MfExpenseTx, type MfItemKind, type MfMemberLink, type MfReminderEntry,
 } from '@/lib/mf-expense-rules'
 
 interface Check {
@@ -60,6 +60,8 @@ interface PageData {
   members: MfMemberLink[]
   reminders: MfReminderEntry[]
   checks: Check[]
+  rejected: MfRejectedEntry[]
+  syncedAt: string | null
   workers: { id: number; name: string; org?: MfOrg }[]
   routeTable: Record<string, MfRouteTableRow[]>
   redirectUri: string
@@ -70,6 +72,8 @@ type Tab = 'reports' | 'approved' | 'routes' | 'reminders' | 'members' | 'items'
 const yen = (n: number) => `${Math.round(n).toLocaleString('ja-JP')}円`
 const fmtDay = (iso: string) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : '日付なし')
 const fmtAt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'まだありません')
+/** MF を読み直す間隔（サーバでも1分に1回に絞っている） */
+const SYNC_MIN_GAP_MS = 60_000
 const inputCls = 'h-9 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 text-sm'
 const cardCls = 'bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl'
 const MF_RESULT_MESSAGE: Record<string, { ok: boolean; text: string }> = {
@@ -112,6 +116,29 @@ export default function ExpenseCheckPage() {
   }, [searchParams])
 
   const post = useCallback((body: unknown) => postJson<Record<string, unknown>>('/api/mf-expense', body, { password: password || undefined }), [password])
+
+  // 開いたときと、MF から戻ってきたときに、MF の今の状態（差し戻し・承認）だけ読み直す。失敗しても黙っている
+  const lastSyncAt = useRef(0)
+  const syncNow = useCallback(async () => {
+    if (!password || Date.now() - lastSyncAt.current < SYNC_MIN_GAP_MS) return
+    lastSyncAt.current = Date.now()
+    const r = await post({ action: 'sync' })
+    if (!r.ok) return
+    if (r.data?.changed === true) { await load(); return }
+    const syncedAt = typeof r.data?.syncedAt === 'string' ? r.data.syncedAt : null
+    if (syncedAt) setData(d => (d ? { ...d, syncedAt } : d))
+  }, [password, post, load])
+  useEffect(() => {
+    if (!ready) return
+    syncNow()
+    const onBack = () => { if (document.visibilityState === 'visible') syncNow() }
+    document.addEventListener('visibilitychange', onBack)
+    window.addEventListener('focus', onBack)
+    return () => {
+      document.removeEventListener('visibilitychange', onBack)
+      window.removeEventListener('focus', onBack)
+    }
+  }, [ready, syncNow])
 
   const connect = async () => {
     setConnecting(true)
@@ -220,7 +247,7 @@ export default function ExpenseCheckPage() {
             ]}
           />
 
-          {tab === 'reports' && <ReportsTab checks={data.checks} canEdit={canEdit} post={post} reload={load} myName={user?.name || ''} />}
+          {tab === 'reports' && <ReportsTab checks={data.checks} rejected={data.rejected} canEdit={canEdit} post={post} reload={load} myName={user?.name || ''} />}
           {tab === 'approved' && <ApprovedTab canEdit={canEdit} post={post} reload={load} password={password || ''} readerOn={data.receiptState.configured} />}
           {tab === 'routes' && <RoutesTab table={data.routeTable} />}
           {tab === 'reminders' && <RemindersTab reminders={data.reminders} />}
@@ -263,7 +290,7 @@ function ConnectionCard({ data, isOwner, canEdit, running, connecting, reading, 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-gray-700 dark:text-gray-200 space-y-0.5">
           <div>接続先: <b>{c.officeName || '事業者が選ばれていません'}</b>{data.settings.hfuEnabled && <>・<b>HFU（技能実習生・{Number(MF_HFU_FROM_YM.slice(4, 6))}月分から）</b></>}{c.authorizedMember && <span className="text-hibi-sub dark:text-gray-400">（{c.authorizedMember} さんの権限）</span>}</div>
-          <div className="text-xs text-hibi-sub dark:text-gray-400">最後のチェック: {fmtAt(s.lastRunAt)}{s.partial && '（途中まで）'}{sh && `・HFU ${fmtAt(sh.lastRunAt)}${sh.partial ? '（途中まで）' : ''}`}</div>
+          <div className="text-xs text-hibi-sub dark:text-gray-400">最後のチェック: {fmtAt(s.lastRunAt)}{s.partial && '（途中まで）'}{sh && `・HFU ${fmtAt(sh.lastRunAt)}${sh.partial ? '（途中まで）' : ''}`}{data.syncedAt && `・承認と差し戻しの反映: ${fmtAt(data.syncedAt)}`}</div>
           <div className="text-xs text-hibi-sub dark:text-gray-400">
             {rs.configured ? `領収書の読み取り: ${fmtAt(rs.lastRunAt)}${rs.remaining > 0 ? `（残り ${rs.remaining} 枚）` : ''}` : '領収書の読み取りは止まっています（代表に連絡してください）'}
           </div>
@@ -460,11 +487,37 @@ function ReportGroup({ title, hint, rows, canEdit, post, reload, collapsed }: { 
   )
 }
 
-function ReportsTab({ checks, canEdit, post, reload, myName }: { checks: Check[]; canEdit: boolean; post: Post; reload: () => Promise<void>; myName: string }) {
+/** 差し戻したまま、本人の出し直しを待っている申請。今やることではないので最初はたたんでおく */
+function RejectedGroup({ rows }: { rows: MfRejectedEntry[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="space-y-2">
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open} className="w-full text-left flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">差し戻し中（再申請待ち） {rows.length} 件</span>
+        <span className="text-xs text-hibi-sub dark:text-gray-400">本人が直して出し直すのを待っています。出し直されると、次のチェックで上の一覧に戻ります</span>
+        <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">{open ? '閉じる' : '開く'}</span>
+      </button>
+      {open && (
+        <div className={cardCls}>
+          {rows.map(r => (
+            <div key={r.reportId} className="border-t first:border-t-0 border-hibi-line dark:border-gray-700 px-5 py-3">
+              <div className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{r.org === 'hfu' && <span className="mr-1.5"><Chip tone="blue">HFU</Chip></span>}{r.name}</div>
+              <div className="text-xs text-hibi-sub dark:text-gray-400 truncate">{r.title || '題名なし'}（申請 {fmtDay(r.submittedIso)}）</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReportsTab({ checks, rejected, canEdit, post, reload, myName }: { checks: Check[]; rejected: MfRejectedEntry[]; canEdit: boolean; post: Post; reload: () => Promise<void>; myName: string }) {
   const mine = checks.filter(c => mfIsMyTurn(c.approvals, myName))
   // 同じ画面のまま、開いた人の番の申請を最初に出す（森田さんは1段目、代表は最終承認の分）
-  const [scope, setScope] = useState<'mine' | 'all'>(mine.length > 0 ? 'mine' : 'all')
-  if (checks.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>承認待ちの申請はありません</div>
+  const [chosenScope, setScope] = useState<'mine' | 'all'>(mine.length > 0 ? 'mine' : 'all')
+  // 開いている間に自分の番がなくなったら（差し戻し・承認の反映）、全部を見せる
+  const scope = mine.length > 0 ? chosenScope : 'all'
+  if (checks.length === 0 && rejected.length === 0) return <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>承認待ちの申請はありません</div>
   const shown = scope === 'mine' ? mine : checks
   const sorted = [...shown].sort((a, b) => b.confirmCount - a.confirmCount || b.infoCount - a.infoCount || a.submittedIso.localeCompare(b.submittedIso))
   const waiting = new Map<string, number>()
@@ -485,11 +538,12 @@ function ReportsTab({ checks, canEdit, post, reload, myName }: { checks: Check[]
           <RowButton tone={scope === 'all' ? 'main' : 'ghost'} onClick={() => setScope('all')}>全部 {checks.length} 件</RowButton>
         </div>
       )}
-      {shown.length === 0 && <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>今、あなたの番の申請はありません</div>}
+      {checks.length === 0 && <div className={`${cardCls} p-8 text-center text-sm text-hibi-sub dark:text-gray-400`}>承認待ちの申請はありません</div>}
       {MF_REPORT_GROUPS.map(g => {
         const rows = sorted.filter(c => mfReportGroup(c) === g.key)
         return rows.length > 0 && <ReportGroup key={g.key} title={g.title} hint={g.hint} rows={rows} canEdit={canEdit} post={post} reload={reload} collapsed={g.key === 'pass'} />
       })}
+      {rejected.length > 0 && <RejectedGroup rows={rejected} />}
     </div>
   )
 }
