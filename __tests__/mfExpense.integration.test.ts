@@ -52,15 +52,18 @@ const h = vi.hoisted(() => {
   const fs = {
     doc: (_db: unknown, coll: string, id: string) => ({ key: `${coll}/${id}` }),
     collection: (_db: unknown, name: string) => ({ collection: name }),
-    query: (c: { collection: string }, ...wheres: { field: string; value: unknown }[]) => ({ collection: c.collection, wheres }),
-    where: (field: string, _op: string, value: unknown) => ({ field, value }),
+    query: (c: { collection: string }, ...wheres: { field: string; op: string; value: unknown }[]) => ({ collection: c.collection, wheres }),
+    where: (field: string, op: string, value: unknown) => ({ field, op, value }),
     orderBy: () => ({}), limit: () => ({}),
     deleteField: () => DELETE,
     getDoc: async (ref: { key: string }) => snap(ref.key),
-    getDocs: async (q: { collection: string; wheres?: { field: string; value: unknown }[] }) => {
+    getDocs: async (q: { collection: string; wheres?: { field: string; op: string; value: unknown }[] }) => {
       const rows = Array.from(docs.keys())
         .filter(k => k.startsWith(`${q.collection}/`))
-        .filter(k => (q.wheres || []).every(w => (docs.get(k) as Record<string, unknown>)[w.field] === w.value))
+        .filter(k => (q.wheres || []).every(w => {
+          const v = (docs.get(k) as Record<string, unknown>)[w.field]
+          return w.op === '>=' ? typeof v === 'string' && v >= (w.value as string) : v === w.value
+        }))
         .map(snap)
       return { docs: rows, size: rows.length, empty: rows.length === 0, forEach: (cb: (d: unknown) => void) => rows.forEach(cb) }
     },
@@ -125,7 +128,7 @@ vi.mock('@/lib/mf-expense-receipt.server', () => ({
 import { GET as cronGET } from '@/app/api/mf-expense/cron/route'
 import { GET as receiptsGET } from '@/app/api/mf-expense/receipts/route'
 import { completeMfConnection } from '@/lib/mf-expense-client.server'
-import { loadMfRouteTable, runMfExpenseCheck, runMfReceiptReads, saveExpenseReview } from '@/lib/mf-expense-run.server'
+import { loadMfRejected, loadMfRouteTable, runMfExpenseCheck, runMfReceiptReads, saveExpenseReview, syncMfExpenseStatus } from '@/lib/mf-expense-run.server'
 import { mfCheckState } from '@/lib/mf-expense-rules'
 
 // ────────────────────────────────────────
@@ -722,19 +725,21 @@ describe('5. 途中失敗', () => {
     expect(fsDoc('mfExpense/runState')!.lastError).toBeNull()
   })
 
-  test('M2 の差し戻し一覧の直前で時間切れでも、続きの回で声かけまで終わる', async () => {
-    at('2026-11-12T07:00:00')
+  test('差し戻しかどうかを確かめる途中で時間切れでも、続きの回で声かけまで終わる', async () => {
     six('2026-11-09')
-    report(HIBI, 'rj', 'm-h2', '2026-11-09', [], { status: 'rejected' })
-    // 全部の読みが終わった直後に持ち時間を使い切る
-    mf.hook = (p) => { if (p.endsWith('/ex_reports/r6/ex_transactions')) vi.setSystemTime(Date.now() + 46_000); return undefined }
-    const first = await cron()
-    expect(first.body.status).toBe('partial')
-    for (let i = 1; i <= 6; i++) expect(check(`r${i}`).open).toBe(true)
+    await cron()
+    at('2026-11-12T07:00:00')
+    for (const id of ['r1', 'r2']) mf.offices[HIBI].reports.find(x => x.id === id)!.status = 'rejected'
+    // r1 を読んだ直後に持ち時間を使い切る
+    mf.hook = (p) => { if (p.endsWith('/ex_reports/r1/ex_transactions')) vi.setSystemTime(Date.now() + 46_000); return undefined }
+    expect((await cron()).body.status).toBe('partial')
+    expect(check('r1').closedAs).toBe('rejected')
+    expect(check('r2').closedAs).toBeUndefined()
     at('2026-11-12T07:10:00')
     mf.hook = null
     expect((await cron()).body.status).toBe('done')
-    expect((fsDoc('mfExpense/reminders')!.entries as { rule: string }[]).some(e => e.rule === 'M2')).toBe(true)
+    expect(check('r2').closedAs).toBe('rejected')
+    expect((fsDoc('mfExpense/reminders')!.entries as { rule: string }[]).filter(e => e.rule === 'M2').length).toBeGreaterThan(0)
   })
 
   test('1件の明細だけ 404: X1 で残り、他は読み、次の回に読み直す', async () => {
@@ -900,14 +905,19 @@ describe('5. 途中失敗', () => {
     expect((await cron()).body.status).toBe('done')
   })
 
-  test('差し戻し一覧が読めなくても done で、声かけに1行', async () => {
-    at('2026-11-11T07:00:00')
-    six()
-    mf.hook = p => (p.endsWith('/expense_reports') ? new Response('{}', { status: 500 }) : undefined)
-    const r = await cron()
-    expect(r.body.status).toBe('done')
-    const e = fsDoc('mfExpense/reminders')!.entries as { name: string; rule: string }[]
-    expect(e).toContainEqual(expect.objectContaining({ rule: 'M2', name: '確認できません' }))
+  test('差し戻しかどうかを読めなくても done で、次の回に読み直す', async () => {
+    six('2026-11-09')
+    await cron()
+    at('2026-11-12T07:00:00')
+    mf.offices[HIBI].reports.find(x => x.id === 'r1')!.status = 'rejected'
+    mf.hook = p => (p.endsWith('/ex_reports/r1/ex_transactions') ? new Response('{}', { status: 500 }) : undefined)
+    expect((await cron()).body.status).toBe('done')
+    expect(check('r1').open).toBe(false)
+    expect(check('r1').closedAs).toBeUndefined()
+    mf.hook = null
+    at('2026-11-13T07:00:00')
+    await cron()
+    expect(check('r1').closedAs).toBe('rejected')
   })
 
   test('空の従業員一覧: 手で決めた結びつけを消さない', async () => {
@@ -1431,7 +1441,7 @@ describe('8. 月またぎと日時', () => {
   function reminderStage() {
     report(HIBI, 'aug', 'm-h1', '2026-09-05', [tx('b1', '2026-08-06', 700, 'i-t', '')], { status: 'approved' })
     report(HIBI, 'sep', 'm-h1', '2026-10-05', [tx('b2', '2026-09-06', 700, 'i-t', '')], { status: 'approved' })
-    report(HIBI, 'rj', 'm-h2', '2026-11-03', [tx('b3', '2026-10-06', 700, 'i-t', '')], { status: 'rejected' })
+    report(HIBI, 'rj', 'm-h2', '2026-11-03', [tx('b3', '2026-10-06', 700, 'i-t', '')])
     worked(101, 'siteA', '202610', [5, 6])
   }
 
@@ -1442,18 +1452,21 @@ describe('8. 月またぎと日時', () => {
     ['2026-11-11', [['M2', 'confirm', 'm-h1'], ['M2', 'confirm', 'm-h2']]],
   ])('m1Day・m2Day の当日: %s', async (date, expected) => {
     reminderStage()
+    at('2026-11-05T07:00:00')
+    await cron()
+    mf.offices[HIBI].reports.find(x => x.id === 'rj')!.status = 'rejected'
     at(`${date}T07:00:00`)
     await cron()
     const got = (fsDoc('mfExpense/reminders')!.entries as { rule: string; level: string; memberId: string }[]).map(e => [e.rule, e.level, e.memberId])
     expect(got).toEqual(expected)
   })
 
-  test('m2Day の差し戻し一覧は前月1日以降の提出で引く（1月なら前年12月1日）', async () => {
+  test('チェックしたことのない昔の差し戻しは声かけに出さない（MF の一覧を頼らない）', async () => {
+    report(HIBI, 'old', 'm-h2', '2025-12-05', [tx('o1', '2025-12-01', 700, 'i-t', '')], { status: 'rejected' })
     at('2027-01-11T07:00:00')
     await cron()
-    const c = mf.callsTo(/expense_reports$/)
-    expect(c.length).toBe(1)
-    expect(decodeURIComponent(c[0].search)).toContain('submitted_at_from]=2026-12-01')
+    expect((fsDoc('mfExpense/reminders')!.entries as { rule: string }[]).filter(e => e.rule === 'M2')).toEqual([])
+    expect(mf.callsTo(/expense_reports$/).length).toBe(0)
   })
 
   test('1月の前年12月分: 月・出面・控え・T1 が年をまたいで合う', async () => {
@@ -1539,5 +1552,178 @@ describe('承認済みの申請', () => {
     stage()
     at('2026-11-10T03:00:00')
     expect(await load('202610')).toMatchObject({ ok: false, status: 'maintenance' })
+  })
+})
+
+describe('MF の今の状態だけの読み直し（画面を開いたとき）', () => {
+  const stage = async () => {
+    settings()
+    report(HIBI, 'r1', 'm-h1', '2026-11-05', [tx('t1', '2026-10-20', 500, 'i-o', '文具')], {
+      ex_report_approvals: [{ step: 1, is_active: true, approved_at: null, approve_office_member: { name: '森田陽子' } }],
+    })
+    report(HIBI, 'r2', 'm-h2', '2026-11-05', [tx('t2', '2026-10-20', 800, 'i-o', '文具')])
+    await cron()
+    mf.calls.length = 0
+    h.writeLog.length = 0
+    at('2026-11-10T09:00:00')
+  }
+  const mfReport = (id: string) => mf.offices[HIBI].reports.find(x => x.id === id)!
+
+  test('差し戻すと、朝を待たずに一覧から外れ、差し戻し中に入る（ほかの申請の明細は読まない）', async () => {
+    await stage()
+    mfReport('r1').status = 'rejected'
+    expect(await syncMfExpenseStatus()).toMatchObject({ synced: true, changed: true })
+    expect(check('r1').open).toBe(false)
+    expect(check('r2').open).toBe(true)
+    expect(await loadMfRejected()).toMatchObject([{ reportId: 'r1', name: '鈴木一郎', submittedIso: '2026-11-05' }])
+    expect(mf.callsTo(/ex_transactions/).length).toBe(1)
+    at('2026-11-10T09:02:00')
+    await syncMfExpenseStatus()
+    expect(mf.callsTo(/ex_transactions/).length).toBe(1)
+  })
+
+  test('承認済みで消えた申請は差し戻し中に出さない', async () => {
+    await stage()
+    mfReport('r1').status = 'approved'
+    await syncMfExpenseStatus()
+    expect(check('r1').closedAs).toBe('approved')
+    expect(await loadMfRejected()).toEqual([])
+  })
+
+  test('朝のチェックで閉じた差し戻しも、差し戻し中に入る', async () => {
+    await stage()
+    mfReport('r1').status = 'rejected'
+    await runMfExpenseCheck({ actor: 'tester', force: true })
+    expect(check('r1').open).toBe(false)
+    expect((await loadMfRejected()).map(r => r.reportId)).toEqual(['r1'])
+  })
+
+  test('チェックしたことのない昔の差し戻しは出さない', async () => {
+    await stage()
+    report(HIBI, 'old', 'm-h1', '2025-12-05', [tx('o1', '2025-12-01', 700, 'i-o')], { status: 'rejected' })
+    await syncMfExpenseStatus()
+    expect(await loadMfRejected()).toEqual([])
+  })
+
+  test('本人が取り消したら、数時間後の確認で差し戻し中から外れる', async () => {
+    await stage()
+    mfReport('r1').status = 'rejected'
+    await syncMfExpenseStatus()
+    mfReport('r1').status = 'canceled'
+    at('2026-11-10T10:00:00')
+    await syncMfExpenseStatus()
+    expect((await loadMfRejected()).length).toBe(1)
+    at('2026-11-10T15:30:00')
+    expect(await syncMfExpenseStatus()).toMatchObject({ changed: true })
+    expect(await loadMfRejected()).toEqual([])
+  })
+
+  test('1段目の承認は、一覧に残したまま次の人の番に変わる', async () => {
+    await stage()
+    const r = mfReport('r1')
+    r.status = 'waiting_step_two'
+    r.ex_report_approvals = [
+      { step: 1, is_active: false, approved_at: '2026-11-10T08:50:00+09:00', approve_office_member: { name: '森田陽子' } },
+      { step: 2, is_active: true, approved_at: null, approve_office_member: { name: '日比靖仁' } },
+    ]
+    expect(await syncMfExpenseStatus()).toMatchObject({ changed: true })
+    expect(check('r1').open).toBe(true)
+    expect(check('r1').status).toBe('waiting_step_two')
+    expect(check('r1').approvals[1]).toMatchObject({ name: '日比靖仁', active: true })
+  })
+
+  test('何も変わっていなければ書かない。項目の順が変わって戻っても「変わった」にしない', async () => {
+    await stage()
+    const c = h.docs.get('expenseChecks/r1') as Record<string, any>
+    c.approvals = c.approvals.map((a: Record<string, unknown>) => Object.fromEntries(Object.entries(a).reverse()))
+    expect(await syncMfExpenseStatus()).toMatchObject({ synced: true, changed: false })
+    expect(h.writeLog.filter(w => w.key.startsWith('expenseChecks/'))).toEqual([])
+  })
+
+  test('1分以内は MF を読まない。1分たてば読む', async () => {
+    await stage()
+    await syncMfExpenseStatus()
+    const n = mf.calls.length
+    at('2026-11-10T09:00:30')
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    expect(mf.calls.length).toBe(n)
+    at('2026-11-10T09:01:01')
+    expect((await syncMfExpenseStatus()).synced).toBe(true)
+  })
+
+  test('出し直されると差し戻し中から外れ、次のチェックで一覧に戻って確認メモは消える', async () => {
+    await stage()
+    h.docs.get('expenseChecks/r1')!.review = { note: 'x', byName: 'y', at: '', flagKeys: [] }
+    const r = mfReport('r1')
+    r.status = 'rejected'
+    await syncMfExpenseStatus()
+    r.status = 'waiting_step_one'
+    r.submitted_at = '2026-11-12T10:00:00+09:00'
+    r.updated_at = r.submitted_at
+    at('2026-11-12T09:00:00')
+    expect(await syncMfExpenseStatus()).toMatchObject({ changed: true })
+    expect(await loadMfRejected()).toEqual([])
+    at('2026-11-12T11:00:00')
+    await runMfExpenseCheck({ actor: 'tester', force: true })
+    expect(check('r1').open).toBe(true)
+    expect(check('r1').review).toBeUndefined()
+  })
+
+  test('形の違う応答や MF の障害では申請を閉じない', async () => {
+    await stage()
+    mf.hook = p => (p.endsWith('/approving_ex_reports') ? Response.json({ oops: true }) : undefined)
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    expect(check('r1').open).toBe(true)
+  })
+
+  test('差し戻しかどうかを読めなくても、承認待ちの反映は活かす', async () => {
+    await stage()
+    mfReport('r1').status = 'approved'
+    mf.hook = p => (p.endsWith('/ex_reports/r1/ex_transactions') ? new Response('{}', { status: 500 }) : undefined)
+    expect(await syncMfExpenseStatus()).toMatchObject({ synced: true, changed: true })
+    expect(check('r1').open).toBe(false)
+    expect(check('r1').closedAs).toBeUndefined()
+  })
+
+  test('チェックの途中とメンテナンス中は読まない', async () => {
+    await stage()
+    h.docs.get('mfExpense/runState')!.runningUntil = Date.now() + 30_000
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    h.docs.get('mfExpense/runState')!.runningUntil = 0
+    at('2026-11-10T03:00:00')
+    expect((await syncMfExpenseStatus()).synced).toBe(false)
+    expect(mf.calls.length).toBe(0)
+  })
+
+  test('HFU のスイッチを切っている間は、HFU を読まない', async () => {
+    await stage()
+    report(HFU, 'f1', 'm-f3', '2026-11-05', [tx('x1', '2026-11-01', 500, 'j-t')], { status: 'rejected' })
+    await syncMfExpenseStatus()
+    expect(noHfuTraffic().length).toBe(0)
+    expect(await loadMfRejected('hfu')).toEqual([])
+  })
+
+  test('同じ時に別の処理がトークンを更新していたら、つなぎ直しにせず新しいトークンで続ける', async () => {
+    await stage()
+    h.docs.get('mfExpenseSecrets/connection')!.accessExpiresAt = Date.now() - 1000
+    const stale = h.docs.get('mfExpenseSecrets/connection')!.enc
+    // 相手が先に更新して保存した状態を作る
+    await runMfExpenseCheck({ actor: 'tester', force: true })
+    const fresh = h.docs.get('mfExpenseSecrets/connection')!.enc
+    expect(fresh).not.toBe(stale)
+    h.docs.get('mfExpenseSecrets/connection')!.enc = stale
+    h.docs.get('mfExpenseSecrets/connection')!.accessExpiresAt = Date.now() - 1000
+    let swapped = false
+    mf.hook = (p, m) => {
+      if (p === '/oauth/token' && m === 'POST' && !swapped) {
+        swapped = true
+        h.docs.get('mfExpenseSecrets/connection')!.enc = fresh
+        h.docs.get('mfExpenseSecrets/connection')!.accessExpiresAt = Date.now() + 3600_000
+        return Response.json({ error: 'invalid_grant' }, { status: 400 })
+      }
+      return undefined
+    }
+    expect((await syncMfExpenseStatus()).synced).toBe(true)
+    expect(fsDoc('mfExpenseSecrets/connection')!.needsReconnect).toBe(false)
   })
 })

@@ -10,8 +10,8 @@ import {
   createMfAuthorizeUrl, disconnectMf, getMfConnectionStatus, isMfConfigured, selectMfOffice, MF_REDIRECT_URI,
 } from '@/lib/mf-expense-client.server'
 import {
-  loadMfWorkerOptions, loadMfItems, loadMfMembers, loadMfReceiptState, loadMfReminders, loadMfRouteTable, loadMfRunState, loadMfSettings,
-  loadOpenExpenseChecks, runMfExpenseCheck, saveExpenseReview, saveMfMemberLink, saveMfSettings,
+  loadMfWorkerOptions, loadMfItems, loadMfMembers, loadMfReceiptState, loadMfRejected, loadMfReminders, loadMfRouteTable, loadMfRunState, loadMfSettings, loadMfSyncedAt,
+  loadOpenExpenseChecks, runMfExpenseCheck, saveExpenseReview, saveMfMemberLink, saveMfSettings, syncMfExpenseStatus,
 } from '@/lib/mf-expense-run.server'
 import { mfExpenseSettingsError, normalizeMfExpenseSettings, normalizeMfReviewNote, type MfOrg } from '@/lib/mf-expense-rules'
 
@@ -22,14 +22,14 @@ export async function GET(request: NextRequest) {
   const denied = await requireCap(request, 'expenseCheck.view')
   if (denied) return denied
   try {
-    const [connection, runState, settings, items, members, reminders, checks, receiptState, routeTable] = await Promise.all([
+    const [connection, runState, settings, items, members, reminders, checks, receiptState, routeTable, rejected, syncedAt] = await Promise.all([
       getMfConnectionStatus(), loadMfRunState(), loadMfSettings(), loadMfItems(), loadMfMembers(),
-      loadMfReminders(), loadOpenExpenseChecks(), loadMfReceiptState(), loadMfRouteTable(),
+      loadMfReminders(), loadOpenExpenseChecks(), loadMfReceiptState(), loadMfRouteTable(), loadMfRejected(), loadMfSyncedAt(),
     ])
     const workers = await loadMfWorkerOptions('hibi', Object.values(members).map(m => m.workerId))
     // HFU はスイッチを入れている間だけ見せる
     const hfu = settings.hfuEnabled
-      ? await Promise.all([loadMfRunState('hfu'), loadMfItems('hfu'), loadMfMembers('hfu'), loadMfReminders('hfu')])
+      ? await Promise.all([loadMfRunState('hfu'), loadMfItems('hfu'), loadMfMembers('hfu'), loadMfReminders('hfu'), loadMfRejected('hfu')])
       : null
     const hfuWorkers = hfu ? await loadMfWorkerOptions('hfu', Object.values(hfu[2]).map(m => m.workerId)) : []
     const withOrg = <T,>(rows: T[], org: MfOrg) => rows.map(r => ({ ...r, org }))
@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
       members: [...withOrg(Object.values(members), 'hibi'), ...withOrg(hfu ? Object.values(hfu[2]) : [], 'hfu')],
       reminders: [...withOrg(reminders, 'hibi'), ...withOrg(hfu ? hfu[3] : [], 'hfu')],
       checks: checks.filter(c => settings.hfuEnabled || (c.org ?? 'hibi') === 'hibi'),
+      rejected: [...rejected, ...(hfu ? hfu[4] : [])],
+      syncedAt,
       workers: [...withOrg(workers, 'hibi'), ...withOrg(hfuWorkers, 'hfu')],
       routeTable,
       redirectUri: MF_REDIRECT_URI,
@@ -71,6 +73,13 @@ export async function POST(request: NextRequest) {
       if (!(await selectMfOffice(officeId))) return NextResponse.json({ error: '事業者が見つかりません' }, { status: 400 })
       await logActivity(actor, 'mf-expense', 'MF経費の事業者を選びました')
       return NextResponse.json({ ok: true })
+    }
+
+    // 画面を開いたときの読み直し。見られる人なら誰が開いても一覧を最新にする（MF には書かない）
+    if (action === 'sync') {
+      const denied = await requireCap(request, 'expenseCheck.view')
+      if (denied) return denied
+      return NextResponse.json(await syncMfExpenseStatus())
     }
 
     if (action === 'run' || action === 'saveSettings' || action === 'saveMember' || action === 'saveReview') {
