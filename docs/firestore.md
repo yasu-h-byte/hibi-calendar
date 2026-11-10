@@ -543,3 +543,15 @@ workSchedule?: {
 - 実行結果は `demmen/system.lastBackup`（時刻・件数・失敗した項目）に残る。26時間以上止まる・一部が失敗すると、
   代表の通知ベルと `/api/health`（`backupOk`）に出る
 - 復元（`/api/backup/restore`）の前の退避は、上書きするドキュメントだけを取る
+
+**Firestore の公式バックアップ（2026-11-10 全体点検・代表のOKで設定）**
+
+上の日次の退避は**同じデータベースの中**（`backups` コレクション）に置くので、データベースごとの事故・誤削除では一緒に消える。
+その備えとして、Firebase 側の定期バックアップを入れた（アプリのコードとは別・Google が保管）。
+
+- 予定: 毎日1回・保持7日（`projects/dedura-kanri/databases/(default)/backupSchedules/037ef998-1fa0-42fa-8349-55f8385f518f`）
+- 確かめ方: Firebase MCP の `firestore_list_backup_schedules`（予定）・`firestore_list_backups`（取れたバックアップ）
+- 復元は**別のデータベースとして**戻す方式（今のデータベースを上書きしない）。戻したあと、必要な分を写すか、接続先を切り替える。
+  手順は実施前に必ず代表と確認する（まだリハーサルはしていない）
+- 入れていないもの: PITR（過去7日の任意の時点に戻す機能）・削除の保護・Storage（書類庫・請求書 PDF）の複製
+
