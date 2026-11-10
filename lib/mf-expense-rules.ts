@@ -527,7 +527,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
   const pct = settings.amountPct / 100
 
   if (link === 'pending') {
-    flags.push({ rule: 'U1', level: 'confirm', message: 'MF の従業員と作業員の結びつけが未確定です。出面と道具代のチェックはしていません' })
+    flags.push({ rule: 'U1', level: 'confirm', message: 'この人が作業員の誰か、まだ決まっていません。「従業員の結びつけ」タブで選ぶまで、出面と道具代は見ていません' })
   }
 
   for (const tx of txs) {
@@ -536,22 +536,22 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
 
     // D1: 前月以外の日付
     if (!tx.date) {
-      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${tx.itemName} ${yen(tx.amount)}: 日付が入っていません` })
+      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${tx.itemName} ${yen(tx.amount)}: 日付が入っていません。入れてもらってください` })
     } else if (tx.date > today) {
-      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${label}: 未来の日付です` })
+      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${label}: まだ来ていない日付です。日付を直してもらってください` })
     } else if (ymOfIso(tx.date) !== targetYm) {
       const older = ymOfIso(tx.date) < targetYm
-      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${label}: ${fmtYm(targetYm)}分の申請に${older ? 'それより前の月の出し忘れ' : '当月の日付'}が入っています` })
+      flags.push({ rule: 'D1', level: 'confirm', txId: tx.id, message: `${label}: ${fmtYm(targetYm)}分の申請に、${Number(tx.date.slice(5, 7))}月の日付が入っています。${older ? '出し忘れか日付の間違いかを確かめてください' : 'その月の分の申請で出してもらってください'}` })
     }
 
     // D2: 同じ人・同じ日・同じ金額・同じ科目が他の申請にもある
     if (tx.date && others.some(o => o.date === tx.date && o.amount === tx.amount && o.itemId === tx.itemId)) {
-      flags.push({ rule: 'D2', level: 'confirm', txId: tx.id, message: `${label}: 同じ日・同じ金額・同じ科目の明細が他の申請にもあります` })
+      flags.push({ rule: 'D2', level: 'confirm', txId: tx.id, message: `${label}: 同じ日・同じ金額・同じ科目の明細が、別の申請にもあります。二重なら消してもらってください` })
     }
 
     // R1: 領収書なし（交通費など領収書の要らない科目と、未設定の科目は見ない）
     if ((kind === 'gas' || kind === 'tool' || kind === 'other') && !tx.hasFile) {
-      flags.push({ rule: 'R1', level: 'confirm', txId: tx.id, message: `${label}: 領収書が添付されていません` })
+      flags.push({ rule: 'R1', level: 'confirm', txId: tx.id, message: `${label}: 領収書が付いていません。付けてもらってください` })
     }
 
     // R2・R3・R4: 領収書の中身と申請の比較。確信が持てない項目は AI が null にするので、読めた項目だけ比べる
@@ -562,7 +562,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
         flags.push({ rule: 'R4', level: 'info', txId: tx.id, message: `${label}: 領収書を読み取れませんでした。目で確かめてください` })
       } else {
         if (read.date && tx.date && read.date !== tx.date) {
-          flags.push({ rule: 'R2', level: MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { date: read.date }, message: `${label}: 領収書の日付は ${fmtDay(read.date)} です` })
+          flags.push({ rule: 'R2', level: MF_RECEIPT_FLAG_LEVEL, txId: tx.id, receipt: { date: read.date }, message: `${label}: 領収書の写真の日付は ${fmtDay(read.date)} で、申請の日付と違います。MF で写真を確かめて、違っていたら直してもらってください` })
         }
         // 折半・半額は申請額が領収書と違って当たり前なので比べない
         const isSplit = settings.splitWords.some(w => `${tx.remark} ${tx.memo}`.includes(w))
@@ -575,7 +575,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
               ? (mfParkingInFare(tx.amount, read.amount) > 0
                 ? `${label}: 付いている領収書は ${yen(read.amount)} です（電車代 ${yen(tx.amount - read.amount)}＋駐輪場代 ${yen(read.amount)} かもしれません）。写真を確かめて、分けて申請してもらってください`
                 : `${label}: 付いている領収書は ${yen(read.amount)} で、申請の金額と違います。写真を確かめてください`)
-              : `${label}: 領収書の金額は ${yen(read.amount)} です`,
+              : `${label}: 領収書の写真の金額は ${yen(read.amount)} で、申請の金額と違います。MF で写真を確かめて、違っていたら直してもらってください`,
           })
         }
         // 交通費は金額のずれを必ず見る決まりなので、金額が読めなかったら「問題なし」にしない
@@ -593,16 +593,16 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
       const gasWord = settings.gasWords.find(w => mfTextHasWord(text, w))
       // ガソリン代には店の名前（JR川口駅前店など）が書かれるので、電車の言葉では見ない
       if (kind !== 'transit' && kind !== 'gas' && transitWord) {
-        flags.push({ rule: 'K1', level: 'confirm', txId: tx.id, message: `${label}: 内容に「${transitWord}」とありますが、交通費の科目ではありません` })
+        flags.push({ rule: 'K1', level: 'confirm', txId: tx.id, message: `${label}: 内容に「${transitWord}」とありますが、交通費の科目ではありません。科目を確かめてください` })
       } else if (kind !== 'gas' && gasWord) {
-        flags.push({ rule: 'K1', level: 'confirm', txId: tx.id, message: `${label}: 内容に「${gasWord}」とありますが、ガソリン代の科目ではありません` })
+        flags.push({ rule: 'K1', level: 'confirm', txId: tx.id, message: `${label}: 内容に「${gasWord}」とありますが、ガソリン代の科目ではありません。科目を確かめてください` })
       }
     }
 
     // T1: 交通費の日に出勤が無い
     // その月に出面が1日も無い人（事務など現場に出ない人）は、出面と比べる意味が無いので見ない（2026-11-10 実データ: 森田さんの交通費が全部指摘された）
     if (kind === 'transit' && hasAttendance && tx.date && loadedYms.has(ymOfIso(tx.date)) && tx.date <= today && !workDays.has(tx.date) && hasWorkIn(ymOfIso(tx.date))) {
-      flags.push({ rule: 'T1', level: 'confirm', txId: tx.id, message: `${label}: この日は現場に出た記録がありません（休み・欠勤・現場都合休の可能性があります）` })
+      flags.push({ rule: 'T1', level: 'confirm', txId: tx.id, message: `${label}: この日は現場に出た記録がありません（休み・欠勤・現場都合休かもしれません）。休みの日なら、この明細を消してもらってください` })
     }
 
     // T3: いつもの金額と大きく違う（同じ経路・同じ科目の直近3か月）
@@ -625,9 +625,9 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     if (kind === 'tool') {
       if (hasAttendance && tool && tx.date) {
         if (!tool.eligibleOn(tx.date)) {
-          flags.push({ rule: 'G1', level: 'confirm', txId: tx.id, message: `${label}: この人は道具代の対象外です（役員・事務・入社6か月未満）` })
+          flags.push({ rule: 'G1', level: 'confirm', txId: tx.id, message: `${label}: この人は道具代の対象外です（役員・事務・入社6か月未満）。代表に相談してください` })
         } else if (!tool.periodOn(tx.date)) {
-          flags.push({ rule: 'G1', level: 'confirm', txId: tx.id, message: `${label}: この日付が入る道具代の期間がありません（期間の起点日を確認してください）` })
+          flags.push({ rule: 'G1', level: 'confirm', txId: tx.id, message: `${label}: この日付が入る道具代の期間がありません。道具代管理で、この人の期間の始まりの日を確かめてください` })
         }
       }
       const splitWord = settings.splitWords.find(w => `${tx.remark} ${tx.memo}`.includes(w))
@@ -650,7 +650,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     }
     byPeriod.forEach(({ remaining, total }) => {
       if (remaining - total < 0) {
-        flags.push({ rule: 'G2', level: 'confirm', message: `道具代 ${yen(total)} を承認すると、残額 ${yen(remaining)} を超えてマイナスになります` })
+        flags.push({ rule: 'G2', level: 'confirm', message: `道具代 ${yen(total)} を承認すると、残額 ${yen(remaining)} を超えてマイナスになります。代表に相談してください` })
       }
     })
   }
@@ -662,7 +662,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
       const read = t.hasFile ? input.receiptReads?.[t.id] : undefined
       return t.amount - (mfIsReceiptReadCurrent(t, read) ? mfParkingInFare(t.amount, read?.amount) : 0)
     }
-    const over = new Map<string, { first: MfExpenseTx; fare: number; lines: number; min: number }>()
+    const over = new Map<string, { first: MfExpenseTx; fare: number; lines: number; min: number; excess: number }>()
     for (const t of txs) {
       if (kindOf(t.itemId) !== 'transit') continue
       const key = mfRouteKey(t.remark)
@@ -670,11 +670,10 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
       const fare = fareOf(t)
       if (!key || min === undefined || fare - min <= settings.routeMargin) continue
       const cur = over.get(key)
-      if (cur) cur.lines++
-      else over.set(key, { first: t, fare, lines: 1, min })
+      if (cur) { cur.lines++; cur.excess += fare - min } else over.set(key, { first: t, fare, lines: 1, min, excess: fare - min })
     }
-    for (const [key, { first, fare, lines, min }] of Array.from(over)) {
-      flags.push({ rule: 'T6', level: 'confirm', txId: first.id, usual: min, moreLines: lines - 1, message: `${key}: ${yen(fare)}（${lines} 件）。同じ区間で社内で一番安い金額は ${yen(min)} です` })
+    for (const [key, { first, fare, lines, min, excess }] of Array.from(over)) {
+      flags.push({ rule: 'T6', level: 'confirm', txId: first.id, usual: min, moreLines: lines - 1, message: `${key}: ${yen(fare)}で ${lines} 件。社内で一番安い金額は ${yen(min)} で、差額は合計 ${yen(excess)} です。一番安いルートの金額に直してもらってください` })
     }
   }
 
@@ -689,7 +688,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
     const more = parkingLines.length - 1
     flags.push({
       rule: 'K2', level: 'confirm', txId: first.id, moreLines: more,
-      message: `${first.date ? fmtDay(first.date) : '日付なし'} ${first.itemName} ${yen(first.amount)}${more > 0 ? `（ほか ${more} 件）` : ''}: 電車代の科目に、駐輪場代のような少額の明細があります。駐輪場代なら「駐車場・駐輪場代」で申請してもらってください`,
+      message: `${first.date ? fmtDay(first.date) : '日付なし'} ${first.itemName} ${yen(first.amount)}${more > 0 ? `（ほか ${more} 件）` : ''}: 電車代の科目に、駐輪場代らしい少額の明細があります。駐輪場代なら、科目を「駐車場・駐輪場代」に変えてもらってください`,
     })
   }
 
@@ -734,7 +733,7 @@ export function checkExpenseReport(input: MfReportCheckInput): { flags: MfExpens
         for (const [date, total] of days.sort((a, b) => a[0].localeCompare(b[0]))) {
           const mine = txs.find(t => t.date === date && kindOf(t.itemId) === 'transit')
           if (Math.abs(total - usual) <= settings.siteTransitMargin || !mine) continue
-          flags.push({ rule: 'T5', level: 'confirm', txId: mine.id, usual, dayTotal: total, message: `${fmtDay(date)} の交通費 ${yen(total)}: 同じ現場（${name}）のいつもの金額 ${yen(usual)} と違います` })
+          flags.push({ rule: 'T5', level: 'confirm', txId: mine.id, usual, dayTotal: total, message: `${fmtDay(date)} の交通費 ${yen(total)}: 同じ現場（${name}）のいつもの金額 ${yen(usual)} と違います。金額が合っているか確かめてください` })
         }
       }
     }
