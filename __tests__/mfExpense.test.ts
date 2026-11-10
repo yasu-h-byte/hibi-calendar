@@ -661,8 +661,11 @@ describe('第1段階は MF に書き込まない', () => {
   })
 
   test('POST は /oauth/ のトークンの発行と無効化だけ', () => {
-    const posts = [...client.matchAll(/fetch\(`\$\{MF_ORIGIN\}([^`]*)`,\s*\{\s*method: 'POST'/g)].map(m => m[1])
+    // MF への通信は mfFetch（待ち時間の上限つき・2026-11-10）だけを通る。素の fetch は mfFetch の中の1か所だけ
+    const posts = [...client.matchAll(/mfFetch\(`\$\{MF_ORIGIN\}([^`]*)`,\s*\{\s*method: 'POST'/g)].map(m => m[1])
     expect(posts.sort()).toEqual(['/oauth/revoke', '/oauth/token'])
+    expect((client.match(/[^A-Za-z]fetch\(/g) || []).length).toBe(1)
+    expect(client).toMatch(/AbortSignal\.timeout\(MF_FETCH_TIMEOUT_MS\)/)
     expect((client.match(/method: 'POST'/g) || []).length).toBe(2)
     expect(runner).not.toMatch(/method:\s*'(POST|PUT|PATCH|DELETE)'/)
   })

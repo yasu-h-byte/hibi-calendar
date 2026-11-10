@@ -21,6 +21,7 @@
   - 公開アクセス防止 = enforced（誤って公開URLにできない）
   - CORS = `https://hibi-calendar.vercel.app`・`http://localhost:3000` からの PUT/GET/HEAD のみ。Vercel の Preview からは直接 PUT が止められるので、
     4MB までのファイルは `/api/storage-relay`（サーバーが置く）に自動で切り替える（`lib/upload-client.ts`・2026-10-20）。4MB 超は本番の画面から
+    この中継は、すでにファイルがある場所には置かない（409・2026-11-10）。登録済み・発行済みのファイルを同じ場所の指定で差し替えさせないため
   - パス: `staff-docs/{workerId}/{docId}/{連番}-{ファイル名}`
 - 出し入れはサーバー（Admin SDK・`lib/storage-admin.ts`）が発行する **15分で切れる署名つきURL** だけ。
   アップロードはブラウザから Storage へ直接 PUT（Vercel の API は本文 4.5MB までなので、API 経由にしない）

@@ -33,7 +33,7 @@ const ACTIVITY_COLLECTION = 'activityLog'
  *   - 書くときは addDoc だけ。間引きは日次バックアップの cron（app/api/backup/snapshot）が pruneActivityLog() で行う
  *   - 「出面の入力」の記録（attendance.*・毎日大量に出る）は新しい NOISY_KEEP 件だけ残し、
  *     それ以外（請求・単価・マスタ・有給・カレンダー等）は別枠で IMPORTANT_KEEP 件残す＝出面の記録に押し出されない
- *   - お金・マスタの記録（DURABLE_PREFIXES）は、削除処理を持たない auditTrail にも同じ内容を残す
+ *   - 出面の入力と NOT_DURABLE_PREFIXES 以外の記録は、削除処理を持たない auditTrail にも同じ内容を残す
  *     （auditTrail は給与欄の変更記録と同じ扱い・日次バックアップの対象）
  */
 /** 出面の入力の記録（量が多い）。新しいこの件数だけ残す */
@@ -49,9 +49,21 @@ export function isNoisyAction(action: string): boolean {
 }
 
 /** 消えない記録（auditTrail）にも残す種類: 請求書・紙の請求書・外注の請求書・請求額・単価・現場/取引先/人員マスタ・設定・復元・月締め */
-const DURABLE_PREFIXES = ['peerInvoice.', 'paperInvoice.', 'subconInvoice.', 'billing.', 'rates.', 'site.', 'subcon.', 'worker.', 'settings.', 'backup.', 'monthly.', 'integration.']
+/**
+ * auditTrail に残さない記録（外すものだけを理由つきで並べる・2026-11-10 全体点検）。
+ * 旧: 残すものを並べる方式（DURABLE_PREFIXES）で、あとから足した機能が抜けていた
+ *   （山岡への請求書の発行・取り消し、評価・昇給、有給の付与・買取、有給精算、書類庫、カレンダー承認、MF の接続）。
+ *   これらは activityLog の新しい IMPORTANT_KEEP 件を超えると消えていた。
+ * 新: 既定で残す。外すのは「量が多い・毎日の自動実行・お金や承認に関わらない」ものだけ。
+ */
+const NOT_DURABLE_PREFIXES = [
+  'mf-expense.run',   // 毎朝の自動チェックの実行記録（1日4件前後。結果は mfExpense 側に残る）
+  'leaveIndex.',      // 有給の索引の作り直し（出面から何度でも作り直せる）
+  'announcement.',    // お知らせの編集（お金・承認に関わらない）
+]
 export function isDurableAction(action: string): boolean {
-  return DURABLE_PREFIXES.some(p => action.startsWith(p))
+  if (!action || isNoisyAction(action)) return false
+  return !NOT_DURABLE_PREFIXES.some(p => action.startsWith(p))
 }
 
 /**

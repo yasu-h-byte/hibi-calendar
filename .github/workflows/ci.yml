@@ -1,0 +1,37 @@
+# PR と main への push のたびに、型・テスト・決まりの検査を自動で走らせる（2026-11-10 全体点検）。
+# 旧: テストと lint:* は手で走らせたときしか効かず、検査が落ちたまま本番に入ることがあった
+#   （Vercel のビルドで走るのは ESLint と postbuild の秘密チェックだけ）。
+# ここで落ちた PR はマージしない。本番の鍵は使わない（テストは Firestore を使わない作り）。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: 型チェック
+        run: npx tsc --noEmit
+      - name: ESLint
+        run: npm run lint
+      - name: 決まりの検査（lint:*）
+        run: npm run lint:rules
+      - name: テスト
+        run: npm test

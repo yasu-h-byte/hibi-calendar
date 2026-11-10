@@ -14,7 +14,7 @@ import { collection, addDoc, getDocs, query, where, orderBy, limit } from '@/lib
 import { getMainData } from '@/lib/compute.server'
 import { todayJstIso } from '@/lib/date-utils'
 import {
-  HELP_COL, HELP_LIMITS, helpQuestionError, helpDocsForRole,
+  HELP_COL, HELP_LIMITS, helpQuestionError, helpDocsForRole, helpUsage, helpRemaining,
   type HelpAnswer, type HelpLogEntry, type HelpTurn,
 } from '@/lib/help'
 import { askHelp, isHelpConfigured, isHelpSetupError, isHelpBusyError } from '@/lib/help.server'
@@ -30,9 +30,10 @@ async function caller(request: NextRequest): Promise<{ workerId: number; name: s
   return { workerId, name: w?.name || (workerId === OWNER_WORKER_ID ? '日比靖仁' : `ID ${workerId}`) }
 }
 
-async function usedToday(workerId: number, day: string): Promise<number> {
-  const snap = await getDocs(query(collection(db, HELP_COL), where('workerId', '==', workerId), where('day', '==', day)))
-  return snap.size
+/** 今日の回数（本人ぶんと、全員ぶん）。1回の読みで両方を数える */
+async function usedToday(workerId: number, day: string): Promise<{ mine: number; all: number }> {
+  const snap = await getDocs(query(collection(db, HELP_COL), where('day', '==', day)))
+  return helpUsage(snap.docs.map(d => (d.data() as { workerId?: number }).workerId), workerId)
 }
 
 /** 画面から来た直前のやり取りを、決まった形と長さに絞る */
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       configured: isHelpConfigured(),
       limit: HELP_LIMITS.perDay,
-      remaining: Math.max(0, HELP_LIMITS.perDay - used),
+      remaining: helpRemaining(used),
     })
   } catch (e) {
     console.error('help GET error:', e)
@@ -87,8 +88,11 @@ export async function POST(request: NextRequest) {
 
     const day = todayJstIso()
     const used = await usedToday(me.workerId, day)
-    if (used >= HELP_LIMITS.perDay) {
+    if (used.mine >= HELP_LIMITS.perDay) {
       return NextResponse.json({ error: `今日はもう${HELP_LIMITS.perDay}回聞きました。続きは明日か、下の「新しく書く」から代表に伝えてください` }, { status: 429 })
+    }
+    if (used.all >= HELP_LIMITS.perDayAll) {
+      return NextResponse.json({ error: '今日は全体の回数の上限に達しました。続きは明日か、下の「新しく書く」から代表に伝えてください' }, { status: 429 })
     }
 
     const role = await getCallerPermRole(request)
@@ -115,7 +119,7 @@ export async function POST(request: NextRequest) {
       answered: result.answered,
       answer: result.answer,
       sources: result.sources.map(url => ({ url, title: titleOf.get(url) || url })),
-      remaining: Math.max(0, HELP_LIMITS.perDay - used - 1),
+      remaining: helpRemaining({ mine: used.mine + 1, all: used.all + 1 }),
     }
     return NextResponse.json(res)
   } catch (e) {

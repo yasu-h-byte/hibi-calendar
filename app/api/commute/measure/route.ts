@@ -17,6 +17,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { todayJstIso } from '@/lib/date-utils'
 import { requireCron } from '@/lib/cron-auth'
+import { withCronRecord } from '@/lib/cron-status.server'
 import type { SiteCommuteData, CommuteSample } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +29,7 @@ async function measureMinutes(apiKey: string, origin: string, destination: strin
   // Routes API: departureTime を少し先に置くと TRAFFIC_AWARE の現在交通で計算される
   const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),   // 応答が止まったまま待ち続けない（2026-11-10）
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
@@ -55,7 +57,11 @@ async function measureMinutes(apiKey: string, origin: string, destination: strin
 export async function GET(request: NextRequest) {
   // auth: Vercel Cron の CRON_SECRET（lib/cron-auth.ts requireCron・3本共通。`?secret=` は 2026-10-02 に廃止）
   { const denied = requireCron(request); if (denied) return denied }
+  // 失敗は demmen/system.cronRuns に残り、代表の通知ベルに出る（lib/cron-status.ts）
+  return withCronRecord('commute-measure', measure)
+}
 
+async function measure(): Promise<NextResponse> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {
     // キー未設定は正常系（手入力運用）。エラーにしない
@@ -96,7 +102,8 @@ export async function GET(request: NextRequest) {
     const addr = c.address || ''
     const origin = slot === 'am' ? ORIGIN_ADDRESS : addr
     const dest = slot === 'am' ? addr : ORIGIN_ADDRESS
-    const min = await measureMinutes(apiKey, origin, dest)
+    // 1現場の通信の失敗・時間切れで、ほかの現場の測定を止めない（その現場は今回は測れなかった扱い）
+    const min = await measureMinutes(apiKey, origin, dest).catch(e => { console.error('[commute/measure] 測定に失敗', s.id, e); return null })
     results[s.id] = min
     if (min !== null) measured.set(s.id, min)
   }
