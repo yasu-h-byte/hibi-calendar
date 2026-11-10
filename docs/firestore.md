@@ -553,5 +553,6 @@ workSchedule?: {
 - 確かめ方: Firebase MCP の `firestore_list_backup_schedules`（予定）・`firestore_list_backups`（取れたバックアップ）
 - 復元は**別のデータベースとして**戻す方式（今のデータベースを上書きしない）。戻したあと、必要な分を写すか、接続先を切り替える。
   手順は実施前に必ず代表と確認する（まだリハーサルはしていない）
-- 入れていないもの: PITR（過去7日の任意の時点に戻す機能）・削除の保護・Storage（書類庫・請求書 PDF）の複製
+- 削除の保護（deleteProtectionState）は 2026-11-10 に有効にした（データベースごと消す操作を Firebase 側で断る）
+- 入れていないもの: PITR（過去7日の任意の時点に戻す機能）・Storage（書類庫・請求書 PDF）の複製
 

@@ -121,6 +121,8 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 | 月の締めの判定 | `lib/locks.server.ts` checkMonthLockedForWorkers / loadLockContext（人の会社で見る・読み直す。会社なしの checkMonthLocked は 2026-10-21 に削除） | `__tests__/locksForWorkers.test.ts` |
 | 承認できる日 | `lib/attendance-authz.ts` approvalDateError（先の日・実在しない日は承認しない。PC・職長スマホ・まとめ承認・マイページの 4 経路とも） | 同上 |
 | 画面から届く import | `lib/*.server.ts`（Firestore 読み書き・個人データ）は画面から import しない | `__tests__/clientBundleIsolation.test.ts` |
+| main の有給記録・配列の書き込み | `lib/main-guard.server.ts` guardedMainUpdate（読んだ時点の控えと違えば書かずに 409。`plData.{人}`・`workers`・`sites`・`announcements` を updateDoc で直接書かない） | `__tests__/mainGuard.test.ts` |
+| お試しサイトからの書き込み | `lib/preview-guard.ts`（既定で止める。外す場所だけ PREVIEW_WRITE_ALLOW_PREFIXES に理由つきで）。書き込みの入口は `lib/fsdb.ts` と `lib/storage-admin.ts` だけ | `__tests__/previewGuard.test.ts` |
 | 消えない記録（auditTrail） | `lib/activity.ts` isDurableAction（既定で残す。外すものだけ NOT_DURABLE_PREFIXES に理由つきで） | `__tests__/systemGuards2026_11.test.ts` |
 | 自動処理（cron）の失敗 | 入口を `lib/cron-status.server.ts` withCronRecord で包む（失敗は代表の通知ベルへ。バックアップと経費チェックは自前の記録） | 同上 |
 
@@ -138,6 +140,13 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 Next 15 / React 19 / ESLint 9 / firebase 13 に 2026-10-21 更新（`generateMetadata` の `params` は Promise・`serverExternalPackages`）。
 `react-hooks/exhaustive-deps` は警告（直せる所から直す。意図して外す依存は `// eslint-disable-next-line react-hooks/exhaustive-deps` に理由を書く）。
 `-eslint/*` の規則は入れていないので、その名前の disable 注記を書かない（「規則が見つからない」エラーになる）。
+
+### お試しサイト（Vercel の Preview）は見るだけ（2026-11-10）
+
+お試しサイトは本番と同じ Firestore・ファイル置き場につながっている。まだ確かめていない PR のコードで本番のデータを
+書き換えないよう、**お試しサイトでは書き込みを既定で止めている**（`lib/preview-guard.ts`。画面の上に帯が出る）。
+保存まで試す必要がある PR のときだけ、代表の OK をもらって Vercel の Preview の環境変数に `PREVIEW_ALLOW_WRITES=1` を入れて作り直し、
+終わったら外す。状態は `/api/health` の `previewReadOnly` で分かる。根治（お試し用の Firebase プロジェクトを分ける）は製品化の第1段階で行う。
 
 ### 自動チェック（2026-11-10）
 

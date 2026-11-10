@@ -1,3 +1,4 @@
+import { isPreviewReadOnly } from '@/lib/preview-guard'
 import { NextResponse } from 'next/server'
 import { isAdminSdkActive, getAdminStatus } from '@/lib/firebase-admin'
 import { db } from '@/lib/firebase'
@@ -65,6 +66,8 @@ export async function GET() {
     adminMode,
     // 通行証の署名鍵に専用の SESSION_SECRET（32 文字以上）が使われているか（2026-10-21。未設定だと鍵がパスワードそのもの）
     sessionSecret: hasDedicatedSessionSecret(),
+    // お試しサイトで書き込みを止めているか（lib/preview-guard.ts・2026-11-10）。本番では必ず false
+    previewReadOnly: isPreviewReadOnly(),
     ...diag,
     readOk,
     readError,

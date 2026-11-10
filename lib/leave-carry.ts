@@ -16,7 +16,8 @@
  *   失敗しても出面の書き込み自体は成功させる（ログのみ）。
  */
 import { db } from './firebase'
-import { doc, getDoc, updateDoc } from '@/lib/fsdb'
+import { doc, getDoc } from '@/lib/fsdb'
+import { captureMainGuard, MainConflictError } from './main-guard'
 import { calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord } from './leave-compute'
 
 type Rec = {
@@ -81,10 +82,20 @@ export function resolveCarryTarget(
   return { records, ...t }
 }
 
-export async function recomputeNextCarryOver(
-  workerId: number,
-  dateIso: string,
-): Promise<{ updated: boolean; from?: number; to?: number; reason?: string }> {
+type CarryResult = { updated: boolean; from?: number; to?: number; reason?: string }
+/** ほかの書き込みと重なったので、最初からやり直す合図 */
+const RETRY = Symbol('retry')
+
+export async function recomputeNextCarryOver(workerId: number, dateIso: string): Promise<CarryResult> {
+  // 2026-11-10 全体点検: 読む→計算→書く のあいだに同じ人の有給記録が書き換わったら、最新を読み直して1回だけやり直す
+  //   （旧: そのまま書いて、相手の変更を消していた）
+  const first = await recomputeOnce(workerId, dateIso, 0)
+  if (first !== RETRY) return first
+  const second = await recomputeOnce(workerId, dateIso, 1)
+  return second === RETRY ? { updated: false, reason: 'conflict' } : second
+}
+
+async function recomputeOnce(workerId: number, dateIso: string, attempt: number): Promise<CarryResult | typeof RETRY> {
   // 事前チェック（2026-10-02）: setAttendanceEntry は有給以外の保存でも（deleteFields に 'p' が
   //   入るため）ここへ来る。書き換える次期が無い大半のケースは、30秒キャッシュの main だけで
   //   抜けて、最新 main の読み直しと最大13か月分の出面読み（getLeaveBalance）を省く。
@@ -100,6 +111,7 @@ export async function recomputeNextCarryOver(
   const snap = await getDoc(ref)
   if (!snap.exists()) return { updated: false, reason: 'main not found' }
   const data = snap.data()
+  const guard = captureMainGuard(data)   // 読んだ時点の控え（lib/main-guard.ts）
   const r = resolveCarryTarget(
     (data.workers || []) as { id: number; visa?: string }[],
     (data.plData || {}) as Record<string, Rec[]>,
@@ -127,7 +139,15 @@ export async function recomputeNextCarryOver(
   next.carryOverRecalcFrom = oldCarry
   next.carryOverRecalcTrigger = dateIso
   // race-fix: dot-notation で 1 worker 単位に局所化
-  await updateDoc(ref, { [`plData.${String(workerId)}`]: records })
+  try {
+    const { guardedMainUpdate } = await import('./main-guard.server')
+    await guardedMainUpdate(ref, guard, { plKeys: [String(workerId)] }, { [`plData.${String(workerId)}`]: records })
+  } catch (e) {
+    if (!(e instanceof MainConflictError)) throw e
+    // ほかの書き込みと重なった。最新を読み直して1回だけやり直す（それでも重なったら今回は見送る＝次の操作でまた計算される）
+    if (attempt >= 1) return { updated: false, reason: 'conflict' }
+    return RETRY
+  }
   try {
     const { logActivity } = await import('./activity')
     await logActivity('system', 'leave.carryOverRecalc',

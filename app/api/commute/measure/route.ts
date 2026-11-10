@@ -14,7 +14,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc } from '@/lib/fsdb'
+import { doc, getDoc, runTransaction } from '@/lib/fsdb'
 import { todayJstIso } from '@/lib/date-utils'
 import { requireCron } from '@/lib/cron-auth'
 import { withCronRecord } from '@/lib/cron-status.server'
@@ -110,7 +110,10 @@ async function measure(): Promise<NextResponse> {
 
   if (measured.size > 0) {
     // 最新の sites を読み直してから該当現場のサンプルだけ差し替える
-    const snap2 = await getDoc(ref)
+    // 2026-11-10 全体点検: 読み直しと書き込みを1つのトランザクションにする（旧: 読み直してから書くまでの間に
+    //   現場マスタが編集されると、sites をまるごと書くのでその編集を消していた。業務時間内の 17:30 にも動く）
+    await runTransaction(db, async tx => {
+    const snap2 = await tx.get(ref)
     const fresh = (snap2.exists() ? snap2.data().sites || [] : []) as Array<{ id: string; archived?: boolean; commute?: SiteCommuteData }>
     let changed = false
     const updated = fresh.map(s => {
@@ -129,7 +132,8 @@ async function measure(): Promise<NextResponse> {
       changed = true
       return { ...s, commute: { ...c, samples } }
     })
-    if (changed) await updateDoc(ref, { sites: updated })
+    if (changed) tx.update(ref, { sites: updated })
+    })
   }
   return NextResponse.json({ date: todayIso, slot, results })
 }

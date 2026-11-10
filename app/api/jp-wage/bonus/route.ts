@@ -16,6 +16,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '@/lib/fsdb'
+import { captureMainGuard, MainConflictError, MAIN_CONFLICT_MESSAGE } from '@/lib/main-guard'
+import { guardedMainUpdate } from '@/lib/main-guard.server'
 import { effectiveRateForYm } from '@/lib/workers'
 import { getWorkers } from '@/lib/workers.server'
 import { fiveDayReserve } from '@/lib/leave-settle'
@@ -314,6 +316,7 @@ export async function POST(request: NextRequest) {
     try {
       const docRef = doc(db, 'demmen', 'main')
       const snap = await getDoc(docRef)
+      const guard = captureMainGuard(snap.exists() ? snap.data() : null)   // 同時に書き換えられたら止める（lib/main-guard.ts）
       const plData = (snap.exists() ? (snap.data().plData || {}) : {}) as Record<string, Record<string, unknown>[]>
       const wRecords = plData[String(line.workerId)] || []
       // 検証で決めた「終わった期」のレコード（付与日で引く・2026-10-02 総合点検。旧: 9/30 時点で有効なレコード）
@@ -341,13 +344,13 @@ export async function POST(request: NextRequest) {
       rec.lastEditedAt = nowIso
       rec.lastEditedBy = actorStr
       // race-fix: dot-notation で 1 worker 単位に局所化（/api/leave の buyout と同じパターン）
-      await updateDoc(docRef, { [`plData.${String(line.workerId)}`]: wRecords })
+      await guardedMainUpdate(docRef, guard, { plKeys: [String(line.workerId)] }, { [`plData.${String(line.workerId)}`]: wRecords })
       await logActivity(await actorLabel(request), 'leave.buyout',
         `workerId=${line.workerId} 賞与「${label}」の精勤賞与から期末買取 ${days}日 ¥${line.attendanceAmount || 0}（操作者: ${actorStr}）`)
       buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'recorded' })
     } catch (e) {
       console.error(`[jp-wage/bonus] 買取記録失敗 workerId=${line.workerId}:`, e)
-      buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'error', note: '記録に失敗しました。休暇管理から手動で記録してください' })
+      buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'error', note: e instanceof MainConflictError ? 'ほかの人の操作と重なったため記録できませんでした。休暇管理から手動で記録してください' : '記録に失敗しました。休暇管理から手動で記録してください' })
     }
   }
 
@@ -377,6 +380,7 @@ export async function DELETE(request: NextRequest) {
   // ① 有給の買取記録を外す（先に外す。途中で失敗しても賞与の記録が残るので、もう一度押せばやり直せる）
   const mainRef = doc(db, 'demmen', 'main')
   const mainSnap = await getDoc(mainRef)
+  const guard = captureMainGuard(mainSnap.exists() ? mainSnap.data() : null)   // 同時に書き換えられたら止める（lib/main-guard.ts）
   const plData = (mainSnap.exists() ? (mainSnap.data().plData || {}) : {}) as Record<string, Record<string, unknown>[]>
   type BuyoutEntry = { at: string; by: string; days: number; amount?: number; reason?: string; bonusId?: string }
   const removed: Array<{ workerId: number; name: string; days: number }> = []
@@ -398,7 +402,13 @@ export async function DELETE(request: NextRequest) {
     }
     if (!changed) continue
     // 1人分だけ書き換える（POST の記録と同じ dot-notation）
-    await updateDoc(mainRef, { [`plData.${String(line.workerId)}`]: wRecords })
+    try {
+      await guardedMainUpdate(mainRef, guard, { plKeys: [String(line.workerId)] }, { [`plData.${String(line.workerId)}`]: wRecords })
+    } catch (e) {
+      // ほかの人の操作と重なった。賞与の記録はまだ消していないので、もう一度押せば続きから外せる
+      if (e instanceof MainConflictError) return NextResponse.json({ error: MAIN_CONFLICT_MESSAGE }, { status: 409 })
+      throw e
+    }
     await logActivity(await actorLabel(request), 'leave.buyout',
       `workerId=${line.workerId} 賞与「${record.label}」の取り消しで期末買取 ${days}日 を外した（操作者: ${actorStr}）`)
     removed.push({ workerId: line.workerId, name: line.name, days })
