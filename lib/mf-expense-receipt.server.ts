@@ -44,7 +44,8 @@ const SYSTEM = [
 ].join('\n')
 
 let client: Anthropic | null = null
-const getClient = () => (client ??= new Anthropic())
+/** 1枚で待つのは60秒まで・再試行は1回（旧: SDK の既定の10分・2回で、1枚が止まると回全体の持ち時間を使い切った） */
+const getClient = () => (client ??= new Anthropic({ timeout: 60_000, maxRetries: 1 }))
 
 /** 形式・大きさの問題で AI に送れないときは理由つきで返す。通信や API の失敗は例外のまま上に投げる（次の回に読み直す） */
 export async function readReceiptFile(bytes: Buffer, contentType: string): Promise<ReceiptReadResult> {

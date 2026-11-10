@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCron } from '@/lib/cron-auth'
+import { withCronRecord } from '@/lib/cron-status.server'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 /**
  * Vercel Cron用エンドポイント: 有給の時効処理を月1回自動実行
@@ -24,7 +26,11 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   // auth: Vercel Cron の CRON_SECRET（lib/cron-auth.ts requireCron。未設定は拒否）
   { const denied = requireCron(request); if (denied) return denied }
+  // 失敗は demmen/system.cronRuns に残り、代表の通知ベルに出る（lib/cron-status.ts・2026-11-10）
+  return withCronRecord('leave-expiry', () => processExpiry(request))
+}
 
+async function processExpiry(request: NextRequest): Promise<NextResponse> {
   // processExpiry アクションを内部で実行
   // 代表の通行証で /api/leave を叩く（2026-09-26: API はパスワードそのものを受け付けなくなったため）
   const { createOwnerToken } = await import('@/lib/session-token')
@@ -45,6 +51,7 @@ export async function GET(request: NextRequest) {
 
   const res = await fetch(`${baseUrl}/api/leave`, {
     method: 'POST',
+    signal: AbortSignal.timeout(50_000),   // 応答が止まったまま待ち続けない（2026-11-10）
     headers: {
       'x-admin-password': adminPassword,
       'Content-Type': 'application/json',

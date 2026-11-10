@@ -10,7 +10,7 @@
  *   役割が分からないときは全員向けの資料だけ（資料一覧の画面とは逆に、狭い側に倒す）
  * - AI は読んで答えるだけ。システムの操作はしない
  * - 質問と答えは Firestore `helpLog` に残す（見られるのは代表 = feedback.manage）
- * - 1人1日の回数に上限（HELP_LIMITS.perDay）
+ * - 1人1日の回数に上限（HELP_LIMITS.perDay）。全員を合わせた1日の回数にも上限（HELP_LIMITS.perDayAll）
  *
  * クライアント・サーバー両方から import する（サーバー専用の依存を入れないこと）。AI の呼び出しは lib/help.server.ts。
  */
@@ -24,6 +24,8 @@ export const HELP_LIMITS = {
   question: 600,
   /** 1人1日に聞ける回数（使いすぎ・費用の歯止め） */
   perDay: 20,
+  /** 全員を合わせた1日の回数（費用の歯止め・2026-11-10 全体点検）。使う人を広げても、1日の費用がこの回数ぶんを超えない */
+  perDayAll: 100,
   /** 続けて聞くときに AI へ渡す、直前のやり取りの数（質問と答えの組） */
   historyPairs: 3,
 } as const
@@ -69,6 +71,16 @@ export function helpQuestionError(text: unknown): string | null {
   if (typeof text !== 'string' || !text.trim()) return '質問を書いてください'
   if (text.length > HELP_LIMITS.question) return `質問は${HELP_LIMITS.question}文字までです（長いときは分けて聞いてください）`
   return null
+}
+
+/** 今日の記録（聞いた人の番号の並び）から、本人ぶんと全員ぶんの回数を数える */
+export function helpUsage(workerIds: (number | undefined)[], workerId: number): { mine: number; all: number } {
+  return { mine: workerIds.filter(id => id === workerId).length, all: workerIds.length }
+}
+
+/** あと何回聞けるか（本人の残りと、全体の残りの少ないほう） */
+export function helpRemaining(used: { mine: number; all: number }): number {
+  return Math.max(0, Math.min(HELP_LIMITS.perDay - used.mine, HELP_LIMITS.perDayAll - used.all))
 }
 
 const DOC_ROLE_OF: Record<PermRole, DocRole | null> = {

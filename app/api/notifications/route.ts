@@ -7,6 +7,7 @@ import { permRoleOf } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs, doc, getDoc } from '@/lib/fsdb'
 import { backupHealth, type LastBackupInfo } from '@/lib/backup-plan'
+import { cronProblems, type CronRunInfo } from '@/lib/cron-status'
 import { parseDKey, getAssign } from '@/lib/compute'
 import { getMainData, getAttData } from '@/lib/compute.server'
 import { ymKey } from '@/lib/attendance'
@@ -101,6 +102,12 @@ export async function GET(request: NextRequest) {
             type: firstTime ? 'info' : 'error',
             href: '/settings?tab=activity',
           })
+        }
+        // 0-1. ほかの自動処理（有給の時効・領収書の読み取り・通勤の測定）が失敗している（2026-11-10 全体点検）。
+        //   同じ demmen/system の読みを使う（読み取りは増やさない）。次に成功すれば自動で消える
+        const cronMsgs = cronProblems((sysSnap.exists() ? sysSnap.data().cronRuns : null) as Record<string, CronRunInfo> | null)
+        if (cronMsgs.length > 0) {
+          notifications.push({ id: 'cron-failed', icon: 'alert', message: `${cronMsgs.join('／')}。続くときは開発担当に知らせてください`, type: 'error', href: '/settings?tab=activity' })
         }
       } catch (e) {
         console.error('Backup health check error:', e)

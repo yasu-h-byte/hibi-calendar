@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { orgKeyOf } from '@/lib/locks'
+import { orgKeyOf, isValidLockTarget } from '@/lib/locks'
 import { currentYmJst } from '@/lib/date-utils'
 import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
@@ -236,6 +236,10 @@ export async function POST(request: NextRequest) {
     const { ym, locked, org, allowUnconfirmed, allowUnackedNotes } = await request.json()
     if (!ym) {
       return NextResponse.json({ error: 'ym required' }, { status: 400 })
+    }
+    // ym・org は保存先の名前（locks.{ym}_{org}）になる。形を確かめずに入れると「.」で locks の中の形を崩せた（2026-11-10 全体点検）
+    if (!isValidLockTarget(ym, org)) {
+      return NextResponse.json({ error: '年月または会社の指定が不正です' }, { status: 400 })
     }
 
     // 2026-06-13: 締め（locked=true）は「月が終了 + 職長チェック全完了」が前提条件。

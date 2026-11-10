@@ -89,7 +89,8 @@ export async function buildDocsBlock(docs: DocItem[]): Promise<string> {
 }
 
 let client: Anthropic | null = null
-const getClient = () => (client ??= new Anthropic())
+/** 画面の待ち時間（app/api/help の maxDuration 60秒）に収める。旧: SDK の既定（10分・再試行2回）のままで、遅いときは案内文ではなく 504 になった */
+const getClient = () => (client ??= new Anthropic({ timeout: 50_000, maxRetries: 0 }))
 
 export interface HelpModelResult {
   answered: boolean
@@ -153,4 +154,5 @@ export function isHelpSetupError(e: unknown): boolean {
 }
 
 export const isHelpBusyError = (e: unknown): boolean =>
-  e instanceof Anthropic.RateLimitError || (e instanceof Anthropic.APIError && typeof e.status === 'number' && e.status >= 500)
+  e instanceof Anthropic.RateLimitError || e instanceof Anthropic.APIConnectionError   // 時間切れ・通信の失敗も「混み合っています」
+  || (e instanceof Anthropic.APIError && typeof e.status === 'number' && e.status >= 500)

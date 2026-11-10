@@ -16,7 +16,7 @@ import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, runTra
 import { getAttData, getAttDataCached, getMainData } from '@/lib/compute.server'
 import { isClosedMonthYm, parseDKey, type RawWorker } from '@/lib/compute'
 import { wasAtSite } from '@/lib/attendance'
-import { isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
+import { isAlreadyRetired, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 import { jstIsoOf, jstWallClock, todayJstIso } from '@/lib/date-utils'
 import { logActivity } from '@/lib/activity'
 import { isJapaneseVisa } from '@/lib/leave-pending'
@@ -186,8 +186,10 @@ function orgWorkers(workers: RawWorker[], org: MfOrg): RawWorker[] {
 export async function loadMfWorkerOptions(org: MfOrg, keepIds: (number | null)[] = []): Promise<{ id: number; name: string }[]> {
   const main = await getMainData()
   const keep = new Set(keepIds)
+  const today = todayJstIso()
+  // 退職日が先の日付の人はまだ在籍（退職日の有無だけで外さない・lint:retired）
   return orgWorkers(main.workers as RawWorker[], org)
-    .filter(w => !w.retired || keep.has(w.id))
+    .filter(w => !isAlreadyRetired(w.retired, today) || keep.has(w.id))
     .map(w => ({ id: w.id, name: w.name }))
     .sort((a, b) => a.id - b.id)
 }
@@ -851,7 +853,7 @@ export async function runMfApprovedCheck(ym: string, actor: string, budgetMs = A
     if (!partial) {
       for (const id of Array.from(existing.keys())) if (!seen.has(id)) await deleteDoc(doc(db, APPROVED_COLL, id))
     }
-    await logActivity(actor, 'mf-expense', `承認済みの申請を読み込み: ${ym} ${count}件${partial ? '（途中まで）' : ''}`)
+    await logActivity(actor, 'mf-expense.run', `承認済みの申請を読み込み: ${ym} ${count}件${partial ? '（途中まで）' : ''}`)
     return {
       ok: true, status: partial ? 'partial' : 'done', count,
       message: partial ? `${count} 件まで読みました。もう一度押すと続きを読みます` : `承認済みの申請を ${count} 件読みました`,
@@ -859,7 +861,7 @@ export async function runMfApprovedCheck(ym: string, actor: string, budgetMs = A
   } catch (e) {
     const message = e instanceof Error ? e.message : '読み込みに失敗しました'
     if (e instanceof MfTimeBudgetError) return { ok: true, status: 'partial', message: '時間がかかり途中で区切りました。もう一度押すと続きを読みます', count: 0 }
-    await logActivity(actor, 'mf-expense', `承認済みの読み込み失敗: ${message}`)
+    await logActivity(actor, 'mf-expense.run', `承認済みの読み込み失敗: ${message}`)
     return { ok: false, status: e instanceof MfReconnectError ? 'notConnected' : 'error', message, count: 0 }
   }
 }
@@ -1061,7 +1063,7 @@ export async function runMfExpenseCheck(opts: { actor: string; force: boolean; o
     }
     const { partial, summary } = await runOnce(api, deadline, today, org)
     await finish({ completedDate: partial ? state.completedDate : today, partial, lastError: null, summary })
-    await logActivity(opts.actor, 'mf-expense', `申請チェック${org === 'hfu' ? '（HFU）' : ''}: 承認待ち${summary.open}件・要確認あり${summary.flagged}件・新しく読んだ${summary.fetched}件${partial ? '（途中まで）' : ''}`)
+    await logActivity(opts.actor, 'mf-expense.run', `申請チェック${org === 'hfu' ? '（HFU）' : ''}: 承認待ち${summary.open}件・要確認あり${summary.flagged}件・新しく読んだ${summary.fetched}件${partial ? '（途中まで）' : ''}`)
     return {
       ok: true,
       status: partial ? 'partial' : 'done',
@@ -1075,7 +1077,7 @@ export async function runMfExpenseCheck(opts: { actor: string; force: boolean; o
     }
     const message = e instanceof Error ? e.message : 'チェックに失敗しました'
     await finish({ lastError: message })
-    await logActivity(opts.actor, 'mf-expense', `申請チェック失敗${org === 'hfu' ? '（HFU）' : ''}: ${message}`)
+    await logActivity(opts.actor, 'mf-expense.run', `申請チェック失敗${org === 'hfu' ? '（HFU）' : ''}: ${message}`)
     return { ok: false, status: e instanceof MfReconnectError ? 'notConnected' : 'error', message }
   }
 }

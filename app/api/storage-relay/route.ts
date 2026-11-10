@@ -6,11 +6,14 @@
  *   （paper-invoices → invoice.paper、subcon-invoices → invoice.subcon、staff-docs → staffDocs.edit、prime-invoices → invoice.request）
  * - 1ファイル 4MB まで（Vercel の API の本文の上限）。種類は各画面と同じ（PDF・JPEG・PNG・WebP・HEIC/HEIF）
  * - 置いたあとの登録（commit）は各 API がこれまでどおり fileMeta で大きさ・種類を確かめる
+ * - すでにファイルがある場所には置かない（2026-11-10 全体点検）。旧: 同じ path を指定すると、登録済み・発行済みの
+ *   ファイル（凍結した請求書の控え・書類庫の契約書）の中身を記録なしで差し替えられた。置き場は prepare が毎回新しく出すので、
+ *   正しい使い方で同じ場所に2度置くことはない
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCap } from '@/lib/auth'
 import type { Capability } from '@/lib/permissions'
-import { uploadBuffer, getStaffDocsBucket } from '@/lib/storage-admin'
+import { uploadBufferIfAbsent, getStaffDocsBucket } from '@/lib/storage-admin'
 import { RELAY_MAX_BYTES } from '@/lib/upload-client'
 
 export const dynamic = 'force-dynamic'
@@ -40,7 +43,10 @@ export async function POST(request: NextRequest) {
   if (!ALLOWED_TYPES.includes(type)) return NextResponse.json({ error: `この形式は入れられません: ${file.name}` }, { status: 400 })
   if (!getStaffDocsBucket()) return NextResponse.json({ error: 'ファイルの置き場に接続できません（サーバー設定を確認してください）' }, { status: 503 })
   try {
-    await uploadBuffer(path, Buffer.from(await file.arrayBuffer()), type)
+    const placed = await uploadBufferIfAbsent(path, Buffer.from(await file.arrayBuffer()), type)
+    if (!placed) {
+      return NextResponse.json({ error: 'この場所にはすでにファイルがあります。画面を開き直して、もう一度入れてください' }, { status: 409 })
+    }
   } catch (e) {
     console.error('[storage-relay] upload failed', path, e)
     return NextResponse.json({ error: 'ファイルを置けませんでした' }, { status: 503 })

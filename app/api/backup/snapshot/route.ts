@@ -6,6 +6,9 @@ import { applyDueScheduledWorkerChanges } from '@/lib/worker-crud'
 import { BACKUP_COLLECTIONS, BACKUP_DOCS, approvalDocYm, type LastBackupInfo } from '@/lib/backup-plan'
 import { requireCron } from '@/lib/cron-auth'
 
+// 約30コレクションを順に退避する。月が進むほど長くなるので持ち時間を明示する（2026-11-10 全体点検）
+export const maxDuration = 300
+
 /**
  * 出面・人員マスターデータの日次バックアップ
  *

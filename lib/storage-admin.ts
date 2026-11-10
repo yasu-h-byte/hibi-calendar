@@ -75,6 +75,28 @@ export async function uploadBuffer(path: string, data: Buffer, contentType: stri
   await bucket.file(path).save(data, { contentType, resumable: false })
 }
 
+/**
+ * まだ無い場所にだけ置く（2026-11-10 全体点検）。すでにファイルがあれば false（中身は変えない）。
+ * 「あるか見てから置く」ではなく、置く瞬間に Storage 側で確かめる（ifGenerationMatch: 0）ので、同時に来ても上書きしない。
+ */
+export async function uploadBufferIfAbsent(path: string, data: Buffer, contentType: string): Promise<boolean> {
+  const bucket = getStaffDocsBucket()
+  if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
+  try {
+    await bucket.file(path).save(data, { contentType, resumable: false, preconditionOpts: { ifGenerationMatch: 0 } })
+    return true
+  } catch (e) {
+    if (isPreconditionFailed(e)) return false
+    throw e
+  }
+}
+
+/** Storage の「条件に合わない」（412 = すでにファイルがある） */
+export function isPreconditionFailed(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code
+  return code === 412 || code === '412'
+}
+
 /** ファイルの中身を読む（一次への請求書: 大林組の控え・山岡の控除計算書の PDF をサーバで読み取る・2026-10-20） */
 export async function downloadFile(path: string): Promise<Buffer> {
   const bucket = getStaffDocsBucket()

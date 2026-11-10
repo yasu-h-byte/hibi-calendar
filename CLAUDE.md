@@ -121,6 +121,8 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 | 月の締めの判定 | `lib/locks.server.ts` checkMonthLockedForWorkers / loadLockContext（人の会社で見る・読み直す。会社なしの checkMonthLocked は 2026-10-21 に削除） | `__tests__/locksForWorkers.test.ts` |
 | 承認できる日 | `lib/attendance-authz.ts` approvalDateError（先の日・実在しない日は承認しない。PC・職長スマホ・まとめ承認・マイページの 4 経路とも） | 同上 |
 | 画面から届く import | `lib/*.server.ts`（Firestore 読み書き・個人データ）は画面から import しない | `__tests__/clientBundleIsolation.test.ts` |
+| 消えない記録（auditTrail） | `lib/activity.ts` isDurableAction（既定で残す。外すものだけ NOT_DURABLE_PREFIXES に理由つきで） | `__tests__/systemGuards2026_11.test.ts` |
+| 自動処理（cron）の失敗 | 入口を `lib/cron-status.server.ts` withCronRecord で包む（失敗は代表の通知ベルへ。バックアップと経費チェックは自前の記録） | 同上 |
 
 画面で止めている操作は、**必ずサーバでも同じ判定で止める**（画面だけの守りは API 直叩きで抜けられる）。
 保存の通信は結果（`res.ok`）を必ず見て、失敗したら表示を戻して理由を出す（楽観更新のまま放置しない）。
@@ -136,6 +138,11 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 Next 15 / React 19 / ESLint 9 / firebase 13 に 2026-10-21 更新（`generateMetadata` の `params` は Promise・`serverExternalPackages`）。
 `react-hooks/exhaustive-deps` は警告（直せる所から直す。意図して外す依存は `// eslint-disable-next-line react-hooks/exhaustive-deps` に理由を書く）。
 `-eslint/*` の規則は入れていないので、その名前の disable 注記を書かない（「規則が見つからない」エラーになる）。
+
+### 自動チェック（2026-11-10）
+
+PR と main への push のたびに GitHub Actions（`.github/workflows/ci.yml`）が 型チェック・ESLint・`npm run lint:rules`（lint:* 8本をまとめて）・
+テスト一式を走らせる。**ここで落ちた PR はマージしない**。新しい lint:* を足したら `lint:rules` にも足す。
 
 ### コミットルール
 - `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` を付与

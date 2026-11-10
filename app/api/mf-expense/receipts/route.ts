@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCron } from '@/lib/cron-auth'
+import { withCronRecord } from '@/lib/cron-status.server'
 import { actorLabel, requireCap } from '@/lib/auth'
 import { getMfConnectionStatus } from '@/lib/mf-expense-client.server'
 import { loadMfSettings, runMfExpenseCheck, runMfReceiptReads } from '@/lib/mf-expense-run.server'
@@ -28,7 +29,8 @@ export async function GET(request: NextRequest) {
   // auth: Vercel Cron の CRON_SECRET を requireCron で確かめる
   const denied = requireCron(request)
   if (denied) return denied
-  return run('cron')
+  // 失敗は demmen/system.cronRuns に残り、代表の通知ベルに出る（lib/cron-status.ts）
+  return withCronRecord('mf-receipts', () => run('cron'))
 }
 
 export async function POST(request: NextRequest) {

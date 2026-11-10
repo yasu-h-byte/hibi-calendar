@@ -169,8 +169,23 @@ export function mfNextPath(next: unknown): string | null {
   throw new Error('MF の応答の形が想定と違います（次のページ）')
 }
 
+/** MF への1回の通信で待つ上限（2026-11-10 全体点検）。旧: 上限が無く、応答が止まると関数ごと時間切れで強制終了していた */
+const MF_FETCH_TIMEOUT_MS = 20_000
+
+/** 上限つきの fetch。時間切れは日本語の理由にして投げる（呼び出し側の再試行・失敗の記録にそのまま乗る） */
+async function mfFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(MF_FETCH_TIMEOUT_MS) })
+  } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      throw new Error('MF から応答がありません（時間切れ）。少し待ってからもう一度お試しください')
+    }
+    throw e
+  }
+}
+
 async function requestToken(params: Record<string, string>): Promise<Required<Pick<TokenResponse, 'access_token'>> & TokenResponse> {
-  const res = await fetch(`${MF_ORIGIN}/oauth/token`, {
+  const res = await mfFetch(`${MF_ORIGIN}/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(params).toString(),
@@ -194,7 +209,7 @@ export async function completeMfConnection(code: string, actor: string): Promise
   if (!t.refresh_token) throw new Error('MF からリフレッシュトークンが返りませんでした')
 
   const authHeaders = { Authorization: `Bearer ${t.access_token}`, Accept: 'application/json' }
-  const officesRes = await fetch(`${MF_ORIGIN}/api/external/v1/offices`, { headers: authHeaders, cache: 'no-store' })
+  const officesRes = await mfFetch(`${MF_ORIGIN}/api/external/v1/offices`, { headers: authHeaders, cache: 'no-store' })
   if (!officesRes.ok) throw new Error(`MF の事業者一覧を読めませんでした（${officesRes.status}）`)
   const officesJson = (await officesRes.json()) as { offices?: { id: string; name: string }[] } | { id: string; name: string }[]
   const rawOffices = Array.isArray(officesJson) ? officesJson : officesJson.offices || []
@@ -206,7 +221,7 @@ export async function completeMfConnection(code: string, actor: string): Promise
 
   let authorizedMember = ''
   if (chosen) {
-    const meRes = await fetch(`${MF_ORIGIN}/api/external/v2/offices/${chosen.id}/me`, { headers: authHeaders, cache: 'no-store' })
+    const meRes = await mfFetch(`${MF_ORIGIN}/api/external/v2/offices/${chosen.id}/me`, { headers: authHeaders, cache: 'no-store' })
     if (meRes.ok) {
       const me = (await meRes.json().catch(() => null)) as { name?: string } | null
       authorizedMember = me?.name || ''
@@ -243,7 +258,7 @@ export async function disconnectMf(): Promise<void> {
   if (c && conn) {
     try {
       const tokens = decryptTokens(conn.enc, c.secret)
-      await fetch(`${MF_ORIGIN}/oauth/revoke`, {
+      await mfFetch(`${MF_ORIGIN}/oauth/revoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ client_id: c.id, client_secret: c.secret, token: tokens.access }).toString(),
@@ -335,7 +350,7 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
   async function fetchJson<T>(pathWithQuery: string, attempt = 0): Promise<T> {
     if (Date.now() > deadline) throw new MfTimeBudgetError('時間切れ')
     if (accessExpires - Date.now() < 5 * 60_000) await refresh()
-    const res = await fetch(`${MF_ORIGIN}${pathWithQuery}`, {
+    const res = await mfFetch(`${MF_ORIGIN}${pathWithQuery}`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${tokens.access}`, Accept: 'application/json' },
       cache: 'no-store',
@@ -355,7 +370,7 @@ export async function openMfApi(deadline: number): Promise<MfApi> {
   async function fetchFile(pathOnly: string, attempt = 0): Promise<{ bytes: Buffer; contentType: string }> {
     if (Date.now() > deadline) throw new MfTimeBudgetError('時間切れ')
     if (accessExpires - Date.now() < 5 * 60_000) await refresh()
-    const res = await fetch(`${MF_ORIGIN}${pathOnly}`, { method: 'GET', headers: { Authorization: `Bearer ${tokens.access}` }, cache: 'no-store' })
+    const res = await mfFetch(`${MF_ORIGIN}${pathOnly}`, { method: 'GET', headers: { Authorization: `Bearer ${tokens.access}` }, cache: 'no-store' })
     if (res.status === 401 && attempt === 0) {
       await refresh()
       return fetchFile(pathOnly, attempt + 1)

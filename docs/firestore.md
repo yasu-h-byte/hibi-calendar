@@ -102,6 +102,7 @@ workSchedule?: {
 |-----------|-----|------|
 | invoiceLock | map `{ [ym]: number }` | 請求書の採番・申請・承認を月ごとに直列化する合図（`withInvoiceMonthLock`・`lib/peer-invoice-store.ts`）。番号は数えない（番号は `peerInvoices` の最大値から出す）。消えても番号は狂わない |
 | lastBackup | map | 日次バックアップの最終実行（時刻・件数・失敗した項目。`app/api/backup/snapshot`）。`/api/health` の `backupOk` と代表の通知ベルが見る |
+| cronRuns | map | ほかの自動処理の最終結果（`leave-expiry`・`mf-receipts`・`commute-measure` ごとに `{ at, ok, error? }`。`lib/cron-status.ts`・2026-11-10）。失敗が残っていると代表の通知ベルに出て、次に成功すれば消える |
 
 書くときは子値を非空マップにして `merge: true`（空マップ置換の罠は踏まない）。
 

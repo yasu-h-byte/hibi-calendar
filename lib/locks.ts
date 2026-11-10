@@ -68,3 +68,13 @@ export function isMonthLockedForWorkers(
 export function ymOfDate(dateIso: string): string {
   return dateIso.slice(0, 7).replace('-', '')
 }
+
+/**
+ * 締めの保存先（locks.{ym} / locks.{ym}_{org}）に使ってよい指定か（2026-11-10 全体点検）。
+ * ym は 6桁の年月、org は 'hibi' / 'hfu' か、指定なし（旧方式の全体ロック）だけ。
+ * 形を確かめずにフィールド名へ入れると「.」で locks の中の形を崩せる。
+ */
+export function isValidLockTarget(ym: unknown, org: unknown): boolean {
+  if (typeof ym !== 'string' || !/^\d{4}(0[1-9]|1[0-2])$/.test(ym)) return false
+  return org === undefined || org === null || org === '' || org === 'hibi' || org === 'hfu'
+}
