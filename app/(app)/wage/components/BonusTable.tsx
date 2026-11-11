@@ -184,6 +184,7 @@ export default function BonusTable() {
       && (info[l.workerId]?.leaveBuyoutRecorded === true || (info[l.workerId]?.leaveRemaining || 0) === 0))
   const hideAttendance = attendanceAllDone && !showAttendance
   const buyoutRecord = records.find(r => r.allocations.some(a => (a.attendanceAmount || 0) > 0))
+  const buyoutSum = buyoutRecord ? summarizeBonus(buyoutRecord.pool, buyoutRecord.allocations) : null
   // 同じ支給日ですでに確定している賞与（二重に確定する前に知らせる）
   const sameDay = sameDayBonuses(records, paidOn)
   const setOverride = (id: number, patch: Override) =>
@@ -331,6 +332,38 @@ export default function BonusTable() {
 
       <div>
         <h3 className="text-sm font-bold mb-2">配分</h3>
+        {/* 同じ支給日の賞与が確定済みのとき（2026-11-11）。確定すると精勤賞与は「買取済」になり、下の表では 0 に見える。
+            「精勤賞与が消えた」と読めてしまうので、確定した中身（精勤賞与の日数と金額）をここに出し、下の表は「もう1件の試算」だと先に伝える */}
+        {sameDay.map(r => {
+          const h = summarizeBonus(r.pool, r.allocations)
+          return (
+            <div key={r.id} role="status" className="mb-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+              <div className="font-bold">支給日 {paidOn} の賞与「{r.label}」は、確定済みです</div>
+              <div className="mt-1 tabular-nums flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>会社が払う合計 <b>{yen(h.own.total)}</b></span>
+                <span>① 利益分配 {yen(h.own.profit)}</span>
+                <span>② 精勤賞与 <b>{yen(h.own.attendance)}</b>（{h.own.attendanceDays}日ぶんの有給の買取）</span>
+                <span>③ 禁煙 {yen(h.own.nonSmoker)}</span>
+                <span>④ 子ども {yen(h.own.child)}</span>
+                {h.dispatched.count > 0 && <span>出向先が支給 {yen(h.dispatched.total)}（うち精勤賞与 {yen(h.dispatched.attendance)}）</span>}
+              </div>
+              <p className="text-xs mt-1.5">
+                下の表は、この日に<b>もう1件</b>作るときの試算です。精勤賞与は確定した賞与で買い取ったので、下の表では 0 になります。
+                直したいときは、履歴でこの確定を取り消してから確定し直してください（取り消すと有給の残りも戻ります）。
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById(`bonus-record-${r.id}`) as HTMLDetailsElement | null
+                    if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+                  }}
+                  className="ml-2 underline font-bold"
+                >
+                  確定した内容を1人ずつ見る
+                </button>
+              </p>
+            </div>
+          )
+        })}
         <div className="grid gap-3 sm:grid-cols-3 mb-3">
           <div>
             <label className="text-xs text-gray-500 block mb-1">支給名</label>
@@ -387,7 +420,7 @@ export default function BonusTable() {
           <>
             {attendanceAllDone && (
               <p className="text-xs text-gray-500 mb-2">
-                ② 精勤賞与（有給の買取）は、買い取る残りがある人がいません{buyoutRecord ? `（「${buyoutRecord.label}」で記録済み）` : ''}。この賞与では付きません。
+                ② 精勤賞与（有給の買取）は、買い取る残りがある人がいません{buyoutRecord && buyoutSum ? `（「${buyoutRecord.label}」で ${buyoutSum.all.attendanceDays}日ぶん・${yen(buyoutSum.all.attendance)} を買取済み）` : ''}。この表では 0 になります。
                 <button
                   type="button" onClick={() => setShowAttendance(v => !v)}
                   className="ml-2 underline text-hibi-navy dark:text-blue-300"
@@ -552,13 +585,6 @@ export default function BonusTable() {
               </div>
             </div>
 
-            {sameDay.length > 0 && (
-              <div role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-200">
-                支給日 {paidOn} の賞与は、すでに確定されています（{sameDay.map(r => `「${r.label}」`).join('・')}）。
-                このまま確定すると、もう1件として記録されます。直したいだけなら、下の履歴でその確定を取り消してから確定してください。
-              </div>
-            )}
-
             <div className="flex flex-wrap items-center gap-3 mt-3">
               <SaveButton
                 action="確定"
@@ -583,7 +609,7 @@ export default function BonusTable() {
             {records.map(r => {
               const h = summarizeBonus(r.pool, r.allocations)
               return (
-              <details key={r.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+              <details key={r.id} id={`bonus-record-${r.id}`} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <summary className="cursor-pointer px-4 py-3 text-sm flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <b>{r.label}</b>
                   <span className="text-xs text-gray-500 tabular-nums">{r.paidOn}</span>
