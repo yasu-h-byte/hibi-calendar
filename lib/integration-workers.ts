@@ -73,6 +73,11 @@ export interface IntegrationWorker {
   pay: { kind: 'daily' | 'hourly' | 'monthly' | 'none'; daily?: number; hourly?: number; monthly?: number; jpGrade?: string; jpStep?: number }
   /** 締めた直近の月の実際の支給額（残業・手当込み・会社負担の社会保険なし）。無ければ null */
   lastClosed: { ym: string; totalCost: number } | null
+  /**
+   * 承認済みの帰国の期間（見込みの最初の月の初め以降に掛かるもの・2026-11-11）。月の途中だけの帰国も入る
+   * （`months[].homeLeave` は月をまるごと居ない時だけ true）。復帰未定は endDate が 9999-12-31
+   */
+  homeLeaves: { startDate: string; endDate: string }[]
   months: ProjectedMonth[]
   /** 月の見込みを年に足したもの（会社負担の社会保険を足した額も）。key は期の初めの年（2026 = 2026年10月〜2027年9月） */
   years: { fyStart: number; pay: number; welfare: number; total: number; activeMonths: number }[]
@@ -269,6 +274,10 @@ export function buildWorkersResult(input: {
                 ? { kind: 'daily', daily: w.rate }
                 : { kind: 'none' },
         lastClosed: input.lastClosed.get(w.id) ?? null,
+        homeLeaves: input.homeLeaves
+          .filter((h) => h.workerId === w.id && h.endDate >= firstDay)
+          .map((h) => ({ startDate: h.startDate, endDate: h.endDate }))
+          .sort((a, b) => a.startDate.localeCompare(b.startDate)),
         months,
         years: sumByFiscalYear(months, age),
       }

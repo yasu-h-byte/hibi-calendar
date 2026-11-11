@@ -19,7 +19,7 @@ import type { NextRequest } from 'next/server'
 import { compute, isClosedMonthYm, getBillTotal, getSubconRate } from '@/lib/compute'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { getMainData, getAttData, getAttDataCached } from '@/lib/compute.server'
-import { applyPayrollCosts } from '@/lib/payroll-cost'
+import { applyPayrollCosts, homeLeavesCached } from '@/lib/payroll-cost'
 import { resolveSiteParties, type CompanyLike } from '@/lib/companies'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import { buildPeerStatements } from '@/lib/peer-statement'
@@ -185,7 +185,84 @@ export interface IntegrationMonth {
    * 人工・残業・額は HFU → 日比建設 の請求書の下書き（buildHfuInvoiceDraft）と同じ数え方。締まっていない月は途中の数字
    */
   hfuWorkforce: IntegrationHfuWorkforce
+  /**
+   * 作業員1人ずつの、その月の出た日数・有給・待機・帰国（2026-11-11）。経営コックピットが、帰国を除いた稼働率を
+   * 日本人・ベトナム人に分けて実績から測り、先の月の稼働を見込むのに使う。金額は含まない。
+   * 締まっていない月は途中の数字（`closed` を見る）
+   */
+  workerDays: IntegrationWorkerDays[]
   totals: { billing: number; billingEnteredSites: number; ownLaborCost: number; subconCost: number }
+}
+
+export interface IntegrationWorkerDays {
+  id: number
+  /** 'hbk' = 日比建設 / 'hfu' = エイチエフユナイテッド */
+  company: 'hbk' | 'hfu'
+  /** 日本人か（在留資格が無い）・ベトナム人か */
+  nationality: 'jp' | 'vn'
+  /** yakuin / shokucho / tobi / tobi_apprentice / doko / jimu */
+  job: string
+  /** 現場に出る人か（事務は false。役員は職長を兼ねる人がいるので job で見分ける） */
+  field: boolean
+  /** その月に在籍していたか（入社日がその月の末まで・退職日がその月の初め以降） */
+  active: boolean
+  /** 人工（出面。夜勤1.5 などは出面の集計と同じ。有給・待機は含まない） */
+  workDays: number
+  /** 有給を使った日数 */
+  paidLeaveDays: number
+  /** 待機の日数（現場の都合で休ませた日・6割保証） */
+  standbyDays: number
+  /** 承認済みの帰国がその月に掛かった期間（月の中に切り取ったもの。無ければ空）と、その暦の日数の合計 */
+  homeLeaves: { startDate: string; endDate: string }[]
+  homeLeaveDays: number
+}
+
+/**
+ * 作業員1人ずつの、その月の出た日数・有給・待機・帰国。純粋な計算（テストできる）。
+ * 在籍していない月でも人工がある人（月の途中の退職など）は返す。在籍も人工も無い人は返さない
+ */
+export function buildWorkerDays(
+  workers: { id: number; company?: string; visaType?: string; jobType?: string; hireDate?: string; retired?: string }[],
+  byWorker: Record<number, { work: number; plUsed: number; compDays: number } | undefined>,
+  homeLeaves: { workerId: number; startDate: string; endDate: string }[],
+  ym: string,
+): IntegrationWorkerDays[] {
+  const y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6))
+  const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+  const monthEnd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+  const isIso = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
+  const dayNo = (iso: string) => parseInt(iso.slice(8, 10), 10)
+  const out: IntegrationWorkerDays[] = []
+  for (const w of workers) {
+    const c = byWorker[w.id]
+    // 退職日が日付でない古い印（'true' など）は、もう居ない人
+    const gone = !!w.retired && (!isIso(w.retired) || w.retired < monthStart) // retired-ok: 月初より前の退職だけを外す
+    const active = !gone && (!isIso(w.hireDate) || w.hireDate! <= monthEnd)
+    const work = c?.work || 0
+    if (!active && work <= 0) continue
+    const leaves = homeLeaves
+      .filter(h => h.workerId === w.id && h.startDate <= monthEnd && h.endDate >= monthStart)
+      .map(h => ({ startDate: h.startDate < monthStart ? monthStart : h.startDate, endDate: h.endDate > monthEnd ? monthEnd : h.endDate }))
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    // 重なった申請を二重に数えないよう、日ごとに印を付けて数える
+    const days = new Set<number>()
+    for (const l of leaves) for (let d = dayNo(l.startDate); d <= dayNo(l.endDate); d++) days.add(d)
+    const job = w.jobType || ''
+    out.push({
+      id: w.id,
+      company: w.company === 'HFU' ? 'hfu' : 'hbk',
+      nationality: !w.visaType || w.visaType === 'none' ? 'jp' : 'vn',
+      job,
+      field: job !== 'jimu',
+      active,
+      workDays: r1(work),
+      paidLeaveDays: r1(c?.plUsed || 0),
+      standbyDays: r1(c?.compDays || 0),
+      homeLeaves: leaves,
+      homeLeaveDays: days.size,
+    })
+  }
+  return out
 }
 
 export interface IntegrationHfuWorkforce {
@@ -357,6 +434,8 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     hfuInvoices,
     primeInvoices,
     hfuWorkforce: buildHfuWorkforce(main, att.d, ym, payroll.workersByYm[ym] || []),
+    // 帰国の一覧は給与の計算（applyPayrollCosts）が読んだ30秒メモを使う（読み取りを増やさない）
+    workerDays: buildWorkerDays(main.workers as never, c.workers, await homeLeavesCached(), ym),
     totals: {
       billing: sites.reduce((t, s) => t + s.billing, 0),
       billingEnteredSites: sites.filter(s => s.billingEntered).length,
