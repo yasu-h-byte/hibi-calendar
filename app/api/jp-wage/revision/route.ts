@@ -20,6 +20,7 @@ import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { isAlreadyRetired } from '@/lib/workers'
 import { getWorkers } from '@/lib/workers.server'
 import { updateWorker } from '@/lib/worker-crud'
+import { isJpMonthlyTrainee } from '@/lib/jp-transfer'
 import {
   computeRosterRevision, nextRevisionDate, lastRevisionDate, dailyForStep,
   SPECIAL_REASONS, HYOGO_PITCH, FIRST_REVISION_MIN_MONTHS,
@@ -83,6 +84,9 @@ async function buildRoster(effective: string, entries: Record<string, Entry>) {
     .filter(w => !isAlreadyRetired(w.retired, effective))
     .filter(w => !w.visaType || w.visaType === 'none')   // 外国人は時給制の別制度
     .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
+    // 月給の新卒はまだ号俸制に入っていない（移行は「日給月給への移行」で。lib/jp-transfer.ts）。
+    //   名簿に入れると「号が未確定」で改定全体が確定できなくなる
+    .filter(w => !isJpMonthlyTrainee(w))
     .map(w => {
       const seed = seedById.get(w.id)
       const e = entries[String(w.id)] || DEFAULT_ENTRY
@@ -100,6 +104,8 @@ async function buildRoster(effective: string, entries: Record<string, Entry>) {
         discretionaryReason: e.discretionaryReason,
         forceInclude: e.forceInclude,
         fixed: seed?.fixed,
+        // 新卒の移行は月給を 0 にして適用開始日を書く（app/api/jp-wage/transfer）。基準日まで6ヶ月未満なら対象外
+        transferredOn: !w.salary && (w.prevSalary ?? 0) > 0 ? (w.salaryFrom || null) : null,
         adjustment: seed?.adjustment,
       } satisfies RosterMember
     })

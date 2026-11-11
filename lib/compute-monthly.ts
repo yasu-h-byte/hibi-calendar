@@ -9,6 +9,7 @@ import { type HomeLeaveEntry } from './homeLeave'
 import { type WorkerAllowanceMonthly } from './allowance'
 import { withWorkTypeSiteCalendars } from './site-hierarchy'
 import { overtimeCalendarDays, workerSiteCalendarDays } from './compute-overtime'
+import { isTransferOverdueForYm } from './jp-transfer'
 import { effectiveHourlyRateForYm, effectiveRateForYm, effectiveSalaryForYm, isHiredByMonth, isStillActiveForMonth, midMonthRateChangeOf } from './workers'
 import { isSuspectCompanyRest } from './attendance-confirm'
 import { OLD_CONTRACT_DAILY_HOURS, countOldContractPrescribedDays, oldContractUnpaidDays } from './old-contract'
@@ -34,7 +35,7 @@ import { LEAVE_SETTLE_FROM_YM, LEAVE_SETTLE_LABEL, LEAVE_SETTLE_MONTH_CAP_DAYS, 
  * 過去の締め済み月の見え方を変えないため、PAY_NOTES_FROM_YM（2026年9月分）より前の月には付けない。
  */
 export interface PayNote {
-  code: 'belowWorkedDays' | 'jpWeekOver40' | 'crossSiteCalendar' | 'midMonthRateOt' | 'blankDays' | 'oldRuleExtraWork' | 'jpMonthlyOffDayWork' | 'leaveSettleOverCap' | 'leaveSettleNotDaily' | 'oldRuleUnpaidDays'
+  code: 'belowWorkedDays' | 'jpWeekOver40' | 'crossSiteCalendar' | 'midMonthRateOt' | 'blankDays' | 'oldRuleExtraWork' | 'jpMonthlyOffDayWork' | 'leaveSettleOverCap' | 'leaveSettleNotDaily' | 'oldRuleUnpaidDays' | 'jpTransferDue'
   message: string
   /** 目安の金額（円）。無い注意点もある */
   amount?: number
@@ -1542,6 +1543,18 @@ export function computeMonthly(
           note(wm, 'oldRuleUnpaidDays',
             `旧契約の所定の日（日曜と会社の休日以外）なのに欠勤（日給100%控除）になっている日が ${unpaid.length}日 あります（${kinds}）。旧契約は現場カレンダーが休みの日も所定の日です。現場・会社の都合の休みなら「0.6補」（60%補償${lost ? `・${lost.toLocaleString()}円` : ''}）、本人の都合なら「欠」を入れてください`,
             lost)
+        }
+      }
+
+      // ⑤ 新卒の月給: 日給月給へ移る日（入社翌年の10月1日。18歳未満なら18歳の誕生日の翌月1日）を過ぎたのに月給のまま（2026-11-11）
+      //   移行の確定（賃金制度 → 日給月給への移行）を忘れると、月給のまま締まってしまう
+      if (isJpMonthly) {
+        const due = isTransferOverdueForYm(
+          { visa: wm.visa, job: wm.job, salary: wm.salary, jpGrade: (raw as { jpGrade?: string } | undefined)?.jpGrade,
+            hireDate: raw?.hireDate, birthDate: (raw as { birthDate?: string } | undefined)?.birthDate }, ym)
+        if (due) {
+          note(wm, 'jpTransferDue',
+            `日給月給へ移る日（${due}）を過ぎていますが、月給のまま計算しています。締める前に「賃金制度 → 日給月給への移行」で確定してください（代表・政仁さん）`)
         }
       }
 

@@ -23,14 +23,18 @@ import AdjustmentTables from './components/AdjustmentTables'
 import BonusTable from './components/BonusTable'
 import PromotionPanel from './components/PromotionPanel'
 import RevisionPanel from './components/RevisionPanel'
+import TransferPanel from './components/TransferPanel'
+import { isJpMonthlyTrainee, jpTransferSchedule, transferStatus } from '@/lib/jp-transfer'
+import { todayJstIso } from '@/lib/date-utils'
 
-type Tab = 'table' | 'rules' | 'revision' | 'promotion' | 'bonus' | 'docs'
+type Tab = 'table' | 'rules' | 'revision' | 'promotion' | 'transfer' | 'bonus' | 'docs'
 
 const TABS: { key: Tab; label: string; note: string }[] = [
   { key: 'table', label: '号俸表', note: '等級と号ごとの日額' },
   { key: 'rules', label: '調整の基準', note: '評価・年齢・特別' },
   { key: 'revision', label: '年次改定', note: '毎年10月1日' },
   { key: 'promotion', label: '昇格', note: '役割が変わったとき' },
+  { key: 'transfer', label: '新卒の移行', note: '月給 → 日給月給（入社翌年の10月1日。18歳未満の人は18歳の誕生日の翌月から）' },
   { key: 'bonus', label: '賞与', note: '原資を点数比で配分' },
   { key: 'docs', label: '資料', note: '規程と関連ドキュメント' },
 ]
@@ -51,6 +55,8 @@ function WageHub() {
   const [placed, setPlaced] = useState<{ name: string; grade: string; step: number }[]>([])
   // 等級が未設定の日本人社員。放置すると年次改定が確定できないので、どのタブでも出す
   const [unset, setUnset] = useState<{ id: number; name: string }[]>([])
+  // 月給の新卒（まだ号俸制に入っていない）。「未設定」とは分けて、移行の予定日を出す（2026-11-11）
+  const [trainees, setTrainees] = useState<{ id: number; name: string; date: string | null; status: string }[]>([])
   // 2026-08-27 追加（給与総点検）: ページ全体の閲覧ガード。改定タブだけでなく
   //   昇格・賞与タブにも個人の日額・賞与額が出るため、ハブごと代表・事業責任者に限定する
   //   （APIはサーバ側 requireExecutiveAuth でも強制済み。これはUXのための早期表示制御）
@@ -84,7 +90,17 @@ function WageHub() {
             .filter(w => !isAlreadyRetired(w.retired as string | undefined) && (!w.visaType || w.visaType === 'none'))
             .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
             .filter(w => !w.jpGrade || !w.jpStep)
+            // 月給の新卒は等級が無いのが正しい状態（移行日に決める）。未設定の注意には出さない
+            .filter(w => !isJpMonthlyTrainee(w as { visaType?: string; jobType?: string; salary?: number; jpGrade?: string }))
             .map(w => ({ id: Number(w.id), name: String(w.name) })))
+          const today = todayJstIso()
+          setTrainees(ws
+            .filter(w => !isAlreadyRetired(w.retired as string | undefined))
+            .filter(w => isJpMonthlyTrainee(w as { visaType?: string; jobType?: string; salary?: number; jpGrade?: string }))
+            .map(w => {
+              const sc = jpTransferSchedule(w.hireDate as string | undefined, w.birthDate as string | undefined)
+              return { id: Number(w.id), name: String(w.name), date: sc.date, status: transferStatus(sc, today) }
+            }))
         })
         .catch(() => {})
     } catch { /* 配置が出せなくても表は見られるので握りつぶす */ }
@@ -136,6 +152,25 @@ function WageHub() {
         </section>
       )}
 
+      {trainees.length > 0 && tab !== 'transfer' && (
+        <section className={`rounded-xl border px-5 py-3 ${trainees.some(t => t.status === 'due' || t.status === 'needInput')
+          ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'
+          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+          <h2 className="text-sm font-bold mb-1">月給の新卒 {trainees.length}名（日給月給への移行待ち）</h2>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+            {trainees.map(t => (
+              <span key={t.id}>
+                {t.name}：
+                {t.status === 'needInput' ? '移行日が決まりません（入社日・生年月日を入れてください）'
+                  : t.status === 'due' ? <b className="text-red-600 dark:text-red-400">移行日 {t.date} を過ぎています。確定してください</b>
+                  : `移行日 ${t.date}`}
+              </span>
+            ))}
+            <button onClick={() => go('transfer')} className="underline text-hibi-navy dark:text-blue-300">新卒の移行を開く</button>
+          </div>
+        </section>
+      )}
+
       <div>
         <UnderlineTabs tabs={TABS.map(t => ({ key: t.key, label: t.label }))} active={tab} onChange={go} label="賃金制度のタブ" />
         {/* 旧タブに添えていた一言（例: 年次改定＝毎年10月1日）は、選んでいるタブの分だけ下に出す */}
@@ -145,6 +180,7 @@ function WageHub() {
       {tab === 'table' && <GradeTable placed={placed} />}
       {tab === 'rules' && <AdjustmentTables />}
       {tab === 'promotion' && <PromotionPanel />}
+      {tab === 'transfer' && <TransferPanel />}
       {tab === 'bonus' && <BonusTable />}
       {tab === 'revision' && <RevisionPanel />}
       {tab === 'docs' && (
