@@ -55,6 +55,20 @@ DEDURA＋ で作って発行した山岡への請求書（`primeInvoices`）は�
 - 残業・手当・賞与は入れない（経営コックピットが `lastClosed` と比べて補う）
 - Firestore の読み取りは main（30秒キャッシュ）+ 帰国の一覧 + 締めの記録（直近4か月 × 3件まで）。経営コックピット側は1日1回ほど
 
+### 確定した賞与の合計（2026-11-11）
+`GET /api/integration/bonuses?from=YYYY-MM-DD`（ヘッダ `x-integration-key`。from を省くと1年前から）。実装は `lib/integration-bonus.ts`、テストは `__tests__/integrationBonus.test.ts`。
+賃金制度の賞与の画面で**確定した**記録（`jpBonuses`）を、支給日が from 以降のものだけ、**合計にして**返す（個人ごとの額は返さない）。
+代表「決算賞与は DEDURA＋ 側で確定しているので、DEDURA＋ からデータを拾ってください」。
+
+| 項目 | 中身 |
+|------|------|
+| `bonuses[]` | 1回の賞与ごと: `label`（支給名）・`paidOn`（支給日）・`pool`（原資）・`own`（自社が払う人の人数と ①利益分配 ②精勤賞与 ③禁煙手当 ④子ども手当・合計）・`dispatched`（出向先が払う人の合計。自社のお金は出ない）・`transfer`/`cash`（自社が払う分の振込・現金）・`savedAt` |
+
+- 数え方は画面の合計行と同じ1か所（`lib/bonus-summary.ts` の `summarizeBonus`）
+- 経営コックピットは `own.total` を、資金繰りの賞与の予定と今期の着地に使う。賃金制度の外で決める賞与（事務の人など）は経営コックピット側で足す
+- 確定を取り消すと記録が消えるので、次に読んだ時から返らなくなる
+- Firestore の読み取りは `jpBonuses` を支給日で絞った1回（経営コックピット側は1日1回）
+
 ## 書き込み（1つだけ・2026-09-25 午後）
 `POST /api/integration/subcon-rate`（ヘッダ `x-integration-key`、本文 `{ subconId, siteId, rate, reason? }`）。
 経営コックピットの「請求書の取り込み」で、請求書の単価が DEDURA＋ と違うと1円まで説明できたとき、社長がボタンで押した単価を
