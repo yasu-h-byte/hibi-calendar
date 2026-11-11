@@ -34,7 +34,7 @@ const TABS: { key: Tab; label: string; note: string }[] = [
   { key: 'rules', label: '調整の基準', note: '評価・年齢・特別' },
   { key: 'revision', label: '年次改定', note: '毎年10月1日' },
   { key: 'promotion', label: '昇格', note: '役割が変わったとき' },
-  { key: 'transfer', label: '新卒の移行', note: '月給 → 日給月給（入社翌年の10月1日・18歳以上）' },
+  { key: 'transfer', label: '新卒の移行', note: '月給 → 日給月給（入社翌年の10月1日。18歳未満の人は18歳の誕生日の翌月から）' },
   { key: 'bonus', label: '賞与', note: '原資を点数比で配分' },
   { key: 'docs', label: '資料', note: '規程と関連ドキュメント' },
 ]

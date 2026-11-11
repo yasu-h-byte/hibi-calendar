@@ -478,7 +478,7 @@ export interface RosterMember {
   discretionaryReason?: string
   /** 処遇固定。号を動かさない */
   fixed?: boolean
-  /** 月給から日給月給へ移った日（新卒）。基準日と同じなら号を決めたばかりなので、その年の改定は対象外 */
+  /** 月給から日給月給へ移った日（新卒）。基準日まで6ヶ月未満なら号を決めたばかりなので、その改定は対象外 */
   transferredOn?: string | null
   /** 号俸額に上乗せする調整給（移籍調整給など） */
   adjustment?: number
@@ -547,11 +547,12 @@ export function computeRosterRevision(
       }
     }
 
-    // 新卒が日給月給へ移った日＝基準日。号を決めたばかりなので今回は対象外（評価は翌年の改定から。lib/jp-transfer.ts）
-    if (!m.forceInclude && m.transferredOn && m.transferredOn === opts.asOf) {
+    // 新卒が日給月給へ移ってから6ヶ月未満。号を決めたばかりなので今回は対象外（中途採用の初回改定と同じ。lib/jp-transfer.ts）
+    if (!m.forceInclude && m.transferredOn && m.transferredOn <= opts.asOf
+      && monthsBetween(m.transferredOn, opts.asOf) < FIRST_REVISION_MIN_MONTHS) {
       return {
         member: m, status: 'ineligible', result: null, oldTotal: cur, newTotal: cur, tenureMonths,
-        blockers: ['日給月給へ移ったばかり（改定は翌年から）'],
+        blockers: [`日給月給へ移って${monthsBetween(m.transferredOn, opts.asOf)}ヶ月（改定は${FIRST_REVISION_MIN_MONTHS}ヶ月以上）`],
       }
     }
 

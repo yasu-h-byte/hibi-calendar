@@ -104,7 +104,7 @@ async function buildRoster(effective: string, entries: Record<string, Entry>) {
         discretionaryReason: e.discretionaryReason,
         forceInclude: e.forceInclude,
         fixed: seed?.fixed,
-        // 新卒の移行は月給を 0 にして適用開始日を書く（app/api/jp-wage/transfer）。それが今回の基準日なら対象外
+        // 新卒の移行は月給を 0 にして適用開始日を書く（app/api/jp-wage/transfer）。基準日まで6ヶ月未満なら対象外
         transferredOn: !w.salary && (w.prevSalary ?? 0) > 0 ? (w.salaryFrom || null) : null,
         adjustment: seed?.adjustment,
       } satisfies RosterMember

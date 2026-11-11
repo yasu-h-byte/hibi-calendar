@@ -1,8 +1,8 @@
 /**
  * 新卒（月給）→ 日給月給への移行の決まり（docs/wage-system.md 第13節・2026-11-11 代表決定）。
- *   - 移行日 = 入社した翌年の10月1日以降で、18歳になっている最初の10月1日
+ *   - 移行日 = 入社した翌年の10月1日。その日に18歳未満なら、18歳の誕生日の翌月1日
  *   - 号 = 1G で「月給 × 12 ÷ 251 を上回る最初の号」
- *   - 移った年の年次改定は対象外
+ *   - 移ってから6ヶ月未満の年次改定は対象外
  * 金額は架空（実在の人の給与を書かない）。
  */
 import { describe, it, expect } from 'vitest'
@@ -36,16 +36,20 @@ describe('移行日', () => {
   it('6月入社でも翌年の10月1日（1年4ヶ月後）', () => {
     expect(jpTransferSchedule('2026-06-01', '2007-01-01').date).toBe('2027-10-01')
   })
-  it('中卒: 翌年の10月1日に17歳なら、18歳になったあとの最初の10月1日', () => {
-    // 2010年5月生まれ・2026年入社 → 2027-10-01 は17歳 → 2028-10-01（18歳）
+  it('中卒: 翌年の10月1日に17歳なら、18歳の誕生日の翌月1日', () => {
+    // 2010年5月生まれ・2026年入社 → 2027-10-01 は17歳 → 18歳は2028年5月 → 2028-06-01
     const s = jpTransferSchedule('2026-06-01', '2010-05-10')
     expect(s.baseDate).toBe('2027-10-01')
-    expect(s.date).toBe('2028-10-01')
+    expect(s.date).toBe('2028-06-01')
     expect(s.waitsForAge).toBe(true)
   })
-  it('10月1日が誕生日ならその日に18歳として移れる・10月2日生まれは翌年', () => {
+  it('誕生日が1日でも翌月・12月生まれは翌年1月', () => {
+    expect(jpTransferSchedule('2026-04-01', '2010-05-01').date).toBe('2028-06-01')
+    expect(jpTransferSchedule('2026-04-01', '2009-12-20').date).toBe('2028-01-01')
+  })
+  it('10月1日が誕生日ならその日に18歳として移れる・10月2日生まれは11月1日', () => {
     expect(jpTransferSchedule('2026-04-01', '2009-10-01').date).toBe('2027-10-01')
-    expect(jpTransferSchedule('2026-04-01', '2009-10-02').date).toBe('2028-10-01')
+    expect(jpTransferSchedule('2026-04-01', '2009-10-02').date).toBe('2027-11-01')
   })
   it('10月以降に入社しても翌年の10月1日', () => {
     expect(jpTransferSchedule('2026-11-01', '2000-01-01').date).toBe('2027-10-01')
@@ -105,7 +109,7 @@ describe('確定で書く値と給与計算（移行日より前の月は月給�
   })
 })
 
-describe('年次改定: 移った年は対象外', () => {
+describe('年次改定: 移ってから6ヶ月未満は対象外', () => {
   const base: RosterMember = {
     id: 1, name: 'Aさん', grade: '1G', currentStep: 3, birthDate: '2008-08-15', hireDate: '2027-04-01', hyogo: 'A',
   }
@@ -113,6 +117,14 @@ describe('年次改定: 移った年は対象外', () => {
     const r = computeRosterRevision([{ ...base, transferredOn: '2028-10-01' }], { asOf: '2028-10-01' })
     expect(r.rows[0].status).toBe('ineligible')
     expect(r.rows[0].newTotal).toBe(r.rows[0].oldTotal)
+  })
+  it('6月に移った人も、その年の10月1日（4ヶ月後）は対象外', () => {
+    const r = computeRosterRevision([{ ...base, transferredOn: '2028-06-01' }], { asOf: '2028-10-01' })
+    expect(r.rows[0].status).toBe('ineligible')
+  })
+  it('1月に移った人は、その年の10月1日（9ヶ月後）は対象', () => {
+    const r = computeRosterRevision([{ ...base, transferredOn: '2028-01-01' }], { asOf: '2028-10-01' })
+    expect(r.rows[0].status).toBe('ok')
   })
   it('翌年の改定は対象', () => {
     const r = computeRosterRevision([{ ...base, transferredOn: '2028-10-01' }], { asOf: '2029-10-01' })

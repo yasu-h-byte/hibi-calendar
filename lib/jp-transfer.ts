@@ -4,11 +4,11 @@
  * 決まり:
  *   - 中卒・高卒の新卒は月給で入り、**入社した翌年の10月1日**に日給月給（号俸制）へ移る
  *     （4月入社なら1年半後。年次改定の基準日とそろえる）
- *   - ただし **18歳になっていること**。その10月1日に18歳未満なら、18歳になったあとの最初の10月1日まで月給のまま
+ *   - ただし **18歳になっていること**。その10月1日に18歳未満なら、**18歳の誕生日の翌月1日**に移る（それまで月給のまま）
  *     （18歳未満は残業・休日出勤ができず週40時間まで＝ほかの社員と同じ働き方ができない。労基法60条）
  *   - 号は **1G で「月給を日額に直した額を上回る最初の号」**。月給は完全週休2日（年間所定251日）の金額なので
  *     日額 = 月給 × 12 ÷ 251
- *   - 移った年の10月1日の年次改定は対象外（号を決めたばかり）。評価は翌年の改定から
+ *   - 移ってから6ヶ月未満の年次改定（10月1日）は対象外（号を決めたばかり。中途採用の初回改定と同じ考え方）
  *
  * ここは制度の計算だけ（個人の金額は持たない）。画面からも import してよい。
  */
@@ -48,7 +48,7 @@ export function isJpMonthlyTrainee(w: TraineeLike | null | undefined): boolean {
 }
 
 export interface TransferSchedule {
-  /** 移行日 'YYYY-10-01'。入社日か生年月日が無くて決まらないときは null */
+  /** 移行日（入社翌年の10月1日か、18歳の誕生日の翌月1日）。入社日か生年月日が無くて決まらないときは null */
   date: string | null
   /** 入社した翌年の10月1日（年齢を見ない場合の日） */
   baseDate: string | null
@@ -58,7 +58,7 @@ export interface TransferSchedule {
   blockers: string[]
 }
 
-/** 移行日 = 入社した翌年の10月1日以降で、18歳になっている最初の10月1日 */
+/** 移行日 = 入社した翌年の10月1日。その日に18歳未満なら、18歳の誕生日の翌月1日 */
 export function jpTransferSchedule(hireDate?: string | null, birthDate?: string | null): TransferSchedule {
   const blockers: string[] = []
   if (!hireDate || !ISO.test(hireDate)) blockers.push('入社日が未登録')
@@ -66,10 +66,12 @@ export function jpTransferSchedule(hireDate?: string | null, birthDate?: string 
   const baseYear = hireDate && ISO.test(hireDate) ? Number(hireDate.slice(0, 4)) + 1 : null
   const baseDate = baseYear ? `${baseYear}-10-01` : null
   if (blockers.length > 0 || !baseYear) return { date: null, baseDate, waitsForAge: false, blockers }
-  let y = baseYear
-  // 18歳になる年の10月1日には必ず届く（上限は念のため）
-  while (ageOn(birthDate!, `${y}-10-01`) < JP_TRANSFER_MIN_AGE && y < baseYear + 30) y++
-  return { date: `${y}-10-01`, baseDate, waitsForAge: y > baseYear, blockers }
+  if (ageOn(birthDate!, baseDate!) >= JP_TRANSFER_MIN_AGE) return { date: baseDate, baseDate, waitsForAge: false, blockers }
+  // 18歳の誕生日の翌月1日（誕生日が1日でも翌月。12月生まれは翌年1月）
+  const by = Number(birthDate!.slice(0, 4)); const bm = Number(birthDate!.slice(5, 7))
+  const y = by + JP_TRANSFER_MIN_AGE + (bm === 12 ? 1 : 0)
+  const m = bm === 12 ? 1 : bm + 1
+  return { date: `${y}-${String(m).padStart(2, '0')}-01`, baseDate, waitsForAge: true, blockers }
 }
 
 export interface TransferPlacement {

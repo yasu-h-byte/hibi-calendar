@@ -116,9 +116,9 @@ export default function TransferPanel({ onChanged }: { onChanged?: () => void })
         <div className="text-sm font-bold mb-1">新卒の移行の決まり</div>
         <ul className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed list-disc pl-5 space-y-0.5">
           <li>中卒・高卒の新卒は<b>月給</b>で入り、<b>入社した翌年の10月1日</b>に日給月給（号俸制）へ移ります（4月入社なら1年半後）。</li>
-          <li>ただし<b>{JP_TRANSFER_MIN_AGE}歳になっていること</b>。その日に{JP_TRANSFER_MIN_AGE}歳未満なら、{JP_TRANSFER_MIN_AGE}歳になったあとの最初の10月1日まで月給のままです。</li>
+          <li>ただし<b>{JP_TRANSFER_MIN_AGE}歳になっていること</b>。その日に{JP_TRANSFER_MIN_AGE}歳未満なら、<b>{JP_TRANSFER_MIN_AGE}歳の誕生日の翌月1日</b>に移ります（それまで月給のまま）。</li>
           <li>号は <b>{JP_TRANSFER_GRADE} で「月給を日額に直した額を上回る最初の号」</b>（日額 = 月給 × 12 ÷ {NEW_GRAD_ANNUAL_WORK_DAYS}日）。</li>
-          <li>移った年の年次改定は対象外です。評価による昇給は翌年の10月1日から。</li>
+          <li>移ってから6ヶ月未満の年次改定（10月1日）は対象外です。評価による昇給はその次の改定から。</li>
         </ul>
       </div>
 
@@ -153,7 +153,7 @@ export default function TransferPanel({ onChanged }: { onChanged?: () => void })
                       <dt className="text-xs text-gray-500">移行日</dt>
                       <dd className="tabular-nums font-bold">{c.schedule.date || '決まりません'}</dd>
                       {c.schedule.waitsForAge && (
-                        <dd className="text-2xs text-gray-500">入社翌年の10月1日（{c.schedule.baseDate}）には{JP_TRANSFER_MIN_AGE}歳未満のため、{JP_TRANSFER_MIN_AGE}歳になったあとの10月1日</dd>
+                        <dd className="text-2xs text-gray-500">入社翌年の10月1日（{c.schedule.baseDate}）には{JP_TRANSFER_MIN_AGE}歳未満のため、{JP_TRANSFER_MIN_AGE}歳の誕生日の翌月1日</dd>
                       )}
                     </div>
                     <div>
