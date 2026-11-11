@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth, actorLabel } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '@/lib/fsdb'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where } from '@/lib/fsdb'
 import { captureMainGuard, MainConflictError, MAIN_CONFLICT_MESSAGE } from '@/lib/main-guard'
 import { guardedMainUpdate } from '@/lib/main-guard.server'
 import { effectiveRateForYm } from '@/lib/workers'
@@ -196,6 +196,16 @@ export async function POST(request: NextRequest) {
 
   if (!label) return NextResponse.json({ error: '支給名が必要です' }, { status: 400 })
   if (pool <= 0) return NextResponse.json({ error: '原資を入力してください' }, { status: 400 })
+
+  // 同じ支給日ですでに確定している賞与があれば、分かったうえでの確定（allowSamePaidOn）だけ通す（2026-11-11）。
+  //   旧: 止める仕組みが無く、同じ日に2回確定すると利益分配・禁煙・子ども手当が二重に記録された（精勤賞与だけは買取の記録で防いでいた）
+  if (body.allowSamePaidOn !== true) {
+    const same = await getDocs(query(collection(db, 'jpBonuses'), where('paidOn', '==', paidOn)))
+    if (!same.empty) {
+      const names = same.docs.map(d => `「${String((d.data() as { label?: string }).label || '')}」`).join('・')
+      return NextResponse.json({ error: `支給日 ${paidOn} の賞与は、すでに確定されています（${names}）。画面を読み込み直して確かめてください` }, { status: 409 })
+    }
+  }
 
   const workers = await getWorkers()
   // GET（表）と同じ対象（退職「予定」の人は残す・2026-10-02 総合点検）

@@ -9,6 +9,9 @@
  * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  * 2026-10-07: 処遇固定の人は点数を1段下で数える・精勤賞与の日額は前の期の最後の日の日額・確定の取り消し
  * 2026-10-23: 特定技能のフウ・トゥアンを「利益分配だけ（2G相当）」で対象に加えた。対象者は API が決める（lib/bonus-members.server.ts）
+ * 2026-11-11: 合計を読めるようにした（代表「81万6千円になる理由・合計が分かりづらい」）。原資 → 配分 → 自社／出向先 の道筋、
+ *   合計行を 自社・出向先・全員 の3行に、出向の人は表の下へ、箱は「会社が払う合計と内訳」、精勤賞与が全員買取済なら列をたたむ、
+ *   履歴に内訳、同じ支給日の確定済みがあれば確定の前に知らせる。数え方は lib/bonus-summary.ts
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -24,6 +27,7 @@ import {
   NON_SMOKER_ALLOWANCE, FIXED_BONUS_STEP_DOWN,
   type JpGrade, type Hyogo, type BonusMember,
 } from '@/lib/jp-wage'
+import { summarizeBonus, sortBonusLines, sameDayBonuses } from '@/lib/bonus-summary'
 
 interface BonusRecord {
   id: string; label: string; paidOn: string; pool: number
@@ -84,6 +88,8 @@ export default function BonusTable() {
   const [records, setRecords] = useState<BonusRecord[]>([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  /** ② 精勤賞与の列（全員が買取済のときはたたむ。出したいときに開く） */
+  const [showAttendance, setShowAttendance] = useState(false)
 
   const load = useCallback(async (password: string, paidOnIso?: string) => {
     try {
@@ -167,6 +173,20 @@ export default function BonusTable() {
   })
   const own = lines.filter(l => !l.paidBy)   // 自社が支給する人
   const sum = (f: (l: typeof lines[number]) => number, list = own) => list.reduce((s, l) => s + f(l), 0)
+  // 合計（自社・出向先・全員）。合計行・箱・原資とのつながりの表示が同じ数え方を使う（lib/bonus-summary.ts）
+  const S = summarizeBonus(poolNum, lines)
+  const profitEdited = lines.some(l => ov[l.workerId]?.profit !== undefined)
+  // ② 精勤賞与: 買い取る残りがある人が1人もいなければ（記録済みか、残りが0日）、3列（残日数・日額・精勤賞与）をたたむ。
+  //   日数を手で入れた人がいるときはたたまない（入れた数字を隠さない）
+  const attendanceTargets = lines.filter(l => !l.profitShareOnly)
+  const attendanceAllDone = attendanceTargets.length > 0
+    && attendanceTargets.every(l => l.attendanceDays === 0 && ov[l.workerId]?.days === undefined
+      && (info[l.workerId]?.leaveBuyoutRecorded === true || (info[l.workerId]?.leaveRemaining || 0) === 0))
+  const hideAttendance = attendanceAllDone && !showAttendance
+  const buyoutRecord = records.find(r => r.allocations.some(a => (a.attendanceAmount || 0) > 0))
+  const buyoutSum = buyoutRecord ? summarizeBonus(buyoutRecord.pool, buyoutRecord.allocations) : null
+  // 同じ支給日ですでに確定している賞与（二重に確定する前に知らせる）
+  const sameDay = sameDayBonuses(records, paidOn)
   const setOverride = (id: number, patch: Override) =>
     setOv(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
 
@@ -176,6 +196,13 @@ export default function BonusTable() {
    */
   const save = async () => {
     if (!result) return null
+    if (sameDay.length > 0 && !(await confirmDanger({
+      title: `支給日 ${paidOn} の賞与は、すでに確定されています`,
+      description: `確定済み: ${sameDay.map(r => `「${r.label}」`).join('・')}\n`
+        + `このまま進むと、もう1件として記録されます（利益分配・禁煙・子ども手当が二重に残ります）。\n`
+        + `直したいだけなら「やめる」を押し、下の履歴でその確定を取り消してから確定してください。`,
+      confirmLabel: 'もう1件として確定する',
+    }))) return null
     if (!(await confirmDialog({
       title: `「${label}」として賞与の支給を確定しますか？`,
       description: `対象 ${lines.length}名（うち出向先支給 ${lines.length - own.length}名）\n`
@@ -194,6 +221,8 @@ export default function BonusTable() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           label, paidOn, pool: poolNum,
+          // 同じ支給日の確定済みがあるのを分かったうえで確定する（サーバーも同じ判定で止める）
+          allowSamePaidOn: sameDay.length > 0,
           hyogo: Object.fromEntries(members.map(m => [String(m.workerId), m.hyogo])),
           lines: lines.map(({ idx: _idx, ...l }) => l)
         })
@@ -303,6 +332,38 @@ export default function BonusTable() {
 
       <div>
         <h3 className="text-sm font-bold mb-2">配分</h3>
+        {/* 同じ支給日の賞与が確定済みのとき（2026-11-11）。確定すると精勤賞与は「買取済」になり、下の表では 0 に見える。
+            「精勤賞与が消えた」と読めてしまうので、確定した中身（精勤賞与の日数と金額）をここに出し、下の表は「もう1件の試算」だと先に伝える */}
+        {sameDay.map(r => {
+          const h = summarizeBonus(r.pool, r.allocations)
+          return (
+            <div key={r.id} role="status" className="mb-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+              <div className="font-bold">支給日 {paidOn} の賞与「{r.label}」は、確定済みです</div>
+              <div className="mt-1 tabular-nums flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>会社が払う合計 <b>{yen(h.own.total)}</b></span>
+                <span>① 利益分配 {yen(h.own.profit)}</span>
+                <span>② 精勤賞与 <b>{yen(h.own.attendance)}</b>（{h.own.attendanceDays}日ぶんの有給の買取）</span>
+                <span>③ 禁煙 {yen(h.own.nonSmoker)}</span>
+                <span>④ 子ども {yen(h.own.child)}</span>
+                {h.dispatched.count > 0 && <span>出向先が支給 {yen(h.dispatched.total)}（うち精勤賞与 {yen(h.dispatched.attendance)}）</span>}
+              </div>
+              <p className="text-xs mt-1.5">
+                下の表は、この日に<b>もう1件</b>作るときの試算です。精勤賞与は確定した賞与で買い取ったので、下の表では 0 になります。
+                直したいときは、履歴でこの確定を取り消してから確定し直してください（取り消すと有給の残りも戻ります）。
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById(`bonus-record-${r.id}`) as HTMLDetailsElement | null
+                    if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+                  }}
+                  className="ml-2 underline font-bold"
+                >
+                  確定した内容を1人ずつ見る
+                </button>
+              </p>
+            </div>
+          )
+        })}
         <div className="grid gap-3 sm:grid-cols-3 mb-3">
           <div>
             <label className="text-xs text-gray-500 block mb-1">支給名</label>
@@ -328,17 +389,48 @@ export default function BonusTable() {
           </div>
         </div>
         {result && (
-          <p className="text-xs text-gray-500 mb-3">
-            合計 {result.totalPoints}点 ／ 1点あたり <b>{result.unit.toFixed(2)}円</b>
-          </p>
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2.5 mb-3">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm tabular-nums">
+              <span>原資 <b>{yen(poolNum)}</b></span>
+              <span className="text-gray-400">→</span>
+              <span>① 利益分配の合計 <b>{yen(S.all.profit)}</b></span>
+              {S.overPool !== 0 && (
+                <span className="text-xs text-gray-500">
+                  （{profitEdited ? '切り上げと手直しで' : '1人ずつ千円単位に切り上げるので'} 原資より {S.overPool > 0 ? '+' : '−'}{yen(Math.abs(S.overPool))}）
+                </span>
+              )}
+              {S.dispatched.count > 0 && (
+                <>
+                  <span className="text-gray-400">＝</span>
+                  <span>自社が払う <b>{yen(S.own.profit)}</b><span className="text-xs text-gray-500">（{S.own.count}名）</span></span>
+                  <span className="text-gray-400">＋</span>
+                  <span>出向先が払う {yen(S.dispatched.profit)}<span className="text-xs text-gray-500">（{S.dispatched.count}名）</span></span>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              合計 {result.totalPoints}点 ／ 1点あたり <b>{result.unit.toFixed(2)}円</b>（1人ぶん = 点 × 1点あたり を千円単位に切り上げ）
+            </p>
+          </div>
         )}
 
         {!result ? (
           <p className="text-xs text-gray-400">在籍者の等級が読み込めませんでした。</p>
         ) : (
           <>
+            {attendanceAllDone && (
+              <p className="text-xs text-gray-500 mb-2">
+                ② 精勤賞与（有給の買取）は、買い取る残りがある人がいません{buyoutRecord && buyoutSum ? `（「${buyoutRecord.label}」で ${buyoutSum.all.attendanceDays}日ぶん・${yen(buyoutSum.all.attendance)} を買取済み）` : ''}。この表では 0 になります。
+                <button
+                  type="button" onClick={() => setShowAttendance(v => !v)}
+                  className="ml-2 underline text-hibi-navy dark:text-blue-300"
+                >
+                  {showAttendance ? '列をたたむ' : '列を出す'}
+                </button>
+              </p>
+            )}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto">
-              <table className="w-full text-sm min-w-[1040px]">
+              <table className={`w-full text-sm ${hideAttendance ? 'min-w-[760px]' : 'min-w-[1040px]'}`}>
                 <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
                   <tr>
                     {/* 12列あり横スクロールするため、氏名列は左に固定する（2026-08-31） */}
@@ -347,9 +439,13 @@ export default function BonusTable() {
                     <th className={`${th} text-left`}>評語</th>
                     <th className={`${th} text-right`}>点</th>
                     <th className={`${th} text-right`}>① 利益分配</th>
-                    <th className={`${th} text-right`}>残日数</th>
-                    <th className={`${th} text-right`} title="買い取る期の最後の日に払っていた日額（10/1改定前）">日額（期末）</th>
-                    <th className={`${th} text-right`}>② 精勤賞与</th>
+                    {!hideAttendance && (
+                      <>
+                        <th className={`${th} text-right`}>残日数</th>
+                        <th className={`${th} text-right`} title="買い取る期の最後の日に払っていた日額（10/1改定前）">日額（期末）</th>
+                        <th className={`${th} text-right`}>② 精勤賞与</th>
+                      </>
+                    )}
                     <th className={`${th} text-right`}>③ 禁煙</th>
                     <th className={`${th} text-right`}>④ 子ども</th>
                     <th className={`${th} text-right`}>合計</th>
@@ -357,7 +453,8 @@ export default function BonusTable() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {[...lines].sort((x, y) => y.totalAmount - x.totalAmount).map(l => (
+                  {/* 自社が払う人を合計の大きい順 → 出向先が払う人は下にまとめる（合計行に入らない人を途中に混ぜない） */}
+                  {sortBonusLines(lines).map(l => (
                     <tr key={l.workerId} className={l.paidBy ? 'bg-gray-50 dark:bg-gray-700/30 text-gray-400' : ''}>
                       <td className={`px-2.5 py-2 whitespace-nowrap sticky left-0 z-10 ${
                         l.paidBy ? 'bg-gray-50 dark:bg-gray-700' : 'bg-white dark:bg-gray-800'}`}>
@@ -389,6 +486,7 @@ export default function BonusTable() {
                           className="w-24 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded px-1.5 py-1 text-right text-sm tabular-nums"
                         />
                       </td>
+                      {!hideAttendance && (<>
                       <td className={td}>
                         {l.profitShareOnly ? <span className="text-gray-400">—</span> : <>
                         <input
@@ -411,6 +509,7 @@ export default function BonusTable() {
                       </td>
                       <td className={`${td} text-gray-500`}>{l.attendanceRate ? yen(l.attendanceRate) : '—'}</td>
                       <td className={td}>{yen(l.attendanceAmount)}</td>
+                      </>)}
                       <td className={td}>{l.nonSmokerAmount ? yen(l.nonSmokerAmount) : '—'}</td>
                       <td className={td}>
                         {l.childAmount ? (
@@ -434,34 +533,54 @@ export default function BonusTable() {
                       </td>
                     </tr>
                   ))}
-                  <tr className="bg-gray-50 dark:bg-gray-700/30 font-bold border-t-2 border-gray-200 dark:border-gray-600">
-                    <td className="px-2.5 py-2 sticky left-0 z-10 bg-gray-50 dark:bg-gray-700" colSpan={4}>合計（自社支給 {own.length}名）</td>
-                    <td className={td}>{yen(sum(l => l.amount))}</td>
-                    <td className={td}>{sum(l => l.attendanceDays)}日</td>
-                    <td className={td}>—</td>
-                    <td className={td}>{yen(sum(l => l.attendanceAmount))}</td>
-                    <td className={td}>{yen(sum(l => l.nonSmokerAmount))}</td>
-                    <td className={td}>{yen(sum(l => l.childAmount))}</td>
-                    <td className={td}>{yen(sum(l => l.totalAmount))}</td>
-                    <td />
-                  </tr>
+                  {([
+                    { key: 'own', label: `自社が払う合計（${S.own.count}名）`, p: S.own, strong: true },
+                    ...(S.dispatched.count > 0 ? [
+                      { key: 'dispatched', label: `出向先が払う（${S.dispatched.count}名）`, p: S.dispatched, strong: false },
+                      { key: 'all', label: `全員（${S.all.count}名）`, p: S.all, strong: false },
+                    ] : []),
+                  ]).map((r, i) => (
+                    <tr key={r.key} className={`bg-gray-50 dark:bg-gray-700/30 ${r.strong ? 'font-bold' : 'text-gray-500 dark:text-gray-400'} ${i === 0 ? 'border-t-2 border-gray-200 dark:border-gray-600' : ''}`}>
+                      <td className="px-2.5 py-2 sticky left-0 z-10 bg-gray-50 dark:bg-gray-700 whitespace-nowrap" colSpan={4}>{r.label}</td>
+                      <td className={td}>{yen(r.p.profit)}</td>
+                      {!hideAttendance && (
+                        <>
+                          <td className={td}>{r.p.attendanceDays}日</td>
+                          <td className={td}>—</td>
+                          <td className={td}>{yen(r.p.attendance)}</td>
+                        </>
+                      )}
+                      <td className={td}>{yen(r.p.nonSmoker)}</td>
+                      <td className={td}>{yen(r.p.child)}</td>
+                      <td className={td}>{yen(r.p.total)}</td>
+                      <td />
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 mt-3">
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
-                <div className="text-xs text-gray-500">振込 計</div>
-                <div className="text-lg font-bold tabular-nums">{yen(sum(l => l.totalAmount, own.filter(l => l.payMethod === 'transfer')))}</div>
+              <div className="sm:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+                <div className="text-xs text-gray-500">会社が払う合計（{S.own.count}名）</div>
+                <div className="text-2xl font-bold tabular-nums">{yen(S.own.total)}</div>
+                <div className="text-xs text-gray-600 dark:text-gray-300 mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
+                  <span>① 利益分配 {yen(S.own.profit)}</span>
+                  <span>② 精勤賞与 {yen(S.own.attendance)}</span>
+                  <span>③ 禁煙 {yen(S.own.nonSmoker)}</span>
+                  <span>④ 子ども {yen(S.own.child)}</span>
+                </div>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
-                <div className="text-xs text-gray-500">現金 計</div>
-                <div className="text-lg font-bold tabular-nums">{yen(sum(l => l.totalAmount, own.filter(l => l.payMethod === 'cash')))}</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
-                <div className="text-xs text-gray-500">出向先が支給</div>
-                <div className="text-lg font-bold tabular-nums text-gray-400">
-                  {yen(lines.filter(l => l.paidBy).reduce((s2, l) => s2 + l.totalAmount, 0))}
+                <div className="text-xs text-gray-500">支払い方</div>
+                <div className="text-sm tabular-nums mt-1 space-y-0.5">
+                  <div className="flex justify-between gap-3"><span>振込</span><b>{yen(S.transfer)}</b></div>
+                  <div className="flex justify-between gap-3"><span>現金</span><b>{yen(S.cash)}</b></div>
+                  {S.dispatched.count > 0 && (
+                    <div className="flex justify-between gap-3 text-gray-400">
+                      <span>出向先が支給（会社は払わない）</span><span>{yen(S.dispatched.total)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -474,7 +593,7 @@ export default function BonusTable() {
                 disabled={!label.trim() || poolNum <= 0}
               />
               <span className="text-2xs text-gray-500">
-                評語の初期値は年次改定で決めたもの。千円切り上げのぶん、利益分配の合計は原資をわずかに超えます。
+                評語の初期値は年次改定で決めたもの。
                 役員・事務は対象外。精勤賞与は、支給日の時点で終わっている有給の期の残りを、その期の最後の日の日額で買い取ります。
               </span>
             </div>
@@ -487,13 +606,17 @@ export default function BonusTable() {
           <p className="text-xs text-gray-400">まだ記録がありません。</p>
         ) : (
           <div className="space-y-2">
-            {records.map(r => (
-              <details key={r.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            {records.map(r => {
+              const h = summarizeBonus(r.pool, r.allocations)
+              return (
+              <details key={r.id} id={`bonus-record-${r.id}`} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <summary className="cursor-pointer px-4 py-3 text-sm flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <b>{r.label}</b>
                   <span className="text-xs text-gray-500 tabular-nums">{r.paidOn}</span>
                   <span className="text-xs text-gray-500 tabular-nums">
-                    原資 {yen(r.pool)} ／ {r.allocations.length}名 ／ 支給計 {yen(r.grandTotal ?? r.total)}
+                    原資 {yen(r.pool)} ／ {r.allocations.length}名 ／ 会社が払った合計 <b>{yen(h.own.total)}</b>
+                    （利益分配 {yen(h.own.profit)}・精勤賞与 {yen(h.own.attendance)}・禁煙と子ども {yen(h.own.nonSmoker + h.own.child)}）
+                    {h.dispatched.count > 0 && <> ／ 出向先が支給 {yen(h.dispatched.total)}</>}
                   </span>
                 </summary>
                 <div className="px-4 pb-3 overflow-x-auto">
@@ -529,7 +652,8 @@ export default function BonusTable() {
                   </button>
                 </div>
               </details>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>
