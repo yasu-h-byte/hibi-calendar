@@ -176,10 +176,12 @@ export default function BonusTable() {
   // 合計（自社・出向先・全員）。合計行・箱・原資とのつながりの表示が同じ数え方を使う（lib/bonus-summary.ts）
   const S = summarizeBonus(poolNum, lines)
   const profitEdited = lines.some(l => ov[l.workerId]?.profit !== undefined)
-  // ② 精勤賞与: 対象の全員が「その期の買取は記録済み」で 0日なら、3列（残日数・日額・精勤賞与）をたたむ
+  // ② 精勤賞与: 買い取る残りがある人が1人もいなければ（記録済みか、残りが0日）、3列（残日数・日額・精勤賞与）をたたむ。
+  //   日数を手で入れた人がいるときはたたまない（入れた数字を隠さない）
   const attendanceTargets = lines.filter(l => !l.profitShareOnly)
   const attendanceAllDone = attendanceTargets.length > 0
-    && attendanceTargets.every(l => info[l.workerId]?.leaveBuyoutRecorded === true && l.attendanceDays === 0)
+    && attendanceTargets.every(l => l.attendanceDays === 0 && ov[l.workerId]?.days === undefined
+      && (info[l.workerId]?.leaveBuyoutRecorded === true || (info[l.workerId]?.leaveRemaining || 0) === 0))
   const hideAttendance = attendanceAllDone && !showAttendance
   const buyoutRecord = records.find(r => r.allocations.some(a => (a.attendanceAmount || 0) > 0))
   // 同じ支給日ですでに確定している賞与（二重に確定する前に知らせる）
@@ -385,7 +387,7 @@ export default function BonusTable() {
           <>
             {attendanceAllDone && (
               <p className="text-xs text-gray-500 mb-2">
-                ② 精勤賞与（有給の買取）は、全員ぶんが記録済みです{buyoutRecord ? `（「${buyoutRecord.label}」で記録）` : ''}。この賞与では付きません。
+                ② 精勤賞与（有給の買取）は、買い取る残りがある人がいません{buyoutRecord ? `（「${buyoutRecord.label}」で記録済み）` : ''}。この賞与では付きません。
                 <button
                   type="button" onClick={() => setShowAttendance(v => !v)}
                   className="ml-2 underline text-hibi-navy dark:text-blue-300"
