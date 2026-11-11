@@ -50,7 +50,8 @@ const TTL_MS = 30_000
 let hlCache: { at: number; data: HomeLeaveEntry[] } | null = null
 const calCache = new Map<string, { at: number; data: Record<string, Record<string, string>> }>()
 
-async function homeLeavesCached(): Promise<HomeLeaveEntry[]> {
+/** 承認済みの帰国の一覧（30秒メモ）。経営コックピット向けの月の窓口（lib/integration.ts）も同じメモを読む（読み取りを増やさない） */
+export async function homeLeavesCached(): Promise<HomeLeaveEntry[]> {
   if (hlCache && Date.now() - hlCache.at < TTL_MS) return hlCache.data
   const data = await getAllActiveHomeLeaves()
   hlCache = { at: Date.now(), data }

@@ -3,7 +3,7 @@
  * 未設定・短すぎる・長さ違い・1文字違いはすべて通さない（読むだけの窓口でも経営の数字が出るため）。
  */
 import { describe, it, expect } from 'vitest'
-import { isValidIntegrationKey, paperInvoiceToIntegration } from '@/lib/integration'
+import { isValidIntegrationKey, paperInvoiceToIntegration, buildWorkerDays } from '@/lib/integration'
 import { summarizePeerInvoiceSites, type PeerInvoiceLine } from '@/lib/peer-invoice'
 
 const KEY = 'k'.repeat(31) + 'X'
@@ -68,5 +68,57 @@ describe('paperInvoiceToIntegration（紙の控えを経営コックピットへ
     expect(r.issueDate).toBe('2026-09-30')
     expect([r.subtotal, r.tax, r.total]).toEqual([1000, 100, 1100])
     expect(r.sites).toEqual([])
+  })
+})
+
+describe('buildWorkerDays（作業員1人ずつの出た日数・有給・待機・帰国）', () => {
+  const workers = [
+    { id: 10, company: 'HIBI', visaType: 'none', jobType: 'tobi', hireDate: '2020-04-01' },
+    { id: 11, company: 'HFU', visaType: 'jisshu2', jobType: 'tobi', hireDate: '2024-08-01' },
+    { id: 12, company: 'HIBI', visaType: 'tokutei1', jobType: 'tobi', hireDate: '2019-01-10' },
+    { id: 13, company: 'HIBI', visaType: 'none', jobType: 'jimu', hireDate: '2026-06-01' },
+    { id: 14, company: 'HIBI', visaType: 'none', jobType: 'tobi', hireDate: '2015-04-01', retired: '2027-01-20' },
+    { id: 15, company: 'HIBI', visaType: 'none', jobType: 'tobi', hireDate: '2027-04-01' },
+    { id: 16, company: 'HIBI', visaType: 'none', jobType: 'tobi', retired: 'true' },
+  ]
+  const byWorker = {
+    10: { work: 22.5, plUsed: 1, compDays: 0 },
+    11: { work: 8, plUsed: 0, compDays: 2 },
+    12: { work: 0, plUsed: 0, compDays: 0 },
+  }
+  const homeLeaves = [
+    // 月をまたぐ帰国（2月の中に切り取る）
+    { workerId: 11, startDate: '2027-01-25', endDate: '2027-02-10' },
+    // 同じ人の重なった申請（二重に数えない）
+    { workerId: 11, startDate: '2027-02-08', endDate: '2027-02-12' },
+    // 月をまるごと
+    { workerId: 12, startDate: '2027-01-15', endDate: '2027-03-05' },
+    // 別の月
+    { workerId: 10, startDate: '2027-05-01', endDate: '2027-05-20' },
+  ]
+  const rows = buildWorkerDays(workers, byWorker, homeLeaves, '202702')
+  const of = (id: number) => rows.find(r => r.id === id)
+
+  it('出た日数・有給・待機をそのまま返す', () => {
+    expect(of(10)).toMatchObject({ company: 'hbk', nationality: 'jp', field: true, active: true, workDays: 22.5, paidLeaveDays: 1, standbyDays: 0, homeLeaveDays: 0, homeLeaves: [] })
+  })
+  it('月をまたぐ帰国は月の中に切り取り、重なった申請は二重に数えない', () => {
+    expect(of(11)).toMatchObject({ company: 'hfu', nationality: 'vn', workDays: 8, standbyDays: 2, homeLeaveDays: 12 })
+    expect(of(11)!.homeLeaves).toEqual([
+      { startDate: '2027-02-01', endDate: '2027-02-10' },
+      { startDate: '2027-02-08', endDate: '2027-02-12' },
+    ])
+  })
+  it('月をまるごと帰国している人は、その月の日数ぶん', () => {
+    expect(of(12)).toMatchObject({ workDays: 0, homeLeaveDays: 28 })
+  })
+  it('事務は field: false', () => expect(of(13)).toMatchObject({ field: false, active: true }))
+  it('月の初めより前に退職した人・まだ入社していない人・古い退職の印の人は返さない', () => {
+    expect(of(14)).toBeUndefined()
+    expect(of(15)).toBeUndefined()
+    expect(of(16)).toBeUndefined()
+  })
+  it('退職した月には居る（月の初め以降の退職）', () => {
+    expect(buildWorkerDays(workers, {}, [], '202701').find(r => r.id === 14)).toMatchObject({ active: true })
   })
 })
