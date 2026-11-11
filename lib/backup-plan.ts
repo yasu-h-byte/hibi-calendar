@@ -22,6 +22,7 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   { coll: 'jpWageHistory', prefix: 'jphist', note: 'ベース年収履歴' },
   { coll: 'jpBonuses', prefix: 'jpbonus', note: '賞与支給記録' },
   { coll: 'jpPromotions', prefix: 'jpprom', note: '昇格履歴' },
+  { coll: 'jpTransfers', prefix: 'jptrans', note: '新卒の月給 → 日給月給への移行の記録（2026-11-11）' },
   { coll: 'calendarSignLog', prefix: 'csignlog', note: '署名の恒久台帳（append-only の正本）' },
   { coll: 'peerInvoices', prefix: 'peerinv', note: '応援・HFU の請求書（発行・申請・取り消しの記録）' },
   { coll: 'paperInvoices', prefix: 'paperinv', note: '紙（手作り）で出した請求書の記録（ファイル本体は Storage）' },

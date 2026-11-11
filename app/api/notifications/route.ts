@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sitesNeedingCalendar } from '@/lib/site-hierarchy'
+import { isJpMonthlyTrainee, jpTransferSchedule, transferStatus, daysUntil } from '@/lib/jp-transfer'
 import { checkApiAuth, getApiAuthUser, approvingForemenOfSite, callerCan } from '@/lib/auth'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { mergeAnnouncements } from '@/lib/release-notes'
@@ -683,6 +684,33 @@ export async function GET(request: NextRequest) {
       }
     } catch (e) {
       console.error('Home long leave request check error:', e)
+    }
+
+    // 8e. 新卒の月給 → 日給月給への移行（2026-11-11）。移行日の60日前から、決める人（代表・政仁さん）にだけ出す
+    //   個人の金額は載せない（名前と日付だけ）。main はキャッシュ済みのものを使う
+    try {
+      if (await callerCan(request, 'wage.decide')) {
+        for (const w of main.workers as unknown as Array<Record<string, unknown>>) {
+          if (isAlreadyRetired(w.retired as string | undefined, nowJstIso)) continue
+          if (!isJpMonthlyTrainee(w as { visa?: string; job?: string; salary?: number; jpGrade?: string })) continue
+          const sc = jpTransferSchedule(w.hireDate as string | undefined, w.birthDate as string | undefined)
+          const st = transferStatus(sc, nowJstIso)
+          if (st === 'waiting') continue
+          notifications.push({
+            id: `jp-transfer-${w.id}`,
+            icon: st === 'soon' ? 'calendar' : 'alert',
+            message: st === 'needInput'
+              ? `${w.name}さん（月給の新卒）の日給月給へ移る日が決まりません（${sc.blockers.join('・')}）`
+              : st === 'due'
+                ? `${w.name}さんが日給月給へ移る日（${sc.date}）になりました。その月を締める前に確定してください`
+                : `${w.name}さんは ${sc.date} に月給から日給月給へ移ります（あと${daysUntil(sc.date!, nowJstIso)}日）`,
+            type: st === 'due' ? 'warning' : 'info',
+            href: '/wage?tab=transfer',
+          })
+        }
+      }
+    } catch (e) {
+      console.error('JP transfer check error:', e)
     }
 
     // 8c. 承認待ちの請求書（事務が発行を申請 → 事業責任者・管理者が承認。2026-09-26）

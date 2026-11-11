@@ -10,7 +10,7 @@
  * 見込みの前提（PROJECTION_ASSUMPTIONS）:
  *   - 日本人（日給月給・号俸）: 毎年10月1日に号俸が上がる。評語は基本の A（+4号）＋ 年齢調整。昇格は見込まない。
  *     入社6か月未満の10月は上げない。年の基本給 = 日額 × (所定290日 + 有給20日) = 310日（月はその12分の1）
- *   - 日本人の新卒の月給: 入社1年は月給のまま、その後は 1G の月給と同じくらいの号から（stepForDaily）
+ *   - 日本人の新卒の月給: 入社翌年の10月1日（18歳以上）まで月給のまま、その後は 1G の月給と同じくらいの号から（lib/jp-transfer.ts）
  *   - ベトナム人（時給）: 入社した月に毎年、逓減カーブの昇給（A 評価 = カーブどおり）。月の給料 = 時給 × 140時間
  *   - 月給の人（時給が無い）: 据え置き
  *   - 会社負担の社会保険: employerWelfare（標準報酬の上限・介護は40〜64歳）
@@ -19,6 +19,7 @@
  * 金額はすべて円。個人の給与を含むので、窓口は合言葉（checkIntegrationKey）で守り、経営コックピット側も経営者だけが見る。
  * 仕様: docs/integration.md
  */
+import { jpTransferSchedule, transferPlacement } from './jp-transfer'
 import type { Worker } from '@/types'
 import { isAlreadyRetired } from './workers'
 import { ANNUAL_DAYS, PAID_LEAVE_DAYS, HYOGO_PITCH, MAX_STEP, ageAdjustment, ageOn, dailyForStep, stepForDaily, type JpGrade } from '@/lib/jp-wage'
@@ -114,6 +115,8 @@ export function projectWorker(
   let step = grade ? Math.min(MAX_STEP, Math.max(1, w.jpStep || (w.rate ? stepForDaily(grade, w.rate) : 1))) : 0
   let hourly = w.hourlyRate || 0
   const monthlySalary = w.salary || 0
+  const transferSc = jpTransferSchedule(w.hireDate, w.birthDate)
+  const transferYm = (transferSc.date || transferSc.baseDate)?.slice(0, 7) ?? null
 
   for (let i = 0; i < months; i++) {
     const ym = ymAdd(fromYm, i)
@@ -134,9 +137,12 @@ export function projectWorker(
         hourly += Math.round(curveRaiseAt(Math.max(0, yearsBefore)) * PROJECTION_ASSUMPTIONS.vnRaiseMultiplier)
       }
       // 日本人の新卒（月給・号俸なし）: 入社1年たったら 1G の月給と同じくらいの号へ
-      if (nat === 'jp' && !grade && monthlySalary > 0 && hireYm && monthsDiff(hireYm, ym) === 12) {
-        grade = '1G'
-        step = stepForDaily('1G', (monthlySalary * 12) / PROJECTION_ASSUMPTIONS.jpPaidDaysPerYear)
+      //   2026-11-11: 移る日は「入社翌年の10月1日・18歳以上」、号は月給×12÷251 を上回る最初の号（lib/jp-transfer.ts）。
+      //   生年月日が無いときは入社翌年の10月1日で見込む
+      if (nat === 'jp' && !grade && monthlySalary > 0 && transferYm && ym === transferYm) {
+        const place = transferPlacement(monthlySalary)
+        grade = place.grade
+        step = place.step
       }
     }
     const active = (!hireYm || hireYm <= ym) && (!retiredDate || retiredDate >= last)

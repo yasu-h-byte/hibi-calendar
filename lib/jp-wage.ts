@@ -478,6 +478,8 @@ export interface RosterMember {
   discretionaryReason?: string
   /** 処遇固定。号を動かさない */
   fixed?: boolean
+  /** 月給から日給月給へ移った日（新卒）。基準日と同じなら号を決めたばかりなので、その年の改定は対象外 */
+  transferredOn?: string | null
   /** 号俸額に上乗せする調整給（移籍調整給など） */
   adjustment?: number
 }
@@ -542,6 +544,14 @@ export function computeRosterRevision(
       return {
         member: m, status: 'fixed', result: null, oldTotal: cur, newTotal: cur,
         tenureMonths, blockers: ['処遇固定（改定対象外）'],
+      }
+    }
+
+    // 新卒が日給月給へ移った日＝基準日。号を決めたばかりなので今回は対象外（評価は翌年の改定から。lib/jp-transfer.ts）
+    if (!m.forceInclude && m.transferredOn && m.transferredOn === opts.asOf) {
+      return {
+        member: m, status: 'ineligible', result: null, oldTotal: cur, newTotal: cur, tenureMonths,
+        blockers: ['日給月給へ移ったばかり（改定は翌年から）'],
       }
     }
 
