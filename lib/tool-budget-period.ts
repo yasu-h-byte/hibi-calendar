@@ -5,6 +5,7 @@
  * ベトナム人（技能実習・特定技能）で起点日が未設定の人は、**入社日を起点にする**
  * （2026-09-30: 8月以降の新人3名が未設定で、スマホに道具代が出ていなかった）。
  * 日本人は 10/1 起点の年度で運用しているので、入社日で補わない（未設定なら期間なし）。
+ * ただし 2026-10-01 以降に入社6ヶ月を迎える日本人（中途採用）は、有給の初回付与日を起点にする（2026-11-12 代表）。
  *
  * スタッフのスマホ（/api/attendance/staff）と道具代の管理（/api/tool-budget）で同じ関数を使う。
  * 以前はスマホ側だけ別の計算を持っていて、起点日が先の人に「来期」を今の残額として出していた。
@@ -12,6 +13,7 @@
 
 import { todayJstIso, addMonthsSafe } from './date-utils'
 import { purchasesBudgetUse, type PurchaseLike } from './tool-subsidy'
+import { jpFirstGrantAlignedDate } from './workers'
 
 export interface ToolBudgetPeriod {
   start: string  // YYYY-MM-DD
@@ -103,7 +105,13 @@ export function getPeriodByIndex(anchor: string, index: number): ToolBudgetPerio
   return { start: iso(start), end: iso(end), index }
 }
 
-/** その人の起点日。設定があればそれ、ベトナム人で未設定なら入社日 */
+/**
+ * その人の起点日。設定があればそれ。未設定なら:
+ *   - ベトナム人（技能実習・特定技能）: 入社日
+ *   - 日本人の中途採用: 有給の初回付与日（入社6ヶ月後・2026-11-12 代表。jpFirstGrantAlignedDate）
+ *     以後は有給と同じ日に1年ごとに切り替わる。予算は日本人の通常額（10万円）をまるごと
+ * fromHireDate は「管理画面で設定していない（入社日から自動で決めた）」の意味（画面の注記用）
+ */
 export function toolBudgetAnchorOf(
   w: { id: number; visa?: string | null; hireDate?: string | null },
   anchors: Record<string, string> | undefined,
@@ -113,6 +121,8 @@ export function toolBudgetAnchorOf(
   const visa = w.visa || 'none'
   const foreign = visa.startsWith('jisshu') || visa.startsWith('tokutei')
   if (foreign && w.hireDate && /^\d{4}-\d{2}-\d{2}$/.test(w.hireDate)) return { anchor: w.hireDate, fromHireDate: true }
+  const jpStart = jpFirstGrantAlignedDate({ visa, hireDate: w.hireDate })
+  if (jpStart) return { anchor: jpStart, fromHireDate: true }
   return { anchor: null, fromHireDate: false }
 }
 

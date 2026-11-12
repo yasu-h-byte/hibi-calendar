@@ -131,7 +131,7 @@ export function listPendingGrants(
           expectedFy = expectedGrantDate.slice(0, 4)
           reason = exp.catchUp
             ? `付与の記録なし（入社6ヶ月後 ${hirePlus6} から1年ごとの直近の付与日を目安）`
-            : '初回付与（入社6ヶ月経過）'
+            : (w.job === 'shokucho' ? '初回付与（入社6ヶ月経過）・道具代もこの日から' : '初回付与（入社6ヶ月経過）・道具代もこの日から・マイページのURLを本人へ送る')
         } else {
           expectedGrantDate = fyGrantDate
           expectedFy = String(currentFyStart)

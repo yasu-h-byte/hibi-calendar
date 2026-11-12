@@ -25,7 +25,7 @@ import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
-import { isAlreadyRetired } from '@/lib/workers'
+import { isAlreadyRetired, mypageDistributeFrom } from '@/lib/workers'
 import { fetchWithAuth, postJson  } from '@/lib/api-client'
 import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog, FieldError, RowButton } from '@/components/ui/PageParts'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
@@ -490,6 +490,10 @@ export default function WorkersPage() {
   //   外国人スタッフ     → 出面入力画面
   // 職長専用の出面画面（/attendance/foreman/[token]）は残してあるが、職長は従来どおり
   // PC画面をスマホで操作する運用になったため、配布URLとしては使わない（代表判断）。
+  // マイページを配れるようになる日（まだなら日付・配れるなら null）。有給の初回付与日にそろえる（2026-11-12 代表）
+  const mypageFrom = (w: { jobType?: string; visaType?: string; hireDate?: string }) =>
+    mypageDistributeFrom({ visa: w.visaType, job: w.jobType, hireDate: w.hireDate })
+  const fmtJpDate = (iso: string) => `${Number(iso.slice(0, 4))}年${Number(iso.slice(5, 7))}月${Number(iso.slice(8, 10))}日`
   const mobileUrl = (w: { token?: string; jobType?: string; visaType?: string }) => {
     const isJp = !w.visaType || w.visaType === 'none'
     return isJp ? `${baseUrl}/mypage/${w.token}` : `${baseUrl}/attendance/${w.token}`
@@ -678,7 +682,12 @@ export default function WorkersPage() {
             {/* よく使う操作（旧: 一覧の行ごとに並んでいたボタン） */}
             {editWorker && (
               <div className="px-6 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-2">
-                {editWorker.token ? (
+                {editWorker.token && mypageFrom(editWorker) ? (
+                  // 日本人の中途採用は有給の初回付与日までマイページを配らない（2026-11-12 代表・職長は除く）
+                  <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">
+                    マイページは {fmtJpDate(mypageFrom(editWorker)!)}（有給の初回付与日）から配ります
+                  </span>
+                ) : editWorker.token ? (
                   <button type="button" onClick={() => setQrWorker(editWorker)} className={PANEL_BTN}>スマホURL・QR</button>
                 ) : tokenHidden(editWorker) ? (
                   <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">スマホURLは代表だけが見られます</span>
@@ -1399,10 +1408,14 @@ export default function WorkersPage() {
                     <div className="text-xs text-gray-500 mb-2">モバイルトークン</div>
                     <div className="flex items-center gap-2">
                       <code className="text-xs bg-white px-2 py-1 rounded border flex-1 truncate">{w.token}</code>
-                      <RowButton tone="main" onClick={() => {
-                        navigator.clipboard.writeText(mobileUrl(w))
-                        notify.success('URLをコピーしました')
-                      }}>URLをコピーする</RowButton>
+                      {mypageFrom(w) ? (
+                        <span className="text-xs text-gray-500 whitespace-nowrap">{fmtJpDate(mypageFrom(w)!)}から配布</span>
+                      ) : (
+                        <RowButton tone="main" onClick={() => {
+                          navigator.clipboard.writeText(mobileUrl(w))
+                          notify.success('URLをコピーしました')
+                        }}>URLをコピーする</RowButton>
+                      )}
                       <RowButton tone="danger" onClick={() => handleRevokeToken(w.id, w.name)}>無効にする</RowButton>
                     </div>
                   </div>
