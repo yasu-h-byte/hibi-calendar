@@ -23,14 +23,14 @@
 - `hibi-amber` #F5A623 / `hibi-amberDark` #DD9314（スマホ主役ボタン）
 - ダークモード対応（管理画面のみ。スマホ画面は非対応）
 
-## ブランド（システム名 DEDURA＋）
+## ブランド（システム名 DEZRA）
 
 **会社名とシステム名は別物。混同しないこと。**
 
 | | 名称 | 使う場所 |
 |---|---|---|
-| システム名 | **DEDURA＋**（デヅラプラス） | ブラウザタブ・PWA・アプリアイコン・サイドバー・ログイン画面 |
-| 運営表記 | **Operated by BOWHEAD HOLDINGS** | サイドバー・ログイン画面で DEDURA＋ の下に小さく添える（`DEDURA_BYLINE`） |
+| システム名 | **DEZRA**（デズラ） | ブラウザタブ・PWA・アプリアイコン・サイドバー・ログイン画面 |
+| 運営表記 | **Operated by BOWHEAD HOLDINGS** | サイドバー・ログイン画面で DEZRA の下に小さく添える（`DEZRA_BYLINE`） |
 | 会社名 | **HIBI CONSTRUCTION** | 公開カレンダー・評価帳票などの印字・LINE通知文の差出人 |
 
 **サイドバーに会社ロゴは置かない。** 見るのは社内4ロール（管理者・事業責任者・事務・職長）
@@ -41,38 +41,44 @@
 運営表記に **`Managed by` は使わない**。英語では「他社に代わって運用受託している」含みが出るため。
 自社グループが自社のために運営しているシステムなので `Operated by` が正確。
 サイドバーの内寸は 184px（w-56・左右 px-5）なので、9px・字間標準・`whitespace-nowrap` で1行に収める。
-`DEDURA＋` との間隔（`mt-1`）と明るさ（白地では `gray-500`・ダークでは `white/50`）はロックアップとして成立する下限値で、
+`DEZRA` との間隔（`mt-1`）と明るさ（白地では `gray-500`・ダークでは `white/50`）はロックアップとして成立する下限値で、
 広げると別物に見え、暗くすると 9px では読めなくなる。
 なお `Sidebar` は `print:hidden` なので、この変更は印刷物・帳票に一切影響しない。
 
-- 由来: 「出面（でづら）」＋ 機能拡張の「＋」。表記は旧アプリ `dedura-kanri` に合わせて **DEDURA**（DEZURA ではない）
-- **＋ は単管クランプ**（直交する2本のパイプ＋ボルトの芯）がモチーフ。とび・土工の道具をそのまま記号にしている。**この意味づけは変えない**
+- 由来: 「出面（でづら）」。読みは **デズラ**、表記は **DEZRA**（すべて大文字・「＋」は付けない）
+- **改称（2026-11-12・代表）**: 旧名 **DEDURA＋**（デヅラプラス）から改めた。短く呼びやすく、英字でも読みやすい名前にするため。
+  Firebase のプロジェクト名 `dedura-kanri` と、経営コックピットとの合言葉の環境変数 `DEDURA_INTEGRATION_KEY` は
+  **名前を変えない**（変えると本番のデータ置き場・連携がつながらなくなる。どちらも利用者の目には出ない）
+- **シンボルは単管クランプ**（直交する2本のパイプ＋ボルトの芯）。とび・土工の道具をそのまま記号にしている。**この意味づけは変えない**
+  - 旧名では名前の「＋」を兼ねて文字の**後ろ**に置いていた。改称で「＋」が名前から外れたので、文字の**前**に置くシンボルにした。
+    後ろに置くと「DEZRA＋」と読まれるので、**文字の後ろには置かない**
+  - パイプを組む形は、タグライン「現場を組む。日々を組む。」とつながる
 - タグライン: **現場を組む。日々を組む。**（ログイン画面に表示）
 
 ### 実装
 
 - アプリ画面内のシステム名表示は **必ず `components/Brand.tsx` 経由**。
-  `<DeduraWordmark size="sm|md|lg" variant="navy|white" />` / `<DeduraMark />` / `DEDURA_TAGLINE`
+  `<DezraWordmark size="sm|md|lg" variant="navy|white" />` / `<DezraMark />` / `DEZRA_TAGLINE`
   （アプリのフォントと自動で揃うため。SVG ファイルを `<img>` で貼らない）
-- マークのサイズは文字のキャップハイト（≒ font-size × 0.85）に合わせる。等倍にすると
-  ＋だけ大きく見えてワードマークが分離する
-- 16px 未満ではボルトの芯を省略（潰れて濁るため）。`DeduraMark` が自動で処理する
+- ワードマークは「シンボル → DEZRA」の順（間は `gap-2`）。シンボルは文字より一回り大きく（≒ font-size × 1.0）。
+  キャップハイトちょうどだと、前に置いたときに小さく沈んで見える
+- 16px 未満ではボルトの芯を省略（潰れて濁るため）。`DezraMark` が自動で処理する
 
 ### アセット
 
 | ファイル | 用途 |
 |---|---|
-| `public/brand/dedura-icon.svg` | アプリアイコンの原本（アンバー地＋ネイビーのクランプ）。文字を含まないのでフォント環境に依存しない |
+| `public/brand/dezra-icon.svg` | アプリアイコンの原本（アンバー地＋ネイビーのクランプ）。文字を含まないのでフォント環境に依存しない |
 | `public/brand/icon-192.png` / `icon-512.png` | PWA（`manifest.json`、`purpose: any maskable`） |
 | `public/brand/apple-touch-icon.png` | iOS ホーム画面 |
 | `public/brand/favicon-32.png` | ファビコン |
-| `public/brand/dedura-logo.svg` | 横組みワードマーク。**印刷物・社外資料用**。アプリ画面では使わない |
+| `public/brand/dezra-logo.svg` | 横組みワードマーク。**印刷物・社外資料用**。アプリ画面では使わない |
 | `public/logo.png` | **会社ロゴ**（HIBI CONSTRUCTION）。サイドバー上部・評価帳票で継続使用 |
 
 PNG は原本 SVG から再生成する:
 
 ```bash
-cd public/brand && qlmanage -t -s 512 -o . dedura-icon.svg && mv dedura-icon.svg.png icon-512.png && sips -z 192 192 icon-512.png --out icon-192.png && sips -z 180 180 icon-512.png --out apple-touch-icon.png && sips -z 32 32 icon-512.png --out favicon-32.png
+cd public/brand && qlmanage -t -s 512 -o . dezra-icon.svg && mv dezra-icon.svg.png icon-512.png && sips -z 192 192 icon-512.png --out icon-192.png && sips -z 180 180 icon-512.png --out apple-touch-icon.png && sips -z 32 32 icon-512.png --out favicon-32.png
 ```
 
 ## 文字の大きさ（2026-10-03・rem 系に統一）
@@ -169,7 +175,7 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
 旧 `lib/styles.ts` の `modalOverlayCls` / `modalContentCls` は使わない。検出は `npm run lint:dialog`（`modal-ok` で例外）。
 見るだけの一覧は右パネル（SidePanel）、入力して保存するものはモーダル、どちらも「やめる」が左・主役が右。重なり順: 右パネル z-60 → モーダル z-70（パネルの中から開いても上）→ 確認の窓 z-80 → お知らせの帯 z-100。
 
-**文字の大きさ（標準／大きい＝1.125倍）**: PC はサイドバー下の切替、スマホは右上の DEDURA＋ マークを押す（`components/StaffHeader.tsx`）。`lib/theme.ts` で端末ごとに覚える
+**文字の大きさ（標準／大きい＝1.125倍）**: PC はサイドバー下の切替、スマホは右上の DEZRA マークを押す（`components/StaffHeader.tsx`）。`lib/theme.ts` で端末ごとに覚える
 
 ### 確認の窓・断りの文の書き方（2026-10-24 総点検）
 
@@ -204,7 +210,7 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
 
 ## スタッフ画面（案1 UDホワイト・2026-09-30 から。旧 案C フィールド・コントラスト）
 - スマホ最適化・ページ背景 `bg-hibi-bg`
-- ヘッダー: `components/StaffHeader.tsx`（白地・頭文字の紺丸・名前・ベトナム語名・DEDURA＋マーク）
+- ヘッダー: `components/StaffHeader.tsx`（白地・頭文字の紺丸・名前・ベトナム語名・DEZRAマーク）
 - 主役ボタン（出勤登録）: `bg-hibi-amber text-hibi-charcoal rounded-xl font-extrabold` + amberシャドウ
 - 脇役ボタン（休み・キャンセル等）: 白ベタ + `border-2 border-gray-300 text-hibi-charcoal font-bold`
 - 実労働時間カード: `bg-[#FFF6E3] border-[#F2D9A0]`、数値 `text-[#8A5A00] font-extrabold tabular-nums`
@@ -252,7 +258,7 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
 ## スタッフ画面（スマホ）
 
 ### ヘッダー
-- **ホーム画面の名前は DEDURA＋**（`lib/staff-manifest.ts` の short_name と `appleWebApp.title`。2026-10-03。旧「出面入力」はベトナム人に読めなかった）
+- **ホーム画面の名前は DEZRA**（`lib/staff-manifest.ts` の short_name と `appleWebApp.title`。2026-10-03。旧「出面入力」はベトナム人に読めなかった）
 - **電波が無いときの画面**: `public/sw.js`（画面を開く通信だけ見る・ふだんはネットワーク優先・失敗時だけ `public/offline.html`）。登録は `components/ServiceWorkerRegister.tsx`（スタッフ・職長・マイページだけ）。API・JS・画像はさわらない
 - スタッフ名にベトナム語名（`nameVi`）を併記
 

@@ -9,5 +9,5 @@ describe('isNonProductionOrigin', () => {
     expect(isNonProductionOrigin('https://hibi-calendar-5uvv4kbqv-yasu-h-bytes-projects.vercel.app')).toBe(true)
   })
   test('手元も置き換える', () => expect(isNonProductionOrigin('http://localhost:3000')).toBe(true))
-  test('独自ドメインはそのまま', () => expect(isNonProductionOrigin('https://dedura.example.jp')).toBe(false))
+  test('独自ドメインはそのまま', () => expect(isNonProductionOrigin('https://dezra.example.jp')).toBe(false))
 })

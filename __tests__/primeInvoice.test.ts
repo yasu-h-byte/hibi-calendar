@@ -283,7 +283,7 @@ describe('出面との検算（前月21日〜当月20日）', () => {
     const agg = aggregatePrimeManDays(main, attD, attSD, ['site1', 'site1_steel'], '202609')
     // 出面ベース = 3.5×36,000 + 2×5,625 + 3×28,000 + 4.5×4,375 = 240,938
     const o = checkPrimeOverall([{ gcAmount: 200000 }, { gcAmount: 40000 }], agg)
-    expect(o).toMatchObject({ gcTotal: 240000, sheetCount: 2, deduraAmount: agg.amount, diff: agg.amount - 240000, totalDays: 6.5, tobiDays: 3.5, dokoDays: 3 })
+    expect(o).toMatchObject({ gcTotal: 240000, sheetCount: 2, dezraAmount: agg.amount, diff: agg.amount - 240000, totalDays: 6.5, tobiDays: 3.5, dokoDays: 3 })
     expect(o.diffRate).toBeCloseTo(938 / 240000, 6)
     expect(o.tone).toBe('ok')
     expect(o.perManDay).toBe(Math.round(240000 / 6.5))

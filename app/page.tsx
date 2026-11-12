@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { saveAuth } from '@/lib/hooks/useAuthPassword'
 import { useRouter } from 'next/navigation'
 import { AuthUser } from '@/types'
-import { DeduraWordmark, DEDURA_TAGLINE, DEDURA_BYLINE } from '@/components/Brand'
+import { DezraWordmark, DEZRA_TAGLINE, DEZRA_BYLINE } from '@/components/Brand'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -84,11 +84,11 @@ export default function LoginPage() {
       <div className="bg-white rounded-2xl border border-hibi-line p-8 w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="flex justify-center">
-            <DeduraWordmark size="lg" />
+            <DezraWordmark size="lg" />
           </div>
-          <p className="text-xs text-gray-400 mt-1.5 tracking-wide">{DEDURA_TAGLINE}</p>
+          <p className="text-xs text-gray-400 mt-1.5 tracking-wide">{DEZRA_TAGLINE}</p>
           {/* タグラインより濃くしないこと。濃いと主役（タグライン）と階層が逆転する */}
-          <p className="text-2xs text-gray-400 tracking-wide mt-3">{DEDURA_BYLINE}</p>
+          <p className="text-2xs text-gray-400 tracking-wide mt-3">{DEZRA_BYLINE}</p>
         </div>
 
         {step === 'password' ? (

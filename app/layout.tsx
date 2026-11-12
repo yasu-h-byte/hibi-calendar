@@ -14,20 +14,20 @@ const udFont = BIZ_UDPGothic({
   variable: '--font-ud',
 })
 
-// タブ・PWA はシステム名（DEDURA＋）、画面内の見出し・帳票は会社名（HIBI CONSTRUCTION）。
+// タブ・PWA はシステム名（DEZRA）、画面内の見出し・帳票は会社名（HIBI CONSTRUCTION）。
 // 使い分けの基準は components/Brand.tsx を参照。
 export const metadata: Metadata = {
-  title: 'DEDURA＋ - 出面管理システム',
-  description: 'DEDURA＋ | HIBI CONSTRUCTION 鳶事業部 出面管理システム',
+  title: 'DEZRA - 出面管理システム',
+  description: 'DEZRA | HIBI CONSTRUCTION 鳶事業部 出面管理システム',
   openGraph: {
-    title: 'DEDURA＋',
+    title: 'DEZRA',
     description: 'HIBI CONSTRUCTION 鳶事業部 出面管理システム',
-    siteName: 'DEDURA＋',
+    siteName: 'DEZRA',
     type: 'website',
   },
   // 個人のリンク（マイページ等）は各 layout で自分のページを開く manifest に差し替える（lib/staff-manifest.ts）
   manifest: '/manifest.json',
-  appleWebApp: { title: 'DEDURA＋' },
+  appleWebApp: { title: 'DEZRA' },
   icons: {
     icon: [
       { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },

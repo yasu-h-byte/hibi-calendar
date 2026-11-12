@@ -100,7 +100,7 @@ export const CAPABILITIES = {
   'invoice.issuePrime':      { group: '毎月', label: '山岡への請求書の確認2（発行）', roles: ['owner'] },
   // 2026-10-02 代表: 応援の請求書はしばらく手作り。手作りの請求書を入れて、システムの計算と見比べる（lib/paper-invoice.ts）。削除は invoice.approve
   'invoice.paper':           { group: '毎月', label: '紙（手作り）で出した請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },
-  // 2026-10-05 代表: 外注から紙で届く請求書を DEDURA＋ に入れて共有する（今は代表、数か月後から森田さん。lib/subcon-invoice.ts）。削除は invoice.approve
+  // 2026-10-05 代表: 外注から紙で届く請求書を DEZRA に入れて共有する（今は代表、数か月後から森田さん。lib/subcon-invoice.ts）。削除は invoice.approve
   'invoice.subcon':          { group: '毎月', label: '受け取った外注の請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },
   // 経費の事前チェック（2026-11-08 代表）。MF経費の申請を承認する前に総務が見る。MF との接続・切断は system.admin（代表だけ）
   'expenseCheck.view':      { group: '毎月', label: '経費の事前チェックを見る（個人の経費の明細を含む）', roles: ['jimu', 'approver', 'owner'] },

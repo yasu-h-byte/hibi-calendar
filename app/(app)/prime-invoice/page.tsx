@@ -420,7 +420,7 @@ export default function PrimeInvoicePage() {
               <div className="bg-white dark:bg-gray-800 rounded-2xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <h3 className="font-bold text-sm">出面との検算（{jpDate(check.manDays.period.from)}〜{jpDate(check.manDays.period.to)}・{rec.siteName}）</h3>
-                  <span className="text-xs text-hibi-sub dark:text-gray-400">大林組への請求額の全枚の合計と、DEDURA＋ の出面の総人工 × 常用単価を比べます（出来高払いの工種は人工と1対1ではないので目安）。</span>
+                  <span className="text-xs text-hibi-sub dark:text-gray-400">大林組への請求額の全枚の合計と、DEZRA の出面の総人工 × 常用単価を比べます（出来高払いの工種は人工と1対1ではないので目安）。</span>
                 </div>
                 {(() => {
                   const o = check.overall
@@ -434,7 +434,7 @@ export default function PrimeInvoicePage() {
                       </div>
                       <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/40 px-4 py-3">
                         <div className="text-2xs text-hibi-sub dark:text-gray-400">出面ベース（総人工 × 常用単価・税抜）</div>
-                        <div className="text-lg font-bold tabular-nums">{yen(o.deduraAmount)}</div>
+                        <div className="text-lg font-bold tabular-nums">{yen(o.dezraAmount)}</div>
                         <div className="text-2xs text-hibi-sub dark:text-gray-400 tabular-nums">鳶 {o.tobiDays}人・土工 {o.dokoDays}人（残業 {o.tobiOtH}h／{o.dokoOtH}h）</div>
                       </div>
                       <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/40 px-4 py-3">

@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
-import { DeduraWordmark, DEDURA_BYLINE } from './Brand'
+import { DezraWordmark, DEZRA_BYLINE } from './Brand'
 import { Icon } from './ui/Icon'
 import { visibleMenuItems, MENU_SECTIONS, MENU_HOME_SECTION, SEARCH_ENTRIES, searchMenu, activeMenuItem, type MenuItem, type SearchEntry } from '@/lib/menu'
 import { can, permRoleOf, PERM_ROLE_LABEL } from '@/lib/permissions'
@@ -133,16 +133,16 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header - システム名（DEDURA＋）+ グループ名。
+        {/* Header - システム名（DEZRA）+ グループ名。
             会社ロゴは外してある: 見るのは社内4ロールだけで常時掲げる情報価値が薄く、
             白カードがメニューより目立って視線の優先順位が逆になっていたため。
             会社名 HIBI CONSTRUCTION はログイン画面・公開カレンダー・帳票に残っている。 */}
         <div className="px-5 pt-5 pb-3">
-          <span className="dark:hidden"><DeduraWordmark size="xl" variant="navy" /></span>
-          <span className="hidden dark:inline"><DeduraWordmark size="xl" variant="white" /></span>
-          {/* mt-1 / 9px はロックアップとして成立させるための値。広げると DEDURA＋ と別物に見える */}
+          <span className="dark:hidden"><DezraWordmark size="xl" variant="navy" /></span>
+          <span className="hidden dark:inline"><DezraWordmark size="xl" variant="white" /></span>
+          {/* mt-1 / 9px はロックアップとして成立させるための値。広げると DEZRA と別物に見える */}
           {/* px-ok: 社名行は 9px 相当で1行に収める（docs/ui-design.md ブランド節） */}
-          <div className="text-[0.5625rem] text-gray-500 dark:text-white/50 mt-1 whitespace-nowrap">{DEDURA_BYLINE}</div>
+          <div className="text-[0.5625rem] text-gray-500 dark:text-white/50 mt-1 whitespace-nowrap">{DEZRA_BYLINE}</div>
         </div>
 
         {/* User info */}

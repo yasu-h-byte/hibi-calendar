@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
     comparisons[id] = { ...compareSubconInvoice(xs, expected[id]), count: xs.length }
   }
   const names = Object.fromEntries((main.subcons || []).map(s => [s.id, s.name]))
-  // 支払内訳書は、DEDURA＋ で発行した山岡への請求書（税込・同じ会社・同じ月・全現場）と見比べる（2026-10-20）
+  // 支払内訳書は、DEZRA で発行した山岡への請求書（税込・同じ会社・同じ月・全現場）と見比べる（2026-10-20）
   const primeByCompany: Record<string, { comparison: PrimeRemittanceComparison; nos: string[] }> = {}
   const remitCos = [...new Set(records.filter(r => docTypeOf(r) === 'remittance').map(r => r.companyId))]
   if (remitCos.length > 0) {

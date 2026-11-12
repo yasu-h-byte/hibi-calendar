@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 330 96" width="330" height="96" role="img" aria-label="DEZRA">
+  <!-- DEZRA 横組みワードマーク（明るい地色用）。シンボル（単管クランプ）を文字の前に置く。
+       2026-11-12 に DEDURA＋ から改称。クランプを文字の後ろに置くと「＋」と読まれるので前に置く。
+       印刷物・マニュアル・社外資料向け。アプリ画面内では components/Brand.tsx を使うこと
+       （アプリのフォントと自動的に揃うため）。 -->
+  <g transform="translate(0 20)">
+    <rect x="0" y="20" width="56" height="16" rx="4" fill="#F5A623"/>
+    <rect x="20" y="0" width="16" height="56" rx="4" fill="#DD9314"/>
+    <circle cx="28" cy="28" r="8.2" fill="#1B2A4A"/>
+    <circle cx="28" cy="28" r="3" fill="#F5A623"/>
+  </g>
+  <text x="74" y="72" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="66" font-weight="700" letter-spacing="4" fill="#1B2A4A">DEZRA</text>
+</svg>

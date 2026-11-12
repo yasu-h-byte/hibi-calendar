@@ -693,7 +693,7 @@ export interface PrimeOverallCheck {
   gcTotal: number
   sheetCount: number
   /** 出面ベースの額（人工 × 常用単価 ＋ 残業h × 残業単価・税抜） */
-  deduraAmount: number
+  dezraAmount: number
   /** 出面 − 請求額 */
   diff: number
   /** diff ÷ 請求額（請求額が 0 なら null） */
@@ -716,7 +716,7 @@ export function checkPrimeOverall(sheets: { gcAmount: number }[], agg: PrimeManD
   const diffRate = gcTotal > 0 ? diff / gcTotal : null
   const tone: PrimeOverallCheck['tone'] = diffRate === null || totalDays <= 0 ? 'none' : Math.abs(diffRate) <= 0.03 ? 'ok' : Math.abs(diffRate) <= 0.10 ? 'warn' : 'bad'
   return {
-    gcTotal, sheetCount: sheets.length, deduraAmount: agg.amount, diff, diffRate,
+    gcTotal, sheetCount: sheets.length, dezraAmount: agg.amount, diff, diffRate,
     tobiDays: agg.tobiDays, dokoDays: agg.dokoDays, totalDays, tobiOtH: agg.tobiOtH, dokoOtH: agg.dokoOtH,
     perManDay: totalDays > 0 ? Math.round(gcTotal / totalDays) : null, tone,
   }
