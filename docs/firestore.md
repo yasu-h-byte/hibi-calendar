@@ -58,6 +58,7 @@ homeLeaves?: {
 | hourlyRate | number? | 時給（外国人用） |
 | otMul | number | 残業倍率（デフォルト1.25） |
 | hireDate | string | 入社日（YYYY-MM-DD） |
+| hireRoute | string? | 入社区分 `'shinsotsu'`（新卒）／`'chuto'`（中途）。日本人の役員・事務以外は必須（2026-11-12・`lib/workers.ts` needsHireRoute）。新卒の月給 → 日給月給の移行の対象を決める |
 | payrollNo | string? | キャシュモ（給与計算委託先）管理の従業員番号。社員番号(id)とは別。提出用帳票（月次集計Excel・出面一覧・勤務予定シフト・実労働時間明細・計算根拠PDF）に載せる（2026-09-17） |
 | retired | string? | 退職日（YYYY-MM-DD） |
 | salary | number? | 月給 |

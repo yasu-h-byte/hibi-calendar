@@ -28,6 +28,15 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261112_hire_route',
+    title: '人員マスタに「入社区分（新卒・中途）」を足しました',
+    content: '日本人（役員・事務を除く）は、人員マスタの基本情報で「入社区分」を新卒か中途から選びます。新しく追加するときは選ばないと保存できません。新卒は月給で入り、翌年10月1日に日給月給へ移ります。中途は最初から日給月給です。人員マスタの「今やること」に、まだ入っていない人と「中途なのに月給」の人が出ます。',
+    category: 'new',
+    publishedAt: '2026-11-12T19:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261112_rename_dezra',
     title: 'システムの名前が「DEZRA（デズラ）」になりました',
     content: '「DEDURA＋」から「DEZRA（デズラ）」に名前を変えました。画面の左上・ブラウザのタブ・スマホのホーム画面の名前・マニュアルの表記が変わります。使い方やデータは何も変わりません。'

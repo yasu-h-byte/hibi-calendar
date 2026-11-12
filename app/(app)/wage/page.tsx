@@ -91,12 +91,12 @@ function WageHub() {
             .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
             .filter(w => !w.jpGrade || !w.jpStep)
             // 月給の新卒は等級が無いのが正しい状態（移行日に決める）。未設定の注意には出さない
-            .filter(w => !isJpMonthlyTrainee(w as { visaType?: string; jobType?: string; salary?: number; jpGrade?: string }))
+            .filter(w => !isJpMonthlyTrainee(w as { visaType?: string; jobType?: string; salary?: number; jpGrade?: string; hireRoute?: string }))
             .map(w => ({ id: Number(w.id), name: String(w.name) })))
           const today = todayJstIso()
           setTrainees(ws
             .filter(w => !isAlreadyRetired(w.retired as string | undefined))
-            .filter(w => isJpMonthlyTrainee(w as { visaType?: string; jobType?: string; salary?: number; jpGrade?: string }))
+            .filter(w => isJpMonthlyTrainee(w as { visaType?: string; jobType?: string; salary?: number; jpGrade?: string; hireRoute?: string }))
             .map(w => {
               const sc = jpTransferSchedule(w.hireDate as string | undefined, w.birthDate as string | undefined)
               return { id: Number(w.id), name: String(w.name), date: sc.date, status: transferStatus(sc, today) }

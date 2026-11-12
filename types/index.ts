@@ -101,6 +101,11 @@ export interface Worker {
    * 未登録のままでは改定額を確定できない。外国人スタッフは対象外。
    */
   birthDate?: string
+  /**
+   * 入社区分（2026-11-12）。'shinsotsu' = 新卒 ／ 'chuto' = 中途。日本人の役員・事務以外が対象（lib/workers.ts needsHireRoute）。
+   * 新卒の月給 → 日給月給の移行の対象を決める（lib/jp-transfer.ts isJpMonthlyTrainee）
+   */
+  hireRoute?: 'shinsotsu' | 'chuto'
 }
 
 /** 現場の勤務時間設定（始業・終業・休憩構成） */
