@@ -16,7 +16,7 @@ import type { PaperInvoice } from '@/lib/paper-invoice'
  *
  * kind: received = 外注から届いた請求書 / remittance = 一次から届いた支払内訳書 /
  *       issued = 一次（山岡建設工業など）へ出した請求書（紙の請求書の控え paperInvoices のうち現場を選んだもの・2026-10-05）
- *   DEDURA＋ で大林組の控えから作って発行した山岡への請求書（primeInvoices）はここには出さない（ファイルが無く、経営コックピットの
+ *   DEZRA で大林組の控えから作って発行した山岡への請求書（primeInvoices）はここには出さない（ファイルが無く、経営コックピットの
  *   取り込みはファイル必須のため・2026-10-20）。月の窓口 /api/integration の primeInvoices[] と sites[].billing で渡す
  */
 export const dynamic = 'force-dynamic'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { DeduraMark } from './Brand'
+import { DezraMark } from './Brand'
 import { getFontSize, initFontSize, setFontSize, type FontSize } from '@/lib/theme'
 
 /**
@@ -13,7 +13,7 @@ import { getFontSize, initFontSize, setFontSize, type FontSize } from '@/lib/the
  *
  * スタッフ（/attendance/[token]）・職長（/attendance/foreman/[token]）・マイページ（/mypage/[token]）で共通。
  *
- * 2026-10-03（UI/UX 磨き込み 土台②・代表 OK）: 右上の DEDURA＋ マークを押すと「文字の大きさ 標準／大きい」。
+ * 2026-10-03（UI/UX 磨き込み 土台②・代表 OK）: 右上の DEZRA マークを押すと「文字の大きさ 標準／大きい」。
  * PC のサイドバーと同じ設定（lib/theme.ts・端末ごとに覚える）。土台①で文字を rem にしたので、ここが効く。
  */
 export default function StaffHeader({ label, name, sub, note }: {
@@ -62,7 +62,7 @@ export default function StaffHeader({ label, name, sub, note }: {
             aria-label="設定 / Cài đặt"
             className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-hibi-bg active:bg-hibi-bg"
           >
-            <DeduraMark size={22} />
+            <DezraMark size={22} />
           </button>
           {open && (
             <div role="dialog" aria-label="文字の大きさ / Cỡ chữ" className="absolute right-0 top-12 z-40 w-[232px] bg-white rounded-2xl border border-hibi-line shadow-xl p-3 animate-modalIn">

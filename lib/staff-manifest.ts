@@ -15,7 +15,7 @@ const PATH_OF: Record<StaffManifestKind, (token: string) => string> = {
   attendance: t => `/attendance/${t}`,
   foreman: t => `/attendance/foreman/${t}`,
 }
-// 2026-10-03: ホーム画面に出る名前（short_name）は言葉に寄らない DEDURA＋ に統一（旧: 「出面入力」だけで、ベトナム人スタッフには読めなかった）。
+// 2026-10-03: ホーム画面に出る名前（short_name）は言葉に寄らない DEZRA に統一（旧: 「出面入力」だけで、ベトナム人スタッフには読めなかった）。
 // 長い名前（name）は日越を添える
 const NAME_OF: Record<StaffManifestKind, string> = {
   mypage: 'マイページ',
@@ -32,8 +32,8 @@ export function buildStaffManifest(kind: StaffManifestKind, token: string) {
   const start = PATH_OF[kind](token)
   return {
     id: start,
-    name: `DEDURA＋ ${NAME_OF[kind]}`,
-    short_name: 'DEDURA＋',
+    name: `DEZRA ${NAME_OF[kind]}`,
+    short_name: 'DEZRA',
     lang: 'ja',
     description: 'HIBI CONSTRUCTION 鳶事業部',
     start_url: start,
@@ -55,6 +55,6 @@ export function staffManifestMetadata(kind: StaffManifestKind, token: string): P
   return {
     manifest: `/api/manifest?kind=${kind}&token=${encodeURIComponent(token)}`,
     // iPhone はホーム画面の名前を manifest でなくこの title から取る
-    appleWebApp: { title: 'DEDURA＋', capable: true, statusBarStyle: 'black-translucent' },
+    appleWebApp: { title: 'DEZRA', capable: true, statusBarStyle: 'black-translucent' },
   }
 }
