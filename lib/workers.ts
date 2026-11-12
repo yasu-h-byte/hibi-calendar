@@ -357,6 +357,38 @@ export function toolBudgetStartFor(hireDate?: string | null): string | null {
 }
 
 /**
+ * 日本人の中途採用は「有給の初回付与日（入社6ヶ月後）」に、道具代の期間とマイページの配布をそろえる
+ * （2026-11-12 代表「道具代補助の発生時期は有給の発生時期と合わせ、そのタイミングでマイページも付与する」）。
+ *
+ * この日より前に入社6ヶ月を迎えた日本人は、10/1 起点の年度で道具代を回している（起点日は管理画面で設定済み）ので
+ * 自動では補わない。古い入社日から計算すると何年も前の起点日になり、今の期間がずれるため。
+ */
+export const JP_FIRST_GRANT_ALIGN_FROM = '2026-10-01'
+
+/** 日本人の初回付与日（入社6ヶ月後）。この決まりの対象（JP_FIRST_GRANT_ALIGN_FROM 以降）でなければ null */
+export function jpFirstGrantAlignedDate(w: { visa?: string | null; job?: string | null; hireDate?: string | null }): string | null {
+  if ((w.visa || 'none') !== 'none') return null
+  if (w.job === 'yakuin') return null
+  if (!w.hireDate || !/^\d{4}-\d{2}-\d{2}$/.test(w.hireDate)) return null
+  const start = toolBudgetStartFor(w.hireDate)
+  return start && start >= JP_FIRST_GRANT_ALIGN_FROM ? start : null
+}
+
+/**
+ * マイページのURLを配れるようになる日。今すぐ配れるなら null。
+ * 日本人の中途採用は有給の初回付与日まで配らない（有給も道具代もまだ無く、開いても何も出ないため）。
+ * 職長と役員は入社時から配る（マイページの「承認すること」で出面を承認するため）。外国人はマイページではなく出面入力の画面なので対象外。
+ */
+export function mypageDistributeFrom(
+  w: { visa?: string | null; job?: string | null; hireDate?: string | null },
+  todayIso: string = todayJstIso(),
+): string | null {
+  if (w.job === 'shokucho' || w.job === 'yakuin') return null
+  const start = jpFirstGrantAlignedDate(w)
+  return start && start > todayIso ? start : null
+}
+
+/**
  * 区分別の既定予算から、そのスタッフの道具代既定額を返す（2026-08-28 追加）。
  *
  * 優先順位:

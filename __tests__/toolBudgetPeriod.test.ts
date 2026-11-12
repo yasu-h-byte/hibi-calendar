@@ -24,8 +24,41 @@ describe('起点日', () => {
   test('ベトナム人で未設定なら入社日', () => {
     expect(toolBudgetAnchorOf({ id: 207, visa: 'jisshu1', hireDate: '2026-08-01' }, {})).toEqual({ anchor: '2026-08-01', fromHireDate: true })
   })
-  test('日本人は入社日で補わない', () => {
-    expect(toolBudgetAnchorOf({ id: 12, visa: 'none', hireDate: '2026-06-01' }, {})).toEqual({ anchor: null, fromHireDate: false })
+  // 2026-11-12 代表: 日本人の中途採用は有給の初回付与日（入社6ヶ月後）を起点にする
+  test('日本人の中途採用は入社6ヶ月後（有給の初回付与日）', () => {
+    expect(toolBudgetAnchorOf({ id: 12, visa: 'none', hireDate: '2026-06-01' }, {})).toEqual({ anchor: '2026-12-01', fromHireDate: true })
+    expect(toolBudgetAnchorOf({ id: 13, visa: undefined, hireDate: '2026-08-31' }, {})).toEqual({ anchor: '2027-02-28', fromHireDate: true })
+  })
+  test('2026-10-01 より前に6ヶ月を迎えた日本人は補わない（10/1 起点の年度・手で設定済み）', () => {
+    expect(toolBudgetAnchorOf({ id: 2, visa: 'none', hireDate: '2015-04-01' }, {})).toEqual({ anchor: null, fromHireDate: false })
+    expect(toolBudgetAnchorOf({ id: 3, visa: 'none', hireDate: '2026-03-31' }, {})).toEqual({ anchor: null, fromHireDate: false })
+    expect(toolBudgetAnchorOf({ id: 4, visa: 'none', hireDate: '2026-04-01' }, {})).toEqual({ anchor: '2026-10-01', fromHireDate: true })
+  })
+  test('日本人でも手で設定した起点日が優先', () => {
+    expect(toolBudgetAnchorOf({ id: 12, visa: 'none', hireDate: '2026-06-01' }, { '12': '2026-12-15' })).toEqual({ anchor: '2026-12-15', fromHireDate: false })
+  })
+  test('入社日が無い日本人は補わない', () => {
+    expect(toolBudgetAnchorOf({ id: 14, visa: 'none' }, {})).toEqual({ anchor: null, fromHireDate: false })
+  })
+})
+
+import { mypageDistributeFrom } from '@/lib/workers'
+describe('マイページを配る日（有給の初回付与日にそろえる・2026-11-12）', () => {
+  test('日本人の中途採用は入社6ヶ月後まで配らない', () => {
+    expect(mypageDistributeFrom({ visa: 'none', job: 'tobi', hireDate: '2026-06-01' }, '2026-11-12')).toBe('2026-12-01')
+    expect(mypageDistributeFrom({ visa: 'none', job: 'jimu', hireDate: '2026-11-01' }, '2026-11-12')).toBe('2027-05-01')
+  })
+  test('付与日の当日からは配れる', () => {
+    expect(mypageDistributeFrom({ visa: 'none', job: 'tobi', hireDate: '2026-06-01' }, '2026-12-01')).toBeNull()
+  })
+  test('職長・役員は入社時から（承認に使う）', () => {
+    expect(mypageDistributeFrom({ visa: 'none', job: 'shokucho', hireDate: '2026-11-01' }, '2026-11-12')).toBeNull()
+    expect(mypageDistributeFrom({ visa: 'none', job: 'yakuin', hireDate: '2026-11-01' }, '2026-11-12')).toBeNull()
+  })
+  test('外国人・入社日なし・古い入社は止めない', () => {
+    expect(mypageDistributeFrom({ visa: 'jisshu1', job: 'tobi', hireDate: '2026-11-01' }, '2026-11-12')).toBeNull()
+    expect(mypageDistributeFrom({ visa: 'none', job: 'tobi' }, '2026-11-12')).toBeNull()
+    expect(mypageDistributeFrom({ visa: 'none', job: 'tobi', hireDate: '2015-04-01' }, '2026-11-12')).toBeNull()
   })
 })
 
