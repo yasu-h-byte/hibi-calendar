@@ -72,14 +72,15 @@ describe('paperInvoiceToIntegration（紙の控えを経営コックピットへ
 })
 
 describe('buildWorkerDays（作業員1人ずつの出た日数・有給・待機・帰国）', () => {
+  // 出面の台帳（main.workers）の項目名: org / visa / job
   const workers = [
-    { id: 10, company: 'HIBI', visaType: 'none', jobType: 'tobi', hireDate: '2020-04-01' },
-    { id: 11, company: 'HFU', visaType: 'jisshu2', jobType: 'tobi', hireDate: '2024-08-01' },
-    { id: 12, company: 'HIBI', visaType: 'tokutei1', jobType: 'tobi', hireDate: '2019-01-10' },
-    { id: 13, company: 'HIBI', visaType: 'none', jobType: 'jimu', hireDate: '2026-06-01' },
-    { id: 14, company: 'HIBI', visaType: 'none', jobType: 'tobi', hireDate: '2015-04-01', retired: '2027-01-20' },
-    { id: 15, company: 'HIBI', visaType: 'none', jobType: 'tobi', hireDate: '2027-04-01' },
-    { id: 16, company: 'HIBI', visaType: 'none', jobType: 'tobi', retired: 'true' },
+    { id: 10, org: 'hibi', visa: 'none', job: 'tobi', hireDate: '2020-04-01' },
+    { id: 11, org: 'hfu', visa: 'jisshu2', job: 'tobi', hireDate: '2024-08-01' },
+    { id: 12, org: 'hibi', visa: 'tokutei1', job: 'tobi', hireDate: '2019-01-10' },
+    { id: 13, org: 'hibi', visa: 'none', job: 'jimu', hireDate: '2026-06-01' },
+    { id: 14, org: 'hibi', visa: 'none', job: 'tobi', hireDate: '2015-04-01', retired: '2027-01-20' },
+    { id: 15, org: 'hibi', visa: 'none', job: 'tobi', hireDate: '2027-04-01' },
+    { id: 16, org: 'hibi', visa: 'none', job: 'tobi', retired: 'true' },
   ]
   const byWorker = {
     10: { work: 22.5, plUsed: 1, compDays: 0 },
@@ -112,7 +113,11 @@ describe('buildWorkerDays（作業員1人ずつの出た日数・有給・待機
   it('月をまるごと帰国している人は、その月の日数ぶん', () => {
     expect(of(12)).toMatchObject({ workDays: 0, homeLeaveDays: 28 })
   })
-  it('事務は field: false', () => expect(of(13)).toMatchObject({ field: false, active: true }))
+  it('事務は field: false', () => expect(of(13)).toMatchObject({ field: false, active: true, job: 'jimu' }))
+  it('人事の台帳の項目名（company / visaType / jobType）でも同じに読める', () => {
+    const r = buildWorkerDays([{ id: 21, company: 'HFU', visaType: 'jisshu1', jobType: 'tobi', hireDate: '2026-10-26' }], {}, [], '202702')
+    expect(r[0]).toMatchObject({ company: 'hfu', nationality: 'vn', job: 'tobi', field: true })
+  })
   it('月の初めより前に退職した人・まだ入社していない人・古い退職の印の人は返さない', () => {
     expect(of(14)).toBeUndefined()
     expect(of(15)).toBeUndefined()

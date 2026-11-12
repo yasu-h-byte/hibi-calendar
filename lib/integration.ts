@@ -222,7 +222,9 @@ export interface IntegrationWorkerDays {
  * 在籍していない月でも人工がある人（月の途中の退職など）は返す。在籍も人工も無い人は返さない
  */
 export function buildWorkerDays(
-  workers: { id: number; company?: string; visaType?: string; jobType?: string; hireDate?: string; retired?: string }[],
+  // 出面の台帳（main.workers）の項目名は org / visa / job。人事の台帳（getWorkers）は company / visaType / jobType なので、どちらでも読めるようにする
+  //   （2026-11-12 修正: 前者を後者の名前で読んでいて、全員が「日比建設・日本人・職種なし」で返っていた）
+  workers: { id: number; org?: string; visa?: string; job?: string; company?: string; visaType?: string; jobType?: string; hireDate?: string; retired?: string }[],
   byWorker: Record<number, { work: number; plUsed: number; compDays: number } | undefined>,
   homeLeaves: { workerId: number; startDate: string; endDate: string }[],
   ym: string,
@@ -247,11 +249,13 @@ export function buildWorkerDays(
     // 重なった申請を二重に数えないよう、日ごとに印を付けて数える
     const days = new Set<number>()
     for (const l of leaves) for (let d = dayNo(l.startDate); d <= dayNo(l.endDate); d++) days.add(d)
-    const job = w.jobType || ''
+    const job = w.job || w.jobType || ''
+    const visa = w.visa || w.visaType || ''
+    const isHfu = w.company === 'HFU' || (!!w.org && isWorkerOfOrg({ org: w.org }, 'hfu'))
     out.push({
       id: w.id,
-      company: w.company === 'HFU' ? 'hfu' : 'hbk',
-      nationality: !w.visaType || w.visaType === 'none' ? 'jp' : 'vn',
+      company: isHfu ? 'hfu' : 'hbk',
+      nationality: !visa || visa === 'none' ? 'jp' : 'vn',
       job,
       field: job !== 'jimu',
       active,
