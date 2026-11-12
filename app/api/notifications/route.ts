@@ -457,18 +457,24 @@ export async function GET(request: NextRequest) {
 
         // 日本人は繰越なし（期末買取制）。2026-09-02 修正: 旧は前期残を繰越として提示し、
         //   validateGrantInput が carryOver>0 を拒否して「付与に失敗しました」になっていた
-        {
-          const wU = main.workers.find(x => x.id === u.workerId)
-          if (!wU?.visa || wU.visa === 'none') realCarryOver = 0
-        }
+        const wU = main.workers.find(x => x.id === u.workerId)
+        const isJpU = !wU?.visa || wU.visa === 'none'
+        if (isJpU) realCarryOver = 0
+        // 日本人の初回付与（前の付与が無い）: 道具代もこの日から始まり、マイページのURLもこの日に本人へ送る
+        //   （2026-11-12 代表。職長・役員はマイページを入社時に配っているので URL の案内は出さない）
+        const firstJpNote = isJpU && !prevRecord
+          ? (wU?.job === 'shokucho' || wU?.job === 'yakuin'
+            ? '\n初回付与です。道具代もこの日から始まります'
+            : '\n初回付与です。道具代もこの日から始まります。マイページのURL（人員マスタの「スマホURL・QR」）を本人へ送ってください')
+          : ''
         const realTotal = u.days + realCarryOver
         const grantDateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
         notifications.push({
           id: `pl-grant-${u.workerId}`,
           icon: isPast ? 'alert' : 'umbrella',
           message: isPast
-            ? `${u.name}の有給付与が未処理です（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日`
-            : `${u.name}の有給付与日が近づいています（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日`,
+            ? `${u.name}の有給付与が未処理です（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日${firstJpNote}`
+            : `${u.name}の有給付与日が近づいています（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日${firstJpNote}`,
           type: isPast ? 'warning' : 'info',
           action: isPast ? {
             type: 'pl-grant',
