@@ -32,11 +32,15 @@ interface TraineeLike {
   jobType?: string | null
   salary?: number | null
   jpGrade?: string | null
+  hireRoute?: string | null
 }
 
 /**
  * 月給で働いている新卒（＝まだ号俸制に入っていない日本人）か。
- * 人員マスタに印を足さず「日本人・役員と事務以外・月給あり・等級なし」で決める（印の付け忘れが起きない）。
+ * 「日本人・役員と事務以外・月給あり・等級なし」で、**入社区分が中途でない**人（2026-11-12）。
+ *   - 入社区分が「中途」の人は月給・等級なしでも新卒の移行の対象にしない（事情があって月給で採った中途を取り違えない。
+ *     人員マスタに「中途なのに月給」の確かめが出る・lib/workers.ts hireRouteIssue）
+ *   - 入社区分が空の人は従来どおり月給・等級なしで判定する（入れ忘れで移行のお知らせが消えないように。空は人員マスタに出る）
  */
 export function isJpMonthlyTrainee(w: TraineeLike | null | undefined): boolean {
   if (!w) return false
@@ -44,6 +48,7 @@ export function isJpMonthlyTrainee(w: TraineeLike | null | undefined): boolean {
   const job = w.job ?? w.jobType
   if (visa && visa !== 'none') return false
   if (job === 'yakuin' || job === 'jimu') return false
+  if (w.hireRoute === 'chuto') return false
   return (w.salary ?? 0) > 0 && !w.jpGrade
 }
 

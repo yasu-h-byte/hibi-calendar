@@ -124,8 +124,17 @@ describe('add: 給与欄は代表だけ', () => {
     asJimu()
     expect((await post({ action: 'add', name: '新人', hourlyRate: 1500 })).status).toBe(403)
     expect((await post({ action: 'add', name: '新人', jpGrade: '1G', jpStep: 1 })).status).toBe(403)
-    expect((await post({ action: 'add', name: '新人', rate: 0, otMul: 1.25, hourlyRate: '' })).status).toBe(200)
+    expect((await post({ action: 'add', name: '新人', rate: 0, otMul: 1.25, hourlyRate: '', hireRoute: 'chuto' })).status).toBe(200)
     expect(calls.add).toHaveLength(1)
+  })
+  // 入社区分（2026-11-12）: 日本人の役員・事務以外は必ず選ぶ
+  test('入社区分: 日本人のとびは無いと 400・知らない値も 400・外国人と事務は要らない', async () => {
+    asJimu()
+    expect((await post({ action: 'add', name: '新人' })).status).toBe(400)
+    expect((await post({ action: 'add', name: '新人', hireRoute: 'other' })).status).toBe(400)
+    expect((await post({ action: 'add', name: '新人', hireRoute: 'shinsotsu' })).status).toBe(200)
+    expect((await post({ action: 'add', name: '実習生', visa: 'jisshu1' })).status).toBe(200)
+    expect((await post({ action: 'add', name: '事務の人', job: 'jimu' })).status).toBe(200)
   })
   test('知らない項目は 400', async () => {
     asJimu()

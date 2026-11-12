@@ -18,6 +18,7 @@ export const WORKER_PUBLIC_KEYS = ['id', 'name', 'nameVi', 'company', 'visaType'
 export const WORKER_OFFICE_KEYS = [
   ...WORKER_PUBLIC_KEYS,
   'token', 'visaExpiry', 'useOldRules', 'payrollNo', 'birthDate', 'nonSmoker', 'children', 'breakShortenMin', 'breakShortenFrom', 'memo',
+  'hireRoute',
 ] as const
 
 /**
@@ -43,6 +44,7 @@ export const WORKER_OWNER_ONLY_KEYS: readonly string[] = [...WORKER_PAY_KEYS, 'u
 export const WORKER_WRITABLE_BASE_KEYS = [
   'name', 'nameVi', 'org', 'visa', 'job', 'hireDate', 'retired', 'visaExpiry', 'memo', 'birthDate', 'payrollNo',
   'dispatchTo', 'dispatchFrom', 'canDrive', 'nonSmoker', 'children', 'breakShortenMin', 'breakShortenFrom',
+  'hireRoute',
 ] as const
 export const WORKER_WRITABLE_PAY_KEYS = [
   'rate', 'hourlyRate', 'otMul', 'salary', 'jpGrade', 'jpStep', 'useOldRules',
@@ -60,6 +62,42 @@ export const WORKER_CLEARABLE_KEYS: readonly string[] = [
   'hourlyRate', 'salary', 'jpGrade', 'jpStep', 'rateFrom', 'prevRate', 'prevJpStep',
   'hourlyRateFrom', 'prevHourlyRate', 'salaryFrom', 'prevSalary',
 ]
+
+/**
+ * 入社区分（新卒・中途）。2026-11-12 代表「新卒入社か中途入社かを記録できるようにする」。
+ *
+ * それまでは記録せず「日本人・役員と事務以外・月給あり・等級なし」で新卒とみなしていた（lib/jp-transfer.ts）。
+ * これだと日給月給へ移ると中途と見分けがつかず、事情があって月給で採った中途を新卒と取り違える。
+ * - 対象は日本人の役員・事務以外（needsHireRoute）。追加のときは必ず選ぶ（画面とサーバの両方で止める）
+ * - 給与の項目ではない（事務も見て入れられる）
+ */
+export const HIRE_ROUTES = ['shinsotsu', 'chuto'] as const
+export type HireRoute = typeof HIRE_ROUTES[number]
+export const HIRE_ROUTE_LABELS: Record<HireRoute, string> = { shinsotsu: '新卒', chuto: '中途' }
+export function isHireRoute(v: unknown): v is HireRoute {
+  return typeof v === 'string' && (HIRE_ROUTES as readonly string[]).includes(v)
+}
+/** 入社区分を入れる人か（日本人で、役員・事務以外）。生データ（visa/job）と写像後（visaType/jobType）のどちらでも */
+export function needsHireRoute(w: { visa?: string | null; visaType?: string | null; job?: string | null; jobType?: string | null }): boolean {
+  const visa = w.visa ?? w.visaType
+  const job = w.job ?? w.jobType
+  if (visa && visa !== 'none') return false
+  return job !== 'yakuin' && job !== 'jimu'
+}
+/**
+ * 入社区分の確かめ。'missing' = 入れる人なのに空 ／ 'chutoOnMonthly' = 中途なのに月給で等級なし
+ * （新卒の月給と同じ形。新卒の移行の対象からは外しているので、新卒の入れ間違いでないか確かめる）／ null = 問題なし。
+ * 月給・等級は給与を見られる人にしか届かないので、見られない人には 'chutoOnMonthly' は出ない
+ */
+export function hireRouteIssue(w: {
+  visa?: string | null; visaType?: string | null; job?: string | null; jobType?: string | null
+  hireRoute?: string | null; salary?: number | null; jpGrade?: string | null; retired?: string | null
+}): 'missing' | 'chutoOnMonthly' | null {
+  if (!needsHireRoute(w) || isAlreadyRetired(w.retired)) return null
+  if (!isHireRoute(w.hireRoute)) return 'missing'
+  if (w.hireRoute === 'chuto' && (w.salary ?? 0) > 0 && !w.jpGrade) return 'chutoOnMonthly'
+  return null
+}
 
 /**
  * demmen/main の workers 配列（生データ）を Worker 型へ写像する（2026-09-02 抽出）。
@@ -108,6 +146,7 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     children: Array.isArray(w.children) ? (w.children as string[]) : undefined,
     breakShortenMin: (w.breakShortenMin as number) || undefined,
     breakShortenFrom: (w.breakShortenFrom as string) || undefined,
+    hireRoute: isHireRoute(w.hireRoute) ? w.hireRoute : undefined,
     // 2026-10-02 総合点検: メモは保存されるのに読み出していなかった（人員マスタで入れても開き直すと空・一覧にも出ない）。
     //   Worker 型（types/index.ts）に無い項目なので、入っているときだけ足す
     ...(typeof w.memo === 'string' && w.memo ? { memo: w.memo } : {}),

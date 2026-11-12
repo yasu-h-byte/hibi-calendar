@@ -8,6 +8,9 @@ import {
   WORKER_WRITABLE_PAY_KEYS,
   WORKER_CLEARABLE_KEYS,
   isOfficeSideWorker,
+  isHireRoute,
+  needsHireRoute,
+  isAlreadyRetired,
 } from '@/lib/workers'
 import {
   getWorkers,
@@ -33,7 +36,8 @@ import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 //   どちらにも無かった（事務が書き換えられ、監査ログにも残らなかった）。
 // ⚠️ workerId の存在チェックに `!id` を使わないこと。**日比靖仁さんの workerId は 0** で、
 //    falsy のため「id required」で弾かれる（2026-08-26 に発生）。undefined/null/'' で判定する。
-const PAY_FIELDS: readonly string[] = [...WORKER_OWNER_ONLY_KEYS, 'retired', 'birthDate']
+// hireRoute（入社区分・2026-11-12）も新卒の月給 → 日給月給の移行の対象を決めるので残す
+const PAY_FIELDS: readonly string[] = [...WORKER_OWNER_ONLY_KEYS, 'retired', 'birthDate', 'hireRoute']
 
 /**
  * 直接の書き換えを代表だけに限る給与欄（lib/permissions.ts workers.editPay・2026-09-26 代表決定）＝ WORKER_OWNER_ONLY_KEYS。
@@ -134,7 +138,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom, nonSmoker, children, payrollNo } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom, nonSmoker, children, payrollNo, hireRoute } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -161,6 +165,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: `給与欄（${payGiven.join('・')}）を入れられるのは代表だけです。給与欄を空にして登録し、代表に伝えてください` }, { status: 403 })
           }
         }
+      }
+      // 入社区分（2026-11-12）: 日本人の役員・事務以外は必ず選ぶ（画面と同じ判定）
+      if (hireRoute !== undefined && hireRoute !== null && hireRoute !== '' && !isHireRoute(hireRoute)) {
+        return NextResponse.json({ error: '入社区分は「新卒」か「中途」です' }, { status: 400 })
+      }
+      if (needsHireRoute({ visa: visa || 'none', job: job || 'tobi' }) && !isHireRoute(hireRoute)) {
+        return NextResponse.json({ error: '入社区分（新卒・中途）を選んでください' }, { status: 400 })
       }
       const workerData: Parameters<typeof addWorker>[0] = {
         name,
@@ -216,6 +227,9 @@ export async function POST(request: NextRequest) {
       }
       if (useOldRules === true) {
         (workerData as Record<string, unknown>).useOldRules = true
+      }
+      if (isHireRoute(hireRoute)) {
+        (workerData as Record<string, unknown>).hireRoute = hireRoute
       }
       const worker = await addWorker(workerData)
       await logActivity(await actorLabel(request), 'worker.add', `${name} を追加`)
@@ -274,6 +288,23 @@ export async function POST(request: NextRequest) {
       const beforeWorkers = await getWorkers()
       const beforeW = beforeWorkers.find(w => w.id === Number(id)) as Record<string, unknown> | undefined
       if (!beforeW) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
+
+      // 入社区分（2026-11-12）: 空で送られたら「変更なし」（消せない項目）。値は新卒・中途だけ。
+      //   保存後に日本人の役員・事務以外になる人で区分が無ければ断る（画面と同じ判定）
+      if ('hireRoute' in updates) {
+        if (updates.hireRoute === '' || updates.hireRoute === null) delete updates.hireRoute
+        else if (!isHireRoute(updates.hireRoute)) return NextResponse.json({ error: '入社区分は「新卒」か「中途」です' }, { status: 400 })
+      }
+      {
+        const afterVisa = (updates.visa as string | undefined) ?? (beforeW.visaType as string | undefined)
+        const afterJob = (updates.job as string | undefined) ?? (beforeW.jobType as string | undefined)
+        const afterRoute = updates.hireRoute ?? beforeW.hireRoute
+        const afterRetired = unsetFields.includes('retired') ? '' : ((updates.retired as string | undefined) ?? (beforeW.retired as string | undefined))
+        // 退職した人の登録を直すときは求めない（入社区分は在籍中の人の移行・見直しに使う）
+        if (needsHireRoute({ visa: afterVisa || 'none', job: afterJob }) && !isAlreadyRetired(afterRetired) && !isHireRoute(afterRoute)) {
+          return NextResponse.json({ error: '入社区分（新卒・中途）を選んでください' }, { status: 400 })
+        }
+      }
 
       // 給与欄の直接の書き換えは代表だけ（画面は全項目を送り返すので「値が変わるとき」だけ判定）。消す（空で送る）も変更
       const effective: Record<string, unknown> = { ...updates, ...Object.fromEntries(unsetFields.map(k => [k, null])) }

@@ -135,3 +135,32 @@ describe('年次改定: 移ってから6ヶ月未満は対象外', () => {
     expect(r.rows[0].status).toBe('ok')
   })
 })
+
+// 入社区分（2026-11-12 代表「新卒入社か中途入社かを記録できるようにする」）
+import { needsHireRoute, hireRouteIssue } from '@/lib/workers'
+describe('入社区分（新卒・中途）', () => {
+  const base = { visa: 'none', job: 'tobi', salary: 235000, jpGrade: '' }
+  it('中途は月給・等級なしでも新卒の移行の対象にしない', () => {
+    expect(isJpMonthlyTrainee({ ...base, hireRoute: 'chuto' })).toBe(false)
+  })
+  it('新卒・空は従来どおり月給・等級なしで判定（空でも移行のお知らせを消さない）', () => {
+    expect(isJpMonthlyTrainee({ ...base, hireRoute: 'shinsotsu' })).toBe(true)
+    expect(isJpMonthlyTrainee({ ...base })).toBe(true)
+    expect(isJpMonthlyTrainee({ ...base, hireRoute: 'shinsotsu', jpGrade: '1G' })).toBe(false) // 移行後
+  })
+  it('入れる人は日本人の役員・事務以外', () => {
+    expect(needsHireRoute({ visa: 'none', job: 'tobi' })).toBe(true)
+    expect(needsHireRoute({ visaType: '', jobType: 'shokucho' })).toBe(true)
+    expect(needsHireRoute({ visa: 'none', job: 'yakuin' })).toBe(false)
+    expect(needsHireRoute({ visa: 'none', job: 'jimu' })).toBe(false)
+    expect(needsHireRoute({ visa: 'tokutei1', job: 'tobi' })).toBe(false)
+  })
+  it('確かめ: 空・中途なのに月給・問題なし', () => {
+    expect(hireRouteIssue({ visa: 'none', job: 'tobi', rate: 0 } as never)).toBe('missing')
+    expect(hireRouteIssue({ ...base, hireRoute: 'chuto' })).toBe('chutoOnMonthly')
+    expect(hireRouteIssue({ ...base, hireRoute: 'shinsotsu' })).toBeNull()
+    expect(hireRouteIssue({ visa: 'none', job: 'tobi', hireRoute: 'chuto', jpGrade: '2G' })).toBeNull()
+    expect(hireRouteIssue({ visa: 'none', job: 'tobi', retired: '2020-01-31' })).toBeNull()
+    expect(hireRouteIssue({ visa: 'none', job: 'yakuin' })).toBeNull()
+  })
+})

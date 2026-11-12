@@ -25,7 +25,7 @@ import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
-import { isAlreadyRetired, mypageDistributeFrom } from '@/lib/workers'
+import { isAlreadyRetired, mypageDistributeFrom, needsHireRoute, hireRouteIssue, HIRE_ROUTE_LABELS, isHireRoute } from '@/lib/workers'
 import { fetchWithAuth, postJson  } from '@/lib/api-client'
 import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog, FieldError, RowButton } from '@/components/ui/PageParts'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
@@ -63,6 +63,7 @@ const EMPTY_FORM = {
   breakShortenMin: '', breakShortenFrom: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '', payrollNo: '',
   useOldRules: false,
+  hireRoute: '' as '' | 'shinsotsu' | 'chuto',
 }
 
 /**
@@ -117,9 +118,10 @@ function visaExpiryStatus(expiry: string): { label: string; cls: string; priorit
   return null
 }
 
-type ListFilter = 'all' | 'visa' | 'url' | 'birth' | 'sched'
+type ListFilter = 'all' | 'visa' | 'url' | 'birth' | 'sched' | 'route'
 const FILTER_LABEL: Record<Exclude<ListFilter, 'all'>, string> = {
   visa: '在留期限が近い人', url: 'スマホのURLがまだの人', birth: '生年月日が入っていない人', sched: '単価の改定予定がある人',
+  route: '入社区分を確かめる人',
 }
 const ROW_COLS = 'lg:grid-cols-[44px_minmax(0,1fr)_220px_140px_130px_120px_100px]'
 const PANEL_BTN = 'h-9 px-3.5 rounded-[9px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 text-[0.8125rem] font-bold hover:bg-hibi-bg dark:hover:bg-gray-700 disabled:opacity-50'
@@ -144,6 +146,8 @@ export default function WorkersPage() {
   //   旧: Esc・背景クリック・「閉じる」で、入れかけの内容が確認なしで消えていた
   const [formBase, setFormBase] = useState(JSON.stringify(EMPTY_FORM))
   const [nameError, setNameError] = useState<string | null>(null)
+  // 入社区分（新卒・中途）が未選択（2026-11-12。日本人の役員・事務以外は必須・サーバも同じ判定で止める）
+  const [hireRouteError, setHireRouteError] = useState<string | null>(null)
   // 顔写真（2026-08-03 追加）。名前と顔が一致しない問題への対応
   const { photos, reload: reloadPhotos } = useWorkerPhotos()
   const [photoBusy, setPhotoBusy] = useState(false)
@@ -242,6 +246,7 @@ export default function WorkersPage() {
     setEditId(null)
     setForm(EMPTY_FORM)
     setFormBase(JSON.stringify(EMPTY_FORM))
+    setHireRouteError(null)
     setModalTab('basic')
     setShowModal(true)
   }
@@ -273,10 +278,12 @@ export default function WorkersPage() {
       dispatchTo: w.dispatchTo || '',
       dispatchFrom: w.dispatchFrom || '',
       useOldRules: !!w.useOldRules,
+      hireRoute: (isHireRoute(w.hireRoute) ? w.hireRoute : '') as '' | 'shinsotsu' | 'chuto',
     }
     setForm(next)
     setFormBase(JSON.stringify(next))
     setNameError(null)
+    setHireRouteError(null)
     setModalTab('basic')
     setShowModal(true)
   }
@@ -285,6 +292,12 @@ export default function WorkersPage() {
   const handleSave = async () => {
     if (!form.name.trim()) { setNameError('名前を入力してください'); return null }
     setNameError(null)
+    if (needsHireRoute({ visa: form.visa, job: form.job }) && !isAlreadyRetired(form.retired) && !form.hireRoute) {
+      setModalTab('basic')
+      setHireRouteError('入社区分（新卒・中途）を選んでください')
+      return null
+    }
+    setHireRouteError(null)
 
     // 新規追加時のみ: 同名スタッフチェック（スペース・全角半角を無視）
     //   2026-05-30 「日比靖仁」が誤って 2 回追加された事案を受けて追加。
@@ -359,8 +372,9 @@ export default function WorkersPage() {
           dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '',
           useOldRules: form.useOldRules ? true : (origOf('useOldRules') ? false : undefined),
           payrollNo: form.payrollNo.trim(),
+          hireRoute: form.hireRoute || undefined,
         }
-      : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined }
+      : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined, hireRoute: form.hireRoute || undefined }
     // 給与欄を書き換えられない人（代表以外）は給与欄を送らない（2026-10-02）。
     //   給与を見られない人には給与欄が空で届くため、送ると「空にする変更」扱いで保存が止まっていた
     if (editId !== null && !canEditPay) {
@@ -450,12 +464,15 @@ export default function WorkersPage() {
   const tokenHidden = (w: Worker) => (w as unknown as { tokenHidden?: boolean }).tokenHidden === true
   const noUrl = activeWorkers.filter(w => !w.token && !tokenHidden(w))
   const noBirth = activeWorkers.filter(w => needsBirthDate(w) && !w.birthDate)
+  // 入社区分が空・中途なのに月給で等級なし（新卒の入れ間違いかもしれない）（2026-11-12）
+  const routeIssues = activeWorkers.filter(w => hireRouteIssue(w))
   const scheduled = activeWorkers.filter(w => schedOf(w)).sort((a, b) => schedOf(a)!.from.localeCompare(schedOf(b)!.from))
   const names = (arr: Worker[]) => arr.slice(0, 3).map(w => w.name).join('・') + (arr.length > 3 ? ` ほか${arr.length - 3}名` : '')
   const toggleFilter = (f: ListFilter) => { setTab('all'); setListFilter(listFilter === f ? 'all' : f) }
   const filterIds: Record<Exclude<ListFilter, 'all'>, Set<number>> = {
     visa: new Set(visaSoon.map(w => w.id)), url: new Set(noUrl.map(w => w.id)),
     birth: new Set(noBirth.map(w => w.id)), sched: new Set(scheduled.map(w => w.id)),
+    route: new Set(routeIssues.map(w => w.id)),
   }
   const q = query.trim().replace(/[\s　]/g, '').toLowerCase()
   const sorted = filtered
@@ -524,7 +541,7 @@ export default function WorkersPage() {
       {mainTab === 'list' && (
         <>
           {/* ① 今やること（2026-10-01 改修。旧: 在留期限アラート・生年月日未入力の帯） */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
             <TodoCard icon="alert" tone={visaSoon.length > 0 ? 'urgent' : 'ok'} title="在留期限が近い"
               big={visaSoon.length > 0 ? `${visaSoon.length}名` : 'ありません'}
               sub={visaSoon.length > 0 ? visaSoon.slice(0, 3).map(w => `${w.name}（${w.status.label}）`).join('・') + (visaSoon.length > 3 ? ` ほか${visaSoon.length - 3}名` : '') : '90日以内に期限が来る人はいません'}
@@ -540,6 +557,13 @@ export default function WorkersPage() {
               sub={noBirth.length > 0 ? `${names(noBirth)}。号俸制の年齢調整（${jpDate(revisionBaseDate())} 基準）に必要です` : '号俸制の対象者は全員入っています'}
               action={noBirth.length > 0 ? '見る' : undefined} active={listFilter === 'birth'}
               onClick={noBirth.length > 0 ? () => toggleFilter('birth') : undefined} />
+            <TodoCard icon="user" tone={routeIssues.length > 0 ? 'warn' : 'ok'} title="入社区分（新卒・中途）"
+              big={routeIssues.length > 0 ? `${routeIssues.length}名` : 'ありません'}
+              sub={routeIssues.length > 0
+                ? routeIssues.slice(0, 3).map(w => `${w.name}（${hireRouteIssue(w) === 'missing' ? 'まだ' : '中途なのに月給'}）`).join('・') + (routeIssues.length > 3 ? ` ほか${routeIssues.length - 3}名` : '') + '。新卒の月給 → 日給月給の移行の対象を決めます'
+                : '日本人は全員入っています'}
+              action={routeIssues.length > 0 ? '見る' : undefined} active={listFilter === 'route'}
+              onClick={routeIssues.length > 0 ? () => toggleFilter('route') : undefined} />
             <TodoCard icon="clock" tone={scheduled.length > 0 ? 'info' : 'ok'} title="単価の改定予定"
               big={scheduled.length > 0 ? `${scheduled.length}名` : 'ありません'}
               sub={scheduled.length > 0 ? scheduled.slice(0, 3).map(w => `${w.name} ${schedOf(w)!.from.slice(5).replace('-', '/')}〜`).join('・') + '。その日から自動で切り替わります' : 'これから単価が変わる人はいません'}
@@ -874,6 +898,20 @@ export default function WorkersPage() {
                     <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                   </div>
+                  {/* 入社区分（2026-11-12）。新卒は月給で入り、翌年10月1日に日給月給へ移る（lib/jp-transfer.ts）。中途は最初から日給月給 */}
+                  {needsHireRoute({ visa: form.visa, job: form.job }) && (
+                    <div>
+                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">入社区分</label>
+                      <select value={form.hireRoute} aria-invalid={!!hireRouteError}
+                        onChange={e => { setForm({ ...form, hireRoute: e.target.value as '' | 'shinsotsu' | 'chuto' }); setHireRouteError(null) }}
+                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+                        <option value="">選んでください</option>
+                        <option value="shinsotsu">{HIRE_ROUTE_LABELS.shinsotsu}（月給で入り、翌年10月1日に日給月給へ）</option>
+                        <option value="chuto">{HIRE_ROUTE_LABELS.chuto}（最初から日給月給）</option>
+                      </select>
+                      <FieldError>{hireRouteError}</FieldError>
+                    </div>
+                  )}
                   {/* 生年月日は労働者名簿の必須記載事項（労基法107条）。
                       日本人社員はさらに号俸制の年齢調整（docs/wage-system.md 第6節）に使う。 */}
                   <div>

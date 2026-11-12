@@ -698,7 +698,7 @@ export async function GET(request: NextRequest) {
       if (await callerCan(request, 'wage.decide')) {
         for (const w of main.workers as unknown as Array<Record<string, unknown>>) {
           if (isAlreadyRetired(w.retired as string | undefined, nowJstIso)) continue
-          if (!isJpMonthlyTrainee(w as { visa?: string; job?: string; salary?: number; jpGrade?: string })) continue
+          if (!isJpMonthlyTrainee(w as { visa?: string; job?: string; salary?: number; jpGrade?: string; hireRoute?: string })) continue
           const sc = jpTransferSchedule(w.hireDate as string | undefined, w.birthDate as string | undefined)
           const st = transferStatus(sc, nowJstIso)
           if (st === 'waiting') continue
