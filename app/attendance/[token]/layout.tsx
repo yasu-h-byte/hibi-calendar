@@ -6,12 +6,12 @@ import { staffManifestMetadata } from '@/lib/staff-manifest'
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params   // Next 15: params は Promise
   return {
-    title: 'DEDURA＋ - 出面入力',
+    title: 'DEZRA - 出面入力',
     description: '出勤状況を入力してください',
     openGraph: {
-      title: 'DEDURA＋ - 出面入力',
+      title: 'DEZRA - 出面入力',
       description: '出勤状況を入力してください',
-      siteName: 'DEDURA＋',
+      siteName: 'DEZRA',
     },
     ...staffManifestMetadata('attendance', token),
   }

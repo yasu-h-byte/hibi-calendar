@@ -99,7 +99,7 @@ tax         = floor(amount × 10%)、total = amount + tax
 ## 経営コックピットとの連携
 
 `/api/integration/subcon-invoices` の `kind: 'issued'` に、発行済みの枚を工種ごとに1件ずつ足す（`prime: { source: 'system', gcAmount, deductions, ratio, bundleNo, siteId }`）。
-ファイルは無し（印刷は DEDURA＋ の画面）。給与の内訳は渡さない。
+ファイルは無し（印刷は DEZRA の画面）。給与の内訳は渡さない。
 
 ## 実装
 

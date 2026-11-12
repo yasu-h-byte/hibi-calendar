@@ -6,7 +6,7 @@ import { staffManifestMetadata } from '@/lib/staff-manifest'
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params   // Next 15: params は Promise
   return {
-    title: 'DEDURA＋ - マイページ',
+    title: 'DEZRA - マイページ',
     ...staffManifestMetadata('mypage', token),
   }
 }

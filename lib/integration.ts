@@ -1,7 +1,7 @@
 /**
  * 経営コックピット（keiei_dashboard）との連携（2026-09-25）
  *
- * DEDURA＋ と経営コックピットを一体で使うための「読むだけ」の窓口。
+ * DEZRA と経営コックピットを一体で使うための「読むだけ」の窓口。
  * 経営コックピットのサーバーが、共通の合言葉（環境変数 DEDURA_INTEGRATION_KEY・両方の Vercel に同じ値）を
  * ヘッダ x-integration-key に付けて呼ぶ。人のパスワード（ADMIN_PASSWORD など）とは別物。
  * 書き込みは現場別の外注単価の上書き（setSubconSiteRate・/api/integration/subcon-rate）の1つだけ（docs/integration.md）。
@@ -96,7 +96,7 @@ export interface IntegrationPeerInvoice {
   status: 'issued' | 'void'
   sites: { siteId: string; siteName: string; amount: number }[]
   /**
-   * 'paper' = 手作りで出して DEDURA＋ に控えを入れたもの（/paper-invoice・2026-10-21）。無ければシステムで発行したもの。
+   * 'paper' = 手作りで出して DEZRA に控えを入れたもの（/paper-invoice・2026-10-21）。無ければシステムで発行したもの。
    * HFU → 日比建設 は 2026年9月分を手作りで出したので、hfuInvoices[] にこの印で入る。
    * 紙の控えは請求書番号が無いことがある（no は空）。現場（sites）は明細の現場名から引き当てたもので、引き当てられない行は siteId が空
    */
@@ -466,7 +466,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
 // ─────────────────────────────────────────────
 
 /**
- * 経営コックピットの「請求書の取り込み」で、請求書の単価が DEDURA＋ と違うと分かったときに、
+ * 経営コックピットの「請求書の取り込み」で、請求書の単価が DEZRA と違うと分かったときに、
  * 社長がボタンで押した単価をここに書く（現場マスタの「現場別単価」と同じ場所 assign[siteId].subconRates）。
  * 残業単価は書かない（getSubconRate 側で 日額 ÷ 8 × 1.25 を自動計算）。
  * 書いた記録は activity に「integration」として残す。

@@ -53,11 +53,11 @@ function contentTypeOf(f: File): string {
   return ''
 }
 
-/** 支払内訳書: DEDURA＋ で発行した山岡への請求書（税込・同じ月・全現場）との見比べ（2026-10-20）。帳簿との照合は経営コックピット */
+/** 支払内訳書: DEZRA で発行した山岡への請求書（税込・同じ月・全現場）との見比べ（2026-10-20）。帳簿との照合は経営コックピット */
 function primeChip(p: { comparison: PrimeRemittanceComparison; nos: string[] } | undefined) {
   if (!p) return <Chip tone="blue">支払内訳書（帳簿と照合は経営コックピット）</Chip>
   const c = p.comparison
-  if (c.result === 'noInvoice') return <Chip tone="amber">山岡への請求書が未発行（DEDURA＋）</Chip>
+  if (c.result === 'noInvoice') return <Chip tone="amber">山岡への請求書が未発行（DEZRA）</Chip>
   if (c.result === 'noRemittance') return <Chip tone="amber">振込額が未入力（請求書 {yen(c.invoiceTotal)}）</Chip>
   if (c.result === 'match') return <Chip tone="green">山岡への請求書 {yen(c.invoiceTotal)} と一致</Chip>
   if (c.result === 'close') return <Chip tone="green">ほぼ一致 {signedYen(c.diff)}（請求書 {yen(c.invoiceTotal)}）</Chip>

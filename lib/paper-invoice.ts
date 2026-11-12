@@ -15,7 +15,7 @@
  * 記録は独立コレクション `paperInvoices`（1件 = 手作りの請求書1枚）。
  *
  * ## 一次（山岡建設工業など）へ出した請求書（2026-10-05）
- * 一次への請求書も紙の控えとしてここに入れる（入口を DEDURA＋ に1本化・代表 2026-10-05）。現場（siteId）は必須、工種は任意。
+ * 一次への請求書も紙の控えとしてここに入れる（入口を DEZRA に1本化・代表 2026-10-05）。現場（siteId）は必須、工種は任意。
  * 見比べは「同じ現場・同じ月の全部の合計 vs 原価・収益で入れた現場の請求額」（comparePrimeSheets）。応援の請求書の一覧（請求・支払）には出さない。
  *
  * ## 見比べ
@@ -61,7 +61,7 @@ export interface PaperInvoice {
   /**
    * 一次（山岡建設工業など）へ出した請求書のとき（2026-10-05）: どの現場の分か（工種サイトでなく親の現場）と工種の書き添え。
    * 一次への請求書は工種ごとに1つの現場で5〜6枚になることがあるので、同じ現場・同じ月の全部の合計を
-   * DEDURA＋ の現場の請求額（原価・収益で入れたもの・工種サイトの分も足す）と比べる（comparePrimeSheets）
+   * DEZRA の現場の請求額（原価・収益で入れたもの・工種サイトの分も足す）と比べる（comparePrimeSheets）
    */
   siteId?: string | null
   siteName?: string | null
@@ -93,7 +93,7 @@ export function paperExTaxTotal(papers: Pick<PaperInvoice, 'subtotal' | 'total'>
   return papers.reduce((t, p) => t + (typeof p.subtotal === 'number' ? p.subtotal : Math.round(p.total / 1.1)), 0)
 }
 
-/** 一次への請求書（同じ現場・同じ月の全部）と DEDURA＋ の現場の請求額の見比べ */
+/** 一次への請求書（同じ現場・同じ月の全部）と DEZRA の現場の請求額の見比べ */
 export interface PrimeSiteComparison {
   siteId: string
   siteName: string
@@ -102,7 +102,7 @@ export interface PrimeSiteComparison {
   /** 請求書の税抜の合計（税抜小計が無い枚は 税込 ÷ 1.1） */
   invoiceExTax: number
   exTaxEstimated: boolean
-  /** DEDURA＋ の現場の請求額（税抜・0 = 未入力） */
+  /** DEZRA の現場の請求額（税抜・0 = 未入力） */
   billing: number
   /** 請求書 − 請求額 */
   diff: number
@@ -110,7 +110,7 @@ export interface PrimeSiteComparison {
   result: 'match' | 'close' | 'diff' | 'noBilling'
 }
 
-/** 一次への請求書を現場ごとに足して、DEDURA＋ の請求額と比べる（純粋） */
+/** 一次への請求書を現場ごとに足して、DEZRA の請求額と比べる（純粋） */
 export function comparePrimeSheets(
   sheets: Pick<PaperInvoice, 'subtotal' | 'total'>[], billing: number, site: { siteId: string; siteName: string },
 ): PrimeSiteComparison {

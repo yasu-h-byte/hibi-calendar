@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'DEDURA＋ - 就業カレンダー',
+  title: 'DEZRA - 就業カレンダー',
   description: '就業カレンダーを確認して署名してください / Xác nhận lịch làm việc',
   openGraph: {
-    title: 'DEDURA＋ - 就業カレンダー',
+    title: 'DEZRA - 就業カレンダー',
     description: '就業カレンダーを確認して署名してください / Xác nhận lịch làm việc',
-    siteName: 'DEDURA＋',
+    siteName: 'DEZRA',
   },
 }
 

@@ -664,7 +664,7 @@ export default function WorkersPage() {
                       : gaikoku && w.hourlyRate ? fmtYen(w.hourlyRate * 168)
                       : <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </span>
-                  <span>{retiredNow(w) ? null : w.token ? <Chip tone="green">配布できる</Chip> : tokenHidden(w) ? <Chip tone="gray" title="管理者側の人の合言葉は代表だけが見られます">代表のみ</Chip> : <Chip tone="red">まだ</Chip>}</span>
+                  <span>{retiredNow(w) ? null : w.token && mypageFrom(w) ? <Chip tone="gray" title="有給の初回付与日にマイページを配ります">{Number(mypageFrom(w)!.slice(5, 7))}/{Number(mypageFrom(w)!.slice(8, 10))}から</Chip> : w.token ? <Chip tone="green">配布できる</Chip> : tokenHidden(w) ? <Chip tone="gray" title="管理者側の人の合言葉は代表だけが見られます">代表のみ</Chip> : <Chip tone="red">まだ</Chip>}</span>
                 </div>
               )
             })}
