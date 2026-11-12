@@ -113,6 +113,15 @@ describe('buildWorkerDays（作業員1人ずつの出た日数・有給・待機
   it('月をまるごと帰国している人は、その月の日数ぶん', () => {
     expect(of(12)).toMatchObject({ workDays: 0, homeLeaveDays: 28 })
   })
+  it('所定日数: 出た現場のカレンダーの日数（複数は大きいほう）→ 無ければ全社 → 無ければ null', () => {
+    const w = [{ id: 31, org: 'hibi', visa: 'none', job: 'tobi' }, { id: 32, org: 'hfu', visa: 'jisshu2', job: 'tobi' }, { id: 33, org: 'hibi', visa: 'none', job: 'tobi' }]
+    const by = { 31: { work: 20, plUsed: 0, compDays: 0, sites: ['a', 'b'] }, 32: { work: 18, plUsed: 0, compDays: 0, sites: ['c'] } }
+    const r = buildWorkerDays(w, by, [], '202702', { company: 21, bySite: { a: 20, b: 22 } })
+    expect(r.find(x => x.id === 31)!.prescribedDays).toBe(22)
+    expect(r.find(x => x.id === 32)!.prescribedDays).toBe(21)
+    expect(r.find(x => x.id === 33)!.prescribedDays).toBe(21)
+    expect(buildWorkerDays(w, by, [], '202702')[0].prescribedDays).toBeNull()
+  })
   it('事務は field: false', () => expect(of(13)).toMatchObject({ field: false, active: true, job: 'jimu' }))
   it('人事の台帳の項目名（company / visaType / jobType）でも同じに読める', () => {
     const r = buildWorkerDays([{ id: 21, company: 'HFU', visaType: 'jisshu1', jobType: 'tobi', hireDate: '2026-10-26' }], {}, [], '202702')

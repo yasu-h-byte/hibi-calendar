@@ -215,6 +215,12 @@ export interface IntegrationWorkerDays {
   /** 承認済みの帰国がその月に掛かった期間（月の中に切り取ったもの。無ければ空）と、その暦の日数の合計 */
   homeLeaves: { startDate: string; endDate: string }[]
   homeLeaveDays: number
+  /**
+   * その月の所定日数（2026-11-12）。その人が出た現場のうち、就業カレンダーの所定日数が決まっている現場の日数（複数あれば大きいほう）。
+   * 現場のカレンダーが無い月・出面が無い人は全社の所定日数（main.workDays）。それも無ければ null。
+   * 経営コックピットの稼働率（請求できる人工 ÷ 所定日数）の分母に使う
+   */
+  prescribedDays: number | null
 }
 
 /**
@@ -225,9 +231,10 @@ export function buildWorkerDays(
   // 出面の台帳（main.workers）の項目名は org / visa / job。人事の台帳（getWorkers）は company / visaType / jobType なので、どちらでも読めるようにする
   //   （2026-11-12 修正: 前者を後者の名前で読んでいて、全員が「日比建設・日本人・職種なし」で返っていた）
   workers: { id: number; org?: string; visa?: string; job?: string; company?: string; visaType?: string; jobType?: string; hireDate?: string; retired?: string }[],
-  byWorker: Record<number, { work: number; plUsed: number; compDays: number } | undefined>,
+  byWorker: Record<number, { work: number; plUsed: number; compDays: number; sites?: string[] } | undefined>,
   homeLeaves: { workerId: number; startDate: string; endDate: string }[],
   ym: string,
+  prescribed: { company?: number; bySite?: Record<string, number> } = {},
 ): IntegrationWorkerDays[] {
   const y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6))
   const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
@@ -264,6 +271,11 @@ export function buildWorkerDays(
       standbyDays: r1(c?.compDays || 0),
       homeLeaves: leaves,
       homeLeaveDays: days.size,
+      prescribedDays: (() => {
+        const mine = (c?.sites || []).map(sid => prescribed.bySite?.[sid] || 0).filter(n => n > 0)
+        if (mine.length) return Math.max(...mine)
+        return prescribed.company && prescribed.company > 0 ? prescribed.company : null
+      })(),
     })
   }
   return out
@@ -439,7 +451,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     primeInvoices,
     hfuWorkforce: buildHfuWorkforce(main, att.d, ym, payroll.workersByYm[ym] || []),
     // 帰国の一覧は給与の計算（applyPayrollCosts）が読んだ30秒メモを使う（読み取りを増やさない）
-    workerDays: buildWorkerDays(main.workers as never, c.workers, await homeLeavesCached(), ym),
+    workerDays: buildWorkerDays(main.workers as never, c.workers, await homeLeavesCached(), ym, { company: main.workDays?.[ym], bySite: main.siteWorkDays?.[ym] as Record<string, number> | undefined }),
     totals: {
       billing: sites.reduce((t, s) => t + s.billing, 0),
       billingEnteredSites: sites.filter(s => s.billingEntered).length,
