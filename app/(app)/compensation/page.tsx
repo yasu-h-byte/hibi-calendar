@@ -71,6 +71,8 @@ export default function CompensationHubPage() {
   const [unset, setUnset] = useState<{ id: number; name: string }[] | null>(null)
   // 評価の承認（/evaluation の「承認」タブ）を開ける人だけに「承認へ」を出す
   const [canDecide, setCanDecide] = useState(false)
+  // 平均日給の推移（/wage-average）は給与を見られる3人（pay.view）
+  const [canPay, setCanPay] = useState(false)
 
   useEffect(() => {
     let pw = ''
@@ -82,6 +84,7 @@ export default function CompensationHubPage() {
       if (typeof parsed?.user?.workerId === 'number') wid = parsed.user.workerId
       pw = parsed?.password || ''
       setCanDecide(can(parsed?.user, 'wage.decide'))
+      setCanPay(can(parsed?.user, 'pay.view'))
     } catch { /* 未ログイン扱い */ }
     setWorkerId(wid)
     if (!pw) return
@@ -128,6 +131,10 @@ export default function CompensationHubPage() {
       desc: '評語の入力から改定の確定、賞与の配分、本人へ渡す給料表まで',
       badge: unset && unset.length > 0 ? <Chip tone="amber">等級まだ {unset.length}名</Chip> : undefined,
     },
+    ...(canPay ? [{
+      href: '/wage-average', icon: 'trend' as IconName, title: '平均日給の推移（日本人・外国人・全体）',
+      desc: '昇給で上がる分を採用で保てているか。平均が動いた理由と、保つのに必要な採用人数',
+    }] : []),
   ]
 
   const vnLinks: HubLink[] = [

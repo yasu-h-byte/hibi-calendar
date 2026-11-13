@@ -14,6 +14,7 @@ export const CRON_LABEL = {
   'leave-expiry': '有給の時効処理（毎月1日）',
   'mf-receipts': '領収書の読み取り（毎朝）',
   'commute-measure': '通勤時間の測定',
+  'wage-average': '平均日給の記録（毎月1日）',
 } as const
 export type CronName = keyof typeof CRON_LABEL
 

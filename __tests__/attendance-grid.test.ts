@@ -16,17 +16,18 @@ import {
   collectRestDayWorkWarnings,
 } from '@/lib/attendance-grid'
 import { AttEntry } from '@/app/(app)/attendance/types'
+import { todayJstDate } from '@/lib/date-utils'
 
 describe('日付ヘルパー', () => {
   it('currentYm: 今月のYYYYMM', () => {
-    const now = new Date()
+    const now = todayJstDate()  // 日本時間の今日（関数と同じ。new Date() は CI＝UTC の 0〜9時 JST に前日になり落ちていた）
     expect(currentYm()).toBe(`${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`)
   })
 
   it('getYmOptions: 2ヶ月先から過去に向かって生成', () => {
     const opts = getYmOptions(4)
     expect(opts).toHaveLength(6)  // i = -2..3
-    const now = new Date()
+    const now = todayJstDate()  // 日本時間の今日（関数と同じ。new Date() は CI＝UTC の 0〜9時 JST に前日になり落ちていた）
     const ahead2 = new Date(now.getFullYear(), now.getMonth() + 2, 1)
     expect(opts[0].ym).toBe(`${ahead2.getFullYear()}${String(ahead2.getMonth() + 1).padStart(2, '0')}`)
     expect(opts[2].ym).toBe(currentYm())
@@ -35,7 +36,7 @@ describe('日付ヘルパー', () => {
   it('getDow / isToday', () => {
     expect(getDow(2026, 6, 7)).toBe(0)   // 2026-06-07 = 日曜
     expect(getDow(2026, 6, 6)).toBe(6)   // 土曜
-    const now = new Date()
+    const now = todayJstDate()  // 日本時間の今日（関数と同じ。new Date() は CI＝UTC の 0〜9時 JST に前日になり落ちていた）
     expect(isToday(now.getFullYear(), now.getMonth() + 1, now.getDate())).toBe(true)
     expect(isToday(2000, 1, 1)).toBe(false)
   })
@@ -52,7 +53,7 @@ describe('日付ヘルパー', () => {
   })
 
   it('今日はアンバー最優先', () => {
-    const now = new Date()
+    const now = todayJstDate()  // 日本時間の今日（関数と同じ。new Date() は CI＝UTC の 0〜9時 JST に前日になり落ちていた）
     expect(dayColBg(now.getFullYear(), now.getMonth() + 1, now.getDate(), 'off')).toBe('bg-amber-50')
   })
 

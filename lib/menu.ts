@@ -71,7 +71,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: '書類庫', icon: 'folder', href: '/staff-docs', section: '人・書類', cap: 'staffDocs.view' },
   // ── 賃金・評価（年に数回）──
   // 評価管理・昇給履歴・賃金制度・賃金分析はハブで国籍別に分岐。昇給履歴は人員マスタのタブだが、こちらを選択中にする
-  { label: '賃金・評価', icon: 'star', href: '/compensation', section: '賃金・評価', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis', '/workers?tab=raise-history'] },
+  { label: '賃金・評価', icon: 'star', href: '/compensation', section: '賃金・評価', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis', '/wage-average', '/workers?tab=raise-history'] },
   // 職長の評価入力の入口（ハブは職長には見せない）。通知ベルの「評価入力をお願いします」もここから
   // 評価入力は職長（評価者）の入口。給与が見える人は「賃金・評価」の中の「評価の入力が残っている」カードから入るので出さない（2026-10-03 代表 OK）
   { label: '評価入力', icon: 'pen', href: '/evaluation?tab=review', section: '賃金・評価', cap: 'evaluation.input', hideIfCap: 'wage.view' },
@@ -153,6 +153,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '号俸表・年次改定（日本人）', where: '賃金・評価 → 賃金制度', href: '/wage', cap: 'wage.decide', keywords: 'ごうほう 号俸 改定' },
   { label: '賞与（日本人）', where: '賃金・評価 → 賃金制度 → 賞与', href: '/wage?tab=bonus', cap: 'wage.decide', keywords: 'しょうよ ぼーなす' },
   { label: '賃金分析', where: '賃金・評価（代表のみ）', href: '/wage-analysis', cap: 'wageAnalysis.view', keywords: 'ちんぎん ぶんせき カーブ' },
+  { label: '平均日給の推移', where: '賃金・評価', href: '/wage-average', cap: 'pay.view', keywords: 'へいきん にっきゅう 平均 日給 単価 採用 推移' },
   // マスタ
   { label: '現場の単価（常用・受取）', where: '現場マスタ → 編集 → 単価', href: '/sites', cap: 'masters.view', keywords: 'たんか 常用' },
   { label: '工種（鉄骨など）の追加', where: '現場マスタ → 編集', href: '/sites', cap: 'masters.edit', keywords: 'こうしゅ 鉄骨 仮設' },
