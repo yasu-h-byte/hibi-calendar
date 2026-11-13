@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import {
-  personOnDate, buildPeople, inScope, statOf, decomposeAverage, requiredHires,
+  personOnDate, buildPeople, foreignMonthlyToHourly, inScope, statOf, decomposeAverage, requiredHires,
   shiftYm, ymRange, buildAvgWageView, documentPerson, mergeDocumentPoint, raiseBetween, DEFAULT_AVG_FILTER, type WageRatePerson,
 } from '@/lib/avg-wage'
 
@@ -19,9 +19,11 @@ describe('平均日給: 日給へのそろえ方', () => {
     expect(personOnDate(w, '2026-10-01')).toMatchObject({ daily: 10500, basis: 'hourly', group: 'foreign' })
     expect(personOnDate(w, '2026-09-01')?.daily).toBe(9800)
   })
-  test('外国人の固定月給は ÷20日（時給より月給を正とする）', () => {
+  test('外国人の固定月給は契約書の1時間あたり（月給×12÷2020）×7時間（人員マスタの時給より月給を正とする）', () => {
     expect(personOnDate({ id: 3, visa: 'ginou', salary: 300000, hourlyRate: 1500 }, '2026-10-01'))
-      .toMatchObject({ daily: 15000, basis: 'monthly' })
+      .toMatchObject({ daily: 1782 * 7, basis: 'hourly' })
+    // 契約書の書き方どおり（架空の額）: 月給 202,000円 × 12 ÷ 2,020 = 1時間あたり 1,200円
+    expect(foreignMonthlyToHourly(202000)).toBe(1200)
   })
   test('日本人の月給だけの人は 月給×12÷310', () => {
     expect(personOnDate({ id: 4, visa: 'none', salary: 310000 }, '2026-10-01')).toMatchObject({ daily: 12000, basis: 'monthly' })

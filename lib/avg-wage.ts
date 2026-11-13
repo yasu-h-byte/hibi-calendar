@@ -13,7 +13,7 @@
  * | 日本人（日給月給・旧契約） | rate（日額） | そのまま |
  * | 日本人（月給・新卒など） | salary | 月給 × 12 ÷ 310（給料表の「日給 × 310 = 年収」と同じ物差し） |
  * | 外国人（時給） | hourlyRate | 時給 × 7時間（給与計算の1日分と同じ・lib/compute-vn-salary.ts） |
- * | 外国人（固定月給） | salary | 月給 ÷ 20日（基本給の保証日数） |
+ * | 外国人（固定月給・旧契約） | salary | 契約書の「1時間あたりの金額」＝月給 × 12 ÷ 2,020時間（円未満は四捨五入）× 7時間 |
  * | 外国人（日額だけ） | rate | そのまま |
  *
  * ## 平均が動いた理由（decomposeAverage）
@@ -28,8 +28,14 @@ import { isEmployedOn } from './workers'
 export const FOREIGN_HOURS_PER_DAY = 7
 /** 日本人の年間の物差し（給料表の「ベース年収 = 日給 × 310」） */
 export const JP_DAYS_PER_YEAR = 310
-/** 外国人の固定月給の日数（基本給の保証 20日） */
-export const FOREIGN_MONTHLY_DAYS = 20
+/**
+ * 外国人の固定月給（旧契約）の年間所定労働時間。雇用契約書の別紙「月給の場合の1時間当たりの金額」が
+ * 月給 × 12 ÷ 2,020 で書かれている（2026-11-14 フン・フォン・タン・ホアンの契約書で確認）
+ */
+export const FOREIGN_ANNUAL_HOURS = 2020
+
+/** 外国人の固定月給 → 契約書どおりの1時間あたりの金額（円・四捨五入） */
+export const foreignMonthlyToHourly = (salary: number): number => Math.round((salary * 12) / FOREIGN_ANNUAL_HOURS)
 /** 平均に入れない職種（現場で働く人だけを数える） */
 export const AVG_WAGE_EXCLUDED_JOBS: readonly string[] = ['yakuin', 'jimu']
 /**
@@ -174,8 +180,10 @@ export function personOnDate(w: RawWageWorker, asOf: string): WageRatePerson | n
   const salary = valueOn(w.salary, w.prevSalary, w.salaryFrom, asOf)
   const base = { id: w.id, group, org, job }
   if (group === 'foreign') {
-    // 固定月給の人は月給が正（lib/compute-vn-salary.ts と同じ。時給は参考で持っているだけのことがある）
-    if (salary) return { ...base, daily: Math.round(salary / FOREIGN_MONTHLY_DAYS), basis: 'monthly' }
+    // 固定月給の人は月給が正（lib/compute-vn-salary.ts と同じ。人員マスタの時給は契約書とずれていることがある）。
+    //   契約書の「1時間あたりの金額」（月給×12÷2,020）にして、ほかの外国人と同じ ×7時間でそろえる（代表 2026-11-14）。
+    //   時給でそろえるので「月給の人」には数えない
+    if (salary) return { ...base, daily: foreignMonthlyToHourly(salary) * FOREIGN_HOURS_PER_DAY, basis: 'hourly' }
     const hourly = valueOn(w.hourlyRate, w.prevHourlyRate, w.hourlyRateFrom, asOf)
     if (hourly) return { ...base, daily: Math.round(hourly * FOREIGN_HOURS_PER_DAY), basis: 'hourly' }
     const rate = valueOn(w.rate, w.prevRate, w.rateFrom, asOf)

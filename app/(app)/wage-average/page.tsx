@@ -147,7 +147,7 @@ export default function WageAveragePage() {
   return (
     <div className="space-y-5 max-w-5xl">
       <PageHeader group="賃金・評価" title="平均日給の推移"
-        sub="その月の1日時点の基本単価（日額・時給×7時間・月給）を1日あたりにそろえた平均です。手当・割増・出勤日数は入れません。役員・事務は数えません。" />
+        sub="その月の1日時点の基本単価を1日あたりにそろえた平均です（日本人は日額、外国人は時給×7時間。外国人の月給は契約書の1時間あたりの額で、日本人の月給は×12÷310）。手当・割増・出勤日数は入れません。役員・事務は数えません。" />
 
       <div className="flex flex-wrap items-center gap-3">
         <Segment value={org} onChange={setOrg} items={[['all', '全社'], ['hibi', '日比建設'], ['hfu', 'HFU']]} />
