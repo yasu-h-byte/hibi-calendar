@@ -14,7 +14,7 @@ import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { notify } from '@/lib/notify'
 import { PageHeader, Segment } from '@/components/ui/PageParts'
-import { requiredHires, type AvgWageView, type WageGroup } from '@/lib/avg-wage'
+import { requiredHires, displayFromYm, AVG_WAGE_DISPLAY_YEARS, type AvgWageView, type WageGroup } from '@/lib/avg-wage'
 import { TrendChart, TrendLegend, WaterfallChart, RaiseChart, RaiseLine, yenRound, signedYen, ymLabel } from './AvgWageCharts'
 
 type Org = 'all' | 'hibi' | 'hfu'
@@ -93,7 +93,14 @@ export default function WageAveragePage() {
   }, [password, org, monthly, cmpIdx === -1 ? pairFrom : '', cmpIdx === -1 ? pairTo : ''])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) load() }, [ready, load])
 
-  const points = useMemo(() => view?.points ?? [], [view])
+  // 画面に出すのは過去5年（最新の点の5年前の10月から）。それより前の点・比較・昇給は出さない
+  const fromYm = useMemo(() => {
+    const all = view?.points ?? []
+    return all.length ? displayFromYm(all[all.length - 1].ym) : ''
+  }, [view])
+  const points = useMemo(() => (view?.points ?? []).filter(p => p.ym >= fromYm), [view, fromYm])
+  const comparisons = useMemo(() => (view?.comparisons ?? []).filter(c => c.from >= fromYm), [view, fromYm])
+  const raises = useMemo(() => (view?.raises ?? []).filter(r => r.from >= fromYm), [view, fromYm])
   const latest = points[points.length - 1]
   // 目標の初期値: 全体の平均が出る最初の10月の点（日本人の年次改定の時点）。無ければ全体の出る最初の点
   //   資料の点（日本人だけ）は全体が出ないので選ばない
@@ -107,7 +114,7 @@ export default function WageAveragePage() {
   const targetPoint = points.find(p => p.ym === tYm)
   const targetOf = (g: Group) => targetPoint?.[g].avg ?? null
   const yearAgo = latest ? points.find(p => p.ym === `${Number(latest.ym.slice(0, 4)) - 1}${latest.ym.slice(4)}`) : undefined
-  const cmp = cmpIdx === -1 ? (view?.custom ?? null) : (view?.comparisons[cmpIdx] ?? view?.comparisons[0] ?? null)
+  const cmp = cmpIdx === -1 ? (view?.custom ?? null) : (comparisons[cmpIdx] ?? comparisons[0] ?? null)
   // 2つの月を選ぶ: 初めて選ぶときは、最新の点とその1つ前（例: 2026年9月 → 10月で10月の改定だけを見る）
   const startPair = () => {
     if (!pairFrom || !pairTo) {
@@ -167,7 +174,7 @@ export default function WageAveragePage() {
         </div>
       )}
 
-      <Section title="① 平均日給の推移" sub="毎月1日時点。白抜きの点は、記録を始める前の月を人員マスタの「1つ前の単価」からさかのぼって出した参考値です。四角の点は給料解説書（毎年10月1日の確定日給）から取り込んだ日本人の点です。外国人の資料が無い年は、全体の平均を出していません。"
+      <Section title={`① 平均日給の推移（過去${AVG_WAGE_DISPLAY_YEARS}年${fromYm ? `・${ymLabel(fromYm)}〜` : ''}）`} sub="毎月1日時点。白抜きの点は、記録を始める前の月を人員マスタの「1つ前の単価」からさかのぼって出した参考値です。四角の点は給料解説書（毎年10月1日の確定日給）から取り込んだ日本人の点です。外国人の資料が無い年は、全体の平均を出していません。"
         actions={points.length > 0 && (
           <label className="flex items-center gap-2 text-xs text-hibi-sub dark:text-gray-400">目標にする月
             <select value={tYm} onChange={e => { setTargetYm(e.target.value); setTargetIn(null) }}
@@ -195,7 +202,7 @@ export default function WageAveragePage() {
               <select value={cmpIdx} onChange={e => { const v = Number(e.target.value); if (v === -1) startPair(); else setCmpIdx(v); resetInputs() }}
                 aria-label="比べる2つの点"
                 className="h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 text-sm text-gray-900 dark:text-gray-100">
-                {view.comparisons.map((c, i) => <option key={c.from + c.to} value={i}>{cmpLabel(c.from)} → {cmpLabel(c.to)}</option>)}
+                {comparisons.map((c, i) => <option key={c.from + c.to} value={i}>{cmpLabel(c.from)} → {cmpLabel(c.to)}</option>)}
                 <option value={-1}>月を選んで比べる…</option>
               </select>
             )}
@@ -250,9 +257,9 @@ export default function WageAveragePage() {
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-300" />日本人（資料・1年分）</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600" />外国人</span>
         </div>
-        <RaiseChart raises={view?.raises ?? []} />
+        <RaiseChart raises={raises} />
         {(() => {
-          const list = [...(view?.raises ?? [])].reverse().filter(r => (r.jp?.raised ?? 0) + (r.foreign?.raised ?? 0) > 0)
+          const list = [...raises].reverse().filter(r => (r.jp?.raised ?? 0) + (r.foreign?.raised ?? 0) > 0)
           return list.length > 0 && (
             <ul className="mt-3 divide-y divide-hibi-line dark:divide-gray-700 text-xs text-gray-700 dark:text-gray-300 tabular-nums">
               {list.map(r => (
