@@ -418,3 +418,15 @@ export function buildAvgWageView(snaps: WageRateSnapshot[], filter: AvgFilter, p
   }
   return { filter, points, comparisons, custom, raises }
 }
+
+/** 画面に出す年数（2026-11-14 代表「データ、過去５年を表示する形にしよう」）。記録と資料はそれより前も残す */
+export const AVG_WAGE_DISPLAY_YEARS = 5
+
+/**
+ * 画面に出す最初の月（'YYYYMM'）。日本人の年次改定（10月）にそろえて、最新の点から years 年前の10月。
+ * 例: 最新が 2026年11月 → 2021年10月（2022〜2026年の5回の改定が見える）／ 最新が 2026年9月 → 2020年10月
+ */
+export function displayFromYm(latestYm: string, years = AVG_WAGE_DISPLAY_YEARS): string {
+  const y = Number(latestYm.slice(0, 4)), m = Number(latestYm.slice(4, 6))
+  return `${(m >= 10 ? y : y - 1) - years}10`
+}

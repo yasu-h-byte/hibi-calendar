@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import {
   personOnDate, buildPeople, foreignMonthlyToHourly, inScope, statOf, decomposeAverage, requiredHires,
-  shiftYm, ymRange, buildAvgWageView, documentPerson, mergeDocumentPoint, raiseBetween, DEFAULT_AVG_FILTER, type WageRatePerson,
+  shiftYm, ymRange, displayFromYm, buildAvgWageView, documentPerson, mergeDocumentPoint, raiseBetween, DEFAULT_AVG_FILTER, type WageRatePerson,
 } from '@/lib/avg-wage'
 
 // 数字はすべて架空（実在の人の単価は書かない）
@@ -189,5 +189,15 @@ describe('平均日給: 月ごとの昇給と自由な比較', () => {
     expect(buildAvgWageView(snaps, DEFAULT_AVG_FILTER, { from: '202610', to: '202609' }).custom).toBeNull()
     expect(buildAvgWageView(snaps, DEFAULT_AVG_FILTER, { from: '201001', to: '202610' }).custom).toBeNull()
     expect(buildAvgWageView(snaps, DEFAULT_AVG_FILTER).custom).toBeNull()
+  })
+})
+
+describe('平均日給: 画面に出す期間（過去5年）', () => {
+  test('最新の点の5年前の10月から（年次改定にそろえる）', () => {
+    expect(displayFromYm('202611')).toBe('202110')
+    expect(displayFromYm('202610')).toBe('202110')
+    expect(displayFromYm('202609')).toBe('202010')
+    expect(displayFromYm('202701')).toBe('202110')
+    expect(displayFromYm('202611', 3)).toBe('202310')
   })
 })
