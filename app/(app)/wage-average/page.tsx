@@ -15,7 +15,7 @@ import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { notify } from '@/lib/notify'
 import { PageHeader, Segment } from '@/components/ui/PageParts'
 import { requiredHires, type AvgWageView, type WageGroup } from '@/lib/avg-wage'
-import { TrendChart, TrendLegend, WaterfallChart, yenRound, signedYen, ymLabel } from './AvgWageCharts'
+import { TrendChart, TrendLegend, WaterfallChart, RaiseChart, RaiseLine, yenRound, signedYen, ymLabel } from './AvgWageCharts'
 
 type Org = 'all' | 'hibi' | 'hfu'
 type Group = 'all' | WageGroup
@@ -69,8 +69,11 @@ export default function WageAveragePage() {
   const [monthly, setMonthly] = useState<'in' | 'out'>('in')
   const [group, setGroup] = useState<Group>('all')
   const [targetYm, setTargetYm] = useState<string>('')
+  // ② の比べ方: 0〜 = 1年前との比較の一覧の何番目か ／ -1 = 2つの月を自分で選ぶ（pairFrom → pairTo）
   const [cmpIdx, setCmpIdx] = useState(0)
-  // ③ の入力（空 = 記録から出した初期値を使う）
+  const [pairFrom, setPairFrom] = useState('')
+  const [pairTo, setPairTo] = useState('')
+  // ④ の入力（空 = 記録から出した初期値を使う）
   const [targetIn, setTargetIn] = useState<number | null>(null)
   const [raiseIn, setRaiseIn] = useState<number | null>(null)
   const [entryIn, setEntryIn] = useState<number | null>(null)
@@ -80,13 +83,14 @@ export default function WageAveragePage() {
     setLoading(true)
     try {
       const q = new URLSearchParams({ org, monthly: monthly === 'in' ? '1' : '0' })
+      if (cmpIdx === -1 && pairFrom && pairTo) { q.set('from', pairFrom); q.set('to', pairTo) }
       const r = await fetchWithAuth(`/api/wage-average?${q}`, { password })
       const j = await r.json().catch(() => null)
       if (!r.ok) { notify.failed('読み込み', j?.error || 'サーバが受け付けませんでした'); return }
       setView(j as AvgWageView)
-      setCmpIdx(0)
     } catch (e) { notify.failed('読み込み', e) } finally { setLoading(false) }
-  }, [password, org, monthly])
+    // 2つの月を自分で選んでいるときだけ、選び直しで読み直す
+  }, [password, org, monthly, cmpIdx === -1 ? pairFrom : '', cmpIdx === -1 ? pairTo : ''])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) load() }, [ready, load])
 
   const points = useMemo(() => view?.points ?? [], [view])
@@ -103,10 +107,18 @@ export default function WageAveragePage() {
   const targetPoint = points.find(p => p.ym === tYm)
   const targetOf = (g: Group) => targetPoint?.[g].avg ?? null
   const yearAgo = latest ? points.find(p => p.ym === `${Number(latest.ym.slice(0, 4)) - 1}${latest.ym.slice(4)}`) : undefined
-  const cmp = view?.comparisons[cmpIdx] ?? null
+  const cmp = cmpIdx === -1 ? (view?.custom ?? null) : (view?.comparisons[cmpIdx] ?? view?.comparisons[0] ?? null)
+  // 2つの月を選ぶ: 初めて選ぶときは、最新の点とその1つ前（例: 2026年9月 → 10月で10月の改定だけを見る）
+  const startPair = () => {
+    if (!pairFrom || !pairTo) {
+      setPairFrom(points[points.length - 2]?.ym ?? '')
+      setPairTo(points[points.length - 1]?.ym ?? '')
+    }
+    setCmpIdx(-1)
+  }
   const dec = cmp ? cmp[group] : null
 
-  // ③ 平均を保つのに必要な採用
+  // ④ 平均を保つのに必要な採用
   const nowStat = latest?.[group]
   const tDefault = Math.round(targetOf(group) ?? nowStat?.avg ?? 0)
   const raiseDefault = Math.round(dec?.raisePerStayer ?? 0)
@@ -179,11 +191,29 @@ export default function WageAveragePage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Segment value={group} onChange={g => { setGroup(g); resetInputs() }} items={[['all', '全体'], ['jp', '日本人'], ['foreign', '外国人']]} />
-            {view && view.comparisons.length > 1 && (
-              <select value={cmpIdx} onChange={e => { setCmpIdx(Number(e.target.value)); resetInputs() }}
+            {view && points.length > 1 && (
+              <select value={cmpIdx} onChange={e => { const v = Number(e.target.value); if (v === -1) startPair(); else setCmpIdx(v); resetInputs() }}
+                aria-label="比べる2つの点"
                 className="h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 text-sm text-gray-900 dark:text-gray-100">
                 {view.comparisons.map((c, i) => <option key={c.from + c.to} value={i}>{cmpLabel(c.from)} → {cmpLabel(c.to)}</option>)}
+                <option value={-1}>月を選んで比べる…</option>
               </select>
+            )}
+            {cmpIdx === -1 && (
+              <span className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
+                <select value={pairFrom} onChange={e => { setPairFrom(e.target.value); if (pairTo && e.target.value >= pairTo) setPairTo(''); resetInputs() }}
+                  aria-label="比べる前の月"
+                  className="h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 text-sm text-gray-900 dark:text-gray-100">
+                  {points.slice(0, -1).map(p => <option key={p.ym} value={p.ym}>{cmpLabel(p.ym)}</option>)}
+                </select>
+                →
+                <select value={pairTo} onChange={e => { setPairTo(e.target.value); resetInputs() }}
+                  aria-label="比べる後の月"
+                  className="h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 text-sm text-gray-900 dark:text-gray-100">
+                  {!pairTo && <option value="">選んでください</option>}
+                  {points.filter(p => p.ym > pairFrom).map(p => <option key={p.ym} value={p.ym}>{cmpLabel(p.ym)}</option>)}
+                </select>
+              </span>
             )}
           </div>
         }>
@@ -213,7 +243,31 @@ export default function WageAveragePage() {
         )}
       </Section>
 
-      <Section title={`③ 平均を保つのに必要な採用（${GROUP_LABEL[group]}）`}
+      <Section title="③ 月ごとの昇給"
+        sub="隣り合う点のあいだに、続けている人の日給がいくら上がったか（合計・円／日）。日本人は毎年10月にまとまって、外国人は契約更新や在留資格の移行の月に上がります。薄い色の棒は給料解説書の1年分です。2026年11月までは人員マスタの「1つ前の単価」から組み立てているので、その間に2回以上上がった人は古いほうが見えません。">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-hibi-sub dark:text-gray-400 mb-1">
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500" />日本人</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-300" />日本人（資料・1年分）</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600" />外国人</span>
+        </div>
+        <RaiseChart raises={view?.raises ?? []} />
+        {(() => {
+          const list = [...(view?.raises ?? [])].reverse().filter(r => (r.jp?.raised ?? 0) + (r.foreign?.raised ?? 0) > 0)
+          return list.length > 0 && (
+            <ul className="mt-3 divide-y divide-hibi-line dark:divide-gray-700 text-xs text-gray-700 dark:text-gray-300 tabular-nums">
+              {list.map(r => (
+                <li key={r.from + r.to} className="py-2 grid md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+                  <span className="font-bold text-gray-900 dark:text-gray-100">{ymLabel(r.to)}{r.months > 1 && <span className="font-normal text-hibi-sub">（{ymLabel(r.from)}から1年分）</span>}</span>
+                  <RaiseLine label="日本人" s={r.jp} />
+                  <RaiseLine label="外国人" s={r.foreign} />
+                </li>
+              ))}
+            </ul>
+          )
+        })()}
+      </Section>
+
+      <Section title={`④ 平均を保つのに必要な採用（${GROUP_LABEL[group]}）`}
         sub="今の人全員に「1人あたりの昇給」が乗ったあと、目標の平均に戻すには、入社時の日給で何人採ればよいか。辞める人は入れていません。初期値は②の昇給と入った人の平均です。">
         {nowStat && nowStat.avg !== null ? (
           <div className="space-y-4">

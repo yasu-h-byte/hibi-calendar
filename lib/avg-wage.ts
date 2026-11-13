@@ -320,15 +320,56 @@ export interface AvgWageComparison {
   foreign: Decomposition
 }
 
+/** ある区分の、ある期間に上がった分（続けている人だけ） */
+export interface RaiseStat {
+  /** 両方の点にいる人 */
+  stayers: number
+  /** 単価が上がった人 */
+  raised: number
+  /** 上がった額の合計（円／日） */
+  total: number
+  /** 単価が下がった人（直し・契約の変更など。合計には入れない） */
+  lowered: number
+}
+
+/** 隣り合う2つの点のあいだの昇給（月ごと。資料の年は1年分） */
+export interface RaisePeriod {
+  from: string
+  to: string
+  /** 2つの点のあいだの月数（毎月の記録は1、資料の年は12） */
+  months: number
+  jp: RaiseStat | null
+  foreign: RaiseStat | null
+}
+
+/** 2つの点のあいだで、続けている人の単価がいくら上がったか */
+export function raiseBetween(from: WageRatePerson[], to: WageRatePerson[]): RaiseStat {
+  const before = new Map(from.map(p => [p.id, p.daily]))
+  let stayers = 0, raised = 0, total = 0, lowered = 0
+  for (const p of to) {
+    const b = before.get(p.id)
+    if (b === undefined) continue
+    stayers++
+    if (p.daily > b) { raised++; total += p.daily - b } else if (p.daily < b) lowered++
+  }
+  return { stayers, raised, total, lowered }
+}
+
+const ymIndex = (ym: string) => Number(ym.slice(0, 4)) * 12 + Number(ym.slice(4, 6)) - 1
+
 /** 画面へ渡す形（平均・人数・内訳だけ。1人ずつの単価は入れない） */
 export interface AvgWageView {
   filter: AvgFilter
   points: AvgWagePoint[]
   /** 1年前の点がある月ごとの比較（新しい順）。1年前が無いうちは「最初の点 → 最新の点」を1つ */
   comparisons: AvgWageComparison[]
+  /** 画面で選んだ2つの月の比較（選ばれていなければ null） */
+  custom: AvgWageComparison | null
+  /** 隣り合う点ごとの昇給（古い順） */
+  raises: RaisePeriod[]
 }
 
-export function buildAvgWageView(snaps: WageRateSnapshot[], filter: AvgFilter): AvgWageView {
+export function buildAvgWageView(snaps: WageRateSnapshot[], filter: AvgFilter, pair?: { from: string; to: string } | null): AvgWageView {
   const sorted = [...snaps].sort((a, b) => a.ym.localeCompare(b.ym))
   const byYm = new Map(sorted.map(s => [s.ym, s]))
   const pick = (s: WageRateSnapshot, g: 'all' | WageGroup) => s.people.filter(p => inScope(p, filter, g))
@@ -357,5 +398,15 @@ export function buildAvgWageView(snaps: WageRateSnapshot[], filter: AvgFilter): 
     if (prev) comparisons.push(compare(prev, s))
   }
   if (comparisons.length === 0 && sorted.length >= 2) comparisons.push(compare(sorted[0], sorted[sorted.length - 1]))
-  return { filter, points, comparisons }
+  const pa = pair ? byYm.get(pair.from) : undefined, pb = pair ? byYm.get(pair.to) : undefined
+  const custom = pa && pb && pa.ym < pb.ym ? compare(pa, pb) : null
+  // 隣り合う点ごとの昇給。その区分が両方の点に入っているときだけ数える（資料の年は外国人が無い）
+  const has = (s: WageRateSnapshot, g: WageGroup) => !s.groups || s.groups.includes(g)
+  const raises: RaisePeriod[] = []
+  for (let i = 1; i < sorted.length; i++) {
+    const a = sorted[i - 1], b = sorted[i]
+    const stat = (g: WageGroup) => (has(a, g) && has(b, g) ? raiseBetween(pick(a, g), pick(b, g)) : null)
+    raises.push({ from: a.ym, to: b.ym, months: ymIndex(b.ym) - ymIndex(a.ym), jp: stat('jp'), foreign: stat('foreign') })
+  }
+  return { filter, points, comparisons, custom, raises }
 }

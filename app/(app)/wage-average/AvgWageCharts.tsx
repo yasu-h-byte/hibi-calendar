@@ -4,7 +4,7 @@
  * Tailwind のクラスは完全な文字列で書く（組み立てると CSS が生成されない・CLAUDE.md）。
  */
 import { useState } from 'react'
-import type { AvgWagePoint, Decomposition } from '@/lib/avg-wage'
+import type { AvgWagePoint, Decomposition, RaisePeriod } from '@/lib/avg-wage'
 
 export const yenRound = (v: number) => `${Math.round(v).toLocaleString()}円`
 export const signedYen = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v)).toLocaleString()}円`
@@ -171,5 +171,77 @@ export function WaterfallChart({ d, fromLabel, toLabel }: { d: Decomposition; fr
         )
       })}
     </svg>
+  )
+}
+
+/**
+ * ③ 月ごとの昇給: 隣り合う点のあいだに、続けている人の日給がいくら上がったか（合計・円／日）を、日本人と外国人で積み上げる。
+ * 資料の年（12か月ぶん）は1年分の合計なので、薄い色で区別する。
+ */
+export function RaiseChart({ raises }: { raises: RaisePeriod[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const rows = raises.filter(r => (r.jp?.total ?? 0) + (r.foreign?.total ?? 0) > 0 || r.months === 1)
+  if (rows.length === 0) return <p className="text-sm text-hibi-sub dark:text-gray-400 py-8 text-center">まだ比べられる点がありません</p>
+  const W = 720, H = 220, L = 56, R = 12, T = 18, B = 30
+  const mi = rows.map(r => Number(r.to.slice(0, 4)) * 12 + Number(r.to.slice(4, 6)) - 1)
+  const m0 = mi[0], mSpan = Math.max(1, mi[mi.length - 1] - m0)
+  const x = (i: number) => L + 10 + (rows.length <= 1 ? (W - L - R - 20) / 2 : ((mi[i] - m0) * (W - L - R - 20)) / mSpan)
+  const tot = (r: RaisePeriod) => (r.jp?.total ?? 0) + (r.foreign?.total ?? 0)
+  const max = Math.max(1, ...rows.map(tot))
+  const step = niceStep(max, 4)
+  const hi = Math.ceil(max / step) * step
+  const y = (v: number) => T + ((hi - v) * (H - T - B)) / hi
+  const ticks: number[] = []
+  for (let v = 0; v <= hi + 1e-6; v += step) ticks.push(v)
+  // 棒の幅: 隣の点との間隔のいちばん狭いところに合わせる（毎月の点が詰まって重ならないように）
+  let gap = Infinity
+  for (let i = 1; i < rows.length; i++) gap = Math.min(gap, x(i) - x(i - 1))
+  const bw = Math.max(3, Math.min(22, (Number.isFinite(gap) ? gap : 40) * 0.7))
+  const labelIdx = new Set<number>()
+  let prevX = Infinity
+  for (let i = rows.length - 1; i >= 0; i--) if (prevX - x(i) >= 44) { labelIdx.add(i); prevX = x(i) }
+  const h = hover !== null ? rows[hover] : null
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="期間ごとの昇給の合計（日本人・外国人）" onMouseLeave={() => setHover(null)}>
+        {ticks.map(v => (
+          <g key={v}>
+            <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className="stroke-gray-200 dark:stroke-gray-700" strokeWidth={1} />
+            <text x={L - 6} y={y(v) + 4} textAnchor="end" className="fill-gray-500 dark:fill-gray-400 text-2xs">{v.toLocaleString()}</text>
+          </g>
+        ))}
+        {rows.map((r, i) => {
+          const jp = r.jp?.total ?? 0, fo = r.foreign?.total ?? 0
+          const yearly = r.months > 1
+          return (
+            <g key={r.from + r.to} onMouseEnter={() => setHover(i)}>
+              <rect x={x(i) - Math.max(bw, 10) / 2} y={T} width={Math.max(bw, 10)} height={H - T - B} fill="transparent" />
+              {jp > 0 && <rect x={x(i) - bw / 2} y={y(jp)} width={bw} height={Math.max(1, y(0) - y(jp))} rx={2}
+                className={yearly ? 'fill-orange-300 dark:fill-orange-700' : 'fill-orange-500'} />}
+              {fo > 0 && <rect x={x(i) - bw / 2} y={y(jp + fo)} width={bw} height={Math.max(1, y(jp) - y(jp + fo))} rx={2}
+                className="fill-emerald-600 dark:fill-emerald-500" />}
+              {labelIdx.has(i) && <text x={x(i)} y={H - 10} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400 text-2xs">{ymShort(r.to)}</text>}
+            </g>
+          )
+        })}
+      </svg>
+      {h && (
+        <div className="absolute top-1 right-2 rounded-lg border border-hibi-line dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 px-3 py-2 text-xs text-gray-800 dark:text-gray-200 tabular-nums pointer-events-none">
+          <div className="font-bold mb-1">{ymLabel(h.from)} → {ymLabel(h.to)}{h.months > 1 && <span className="ml-1 font-normal text-hibi-sub">（{h.months}か月分）</span>}</div>
+          <RaiseLine label="日本人" s={h.jp} />
+          <RaiseLine label="外国人" s={h.foreign} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function RaiseLine({ label, s }: { label: string; s: RaisePeriod['jp'] }) {
+  if (!s) return <div>{label} <span className="text-hibi-sub dark:text-gray-400">資料なし</span></div>
+  if (s.raised === 0) return <div>{label} 昇給なし<span className="text-hibi-sub dark:text-gray-400">（{s.stayers}人）</span></div>
+  return (
+    <div>{label} {s.raised}人・合計 +{Math.round(s.total).toLocaleString()}円／日
+      <span className="text-hibi-sub dark:text-gray-400">（1人あたり +{Math.round(s.total / s.raised).toLocaleString()}円）</span>
+    </div>
   )
 }

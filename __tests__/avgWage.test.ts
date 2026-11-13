@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import {
   personOnDate, buildPeople, inScope, statOf, decomposeAverage, requiredHires,
-  shiftYm, ymRange, buildAvgWageView, documentPerson, mergeDocumentPoint, DEFAULT_AVG_FILTER, type WageRatePerson,
+  shiftYm, ymRange, buildAvgWageView, documentPerson, mergeDocumentPoint, raiseBetween, DEFAULT_AVG_FILTER, type WageRatePerson,
 } from '@/lib/avg-wage'
 
 // 数字はすべて架空（実在の人の単価は書かない）
@@ -160,5 +160,32 @@ describe('平均日給: 資料（給料解説書）の点', () => {
     const cron = snap('202510', [P(2, 20800)], 'cron')
     expect(mergeDocumentPoint(cron, snap('202510', [documentPerson([2, 1])], 'document', ['jp']))).toBe(cron)
     expect(mergeDocumentPoint(undefined, cron)).toBe(cron)
+  })
+})
+
+describe('平均日給: 月ごとの昇給と自由な比較', () => {
+  const snap = (ym: string, people: WageRatePerson[], source: 'cron' | 'restored' | 'document' = 'restored', groups?: ('jp' | 'foreign')[]) =>
+    ({ ym, asOf: '', source, takenAt: '', people, groups })
+  test('raiseBetween は続けている人の上がった分だけを数える（下がった人は別に数える）', () => {
+    const r = raiseBetween([P(1, 100), P(2, 200), P(3, 300), P(4, 400)], [P(1, 150), P(2, 200), P(3, 290), P(5, 999)])
+    expect(r).toEqual({ stayers: 3, raised: 1, total: 50, lowered: 1 })
+  })
+  test('隣り合う点ごと・資料の年は12か月・外国人が無い点では外国人を出さない', () => {
+    const v = buildAvgWageView([
+      snap('202410', [documentPerson([2, 20000])], 'document', ['jp']),
+      snap('202510', [P(2, 20500), P(101, 10000, 'foreign')]),
+      snap('202511', [P(2, 20500), P(101, 10700, 'foreign')]),
+    ], DEFAULT_AVG_FILTER)
+    expect(v.raises).toHaveLength(2)
+    expect(v.raises[0]).toMatchObject({ from: '202410', to: '202510', months: 12, foreign: null })
+    expect(v.raises[0].jp).toMatchObject({ raised: 1, total: 500 })
+    expect(v.raises[1]).toMatchObject({ months: 1, jp: { raised: 0, total: 0 }, foreign: { raised: 1, total: 700 } })
+  })
+  test('選んだ2つの月を比べる（無い月・逆順は null）', () => {
+    const snaps = [snap('202609', [P(2, 20000)]), snap('202610', [P(2, 21000)]), snap('202611', [P(2, 21000)])]
+    expect(buildAvgWageView(snaps, DEFAULT_AVG_FILTER, { from: '202609', to: '202610' }).custom?.jp.raiseEffect).toBe(1000)
+    expect(buildAvgWageView(snaps, DEFAULT_AVG_FILTER, { from: '202610', to: '202609' }).custom).toBeNull()
+    expect(buildAvgWageView(snaps, DEFAULT_AVG_FILTER, { from: '201001', to: '202610' }).custom).toBeNull()
+    expect(buildAvgWageView(snaps, DEFAULT_AVG_FILTER).custom).toBeNull()
   })
 })
