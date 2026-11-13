@@ -20,6 +20,7 @@ export const BACKUP_COLLECTIONS: readonly { coll: string; prefix: string; note: 
   { coll: 'payrollSnapshots', prefix: 'paysnap', note: '締めスナップショット（給与確定の証跡）' },
   { coll: 'jpWageRevisions', prefix: 'jprev', note: '号俸制の年次改定（評語・凍結給料表）' },
   { coll: 'jpWageHistory', prefix: 'jphist', note: 'ベース年収履歴' },
+  { coll: 'wageRateSnapshots', prefix: 'wagerate', note: '平均日給の記録（毎月1日時点の全員の日給）' },
   { coll: 'jpBonuses', prefix: 'jpbonus', note: '賞与支給記録' },
   { coll: 'jpPromotions', prefix: 'jpprom', note: '昇格履歴' },
   { coll: 'jpTransfers', prefix: 'jptrans', note: '新卒の月給 → 日給月給への移行の記録（2026-11-11）' },

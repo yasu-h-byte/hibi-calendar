@@ -28,6 +28,7 @@ export const PAGE_CAPS: { path: string; caps: Capability[] | null }[] = [
   { path: '/tool-budget', caps: ['toolBudget.view'] },
   { path: '/compensation', caps: ['wage.view'] },
   { path: '/wage-analysis', caps: ['wageAnalysis.view'] },
+  { path: '/wage-average', caps: ['pay.view'] },
   { path: '/wage', caps: ['wage.view'] },
   // 職長は「評価入力」タブだけ（他のタブは画面と API が別に止める）
   { path: '/evaluation', caps: ['evaluation.input', 'wage.view'] },

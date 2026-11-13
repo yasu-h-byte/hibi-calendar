@@ -31,6 +31,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/integration.md](docs/integration.md) | 経営コックピットとの連携（読むだけの窓口・合言葉・税抜の約束） |
 | [docs/manual-invoice.md](docs/manual-invoice.md) | （アーカイブ・2026-09-26）請求書の発行マニュアル。森田さんマニュアル・政仁さんマニュアルへ統合済み |
 | [docs/roles-auth.md](docs/roles-auth.md) | 役割・認証・権限（**権限の唯一の決まりは lib/permissions.ts**。職長の通行証） |
+| [docs/avg-wage.md](docs/avg-wage.md) | 平均日給の推移（2026-11-14・/wage-average・見られるのは給与の3人だけ）。基本単価を1日あたりにそろえ、日本人・外国人・全体の平均を毎月1日に記録。平均が動いた理由（辞めた人・昇給・入った人）と、平均を保つのに必要な採用人数 |
 | [docs/staff-docs.md](docs/staff-docs.md) | 書類庫（在留カード・雇用契約書の保管。Firebase Storage・署名つきURL・見られるのは代表/事業責任者/事務） |
 | `feedback`（Firestore）| **困ったこと・要望（2026-10-09・試験運用は森田さん・政仁さん・代表だけ）**。森田さんたちの書き込み。セッションの最初に未対応（status が open/doing・unreadForOwner）を Firebase MCP で確かめ、代表に伝える。返信の書き方は [docs/firestore.md](docs/firestore.md)「困ったこと・要望」 |
 | [docs/prime-invoice.md](docs/prime-invoice.md) | 一次（山岡建設工業）への請求書（2026-10-20）。大林組の控え PDF と山岡の控除計算書 PDF を入れると、85%・他社借受の切り出し・給与控除を計算して山岡フォーマットで印刷。/prime-invoice。承認ルートは 格納（森田）→ 確認1（政仁）→ 確認2（代表・invoice.issuePrime）。代表だけ「1回で発行」も可。出面との検算は前月21日〜当月20日。控除の給与額は pay.view の人だけ |

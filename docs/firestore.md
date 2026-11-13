@@ -252,6 +252,17 @@ workSchedule?: {
 | `issueOpen` | boolean | 「まちがいがある」の連絡が未対応（通知ベルはこれで絞って読む） |
 | `resolvedAt` / `resolvedBy` / `reply` | string | 事務所が対応済みにした日時・人・本人への返事（本人のスマホに出る） |
 
+### wageRateSnapshots/{YYYYMM}（2026-11-14）
+平均日給の記録。毎月1日時点の全員の基本単価を1日あたりにそろえたもの（決まりは [avg-wage.md](avg-wage.md)・`lib/avg-wage.ts`）。
+毎月1日の自動処理（`/api/wage-average/cron`）だけが書く。既にある月は書き換えない。**個人の単価なので給与と同じ扱い**（画面へは平均だけ）。
+
+| フィールド | 型 | 内容 |
+|---|---|---|
+| `ym` / `asOf` | string | 月（YYYYMM）と、何日時点か（YYYY-MM-01） |
+| `source` | `'cron'\|'restored'` | その月の1日に記録した／人員マスタの「1つ前の単価」からさかのぼって組み立てた（参考） |
+| `takenAt` | string | 記録した時刻（ISO） |
+| `people` | 配列 | `{id, group:'jp'\|'foreign', org:'hibi'\|'hfu', job, daily, basis:'daily'\|'hourly'\|'monthly'}` |
+
 ### evaluations/{workerId_evaluationDate}
 評価データ（複数評価者対応）。
 
