@@ -91,8 +91,14 @@ export default function WageAveragePage() {
 
   const points = useMemo(() => view?.points ?? [], [view])
   const latest = points[points.length - 1]
-  // 目標の初期値: 最初の10月の点（日本人の年次改定の時点）。無ければ最初の点
-  const defaultTargetYm = useMemo(() => points.find(p => p.ym.endsWith('10'))?.ym ?? points[0]?.ym ?? '', [points])
+  // 目標の初期値: 全体の平均が出る最初の10月の点（日本人の年次改定の時点）。無ければ全体の出る最初の点
+  //   資料の点（日本人だけ）は全体が出ないので選ばない
+  const defaultTargetYm = useMemo(() => {
+    const withAll = points.filter(p => p.all.avg !== null)
+    return withAll.find(p => p.ym.endsWith('10'))?.ym ?? withAll[0]?.ym ?? points[0]?.ym ?? ''
+  }, [points])
+  const sourceOf = useMemo(() => new Map(points.map(p => [p.ym, p.source])), [points])
+  const cmpLabel = (ym: string) => `${ymLabel(ym)}${sourceOf.get(ym) === 'document' ? '【資料から】' : ''}`
   const tYm = targetYm && points.some(p => p.ym === targetYm) ? targetYm : defaultTargetYm
   const targetPoint = points.find(p => p.ym === tYm)
   const targetOf = (g: Group) => targetPoint?.[g].avg ?? null
@@ -149,12 +155,12 @@ export default function WageAveragePage() {
         </div>
       )}
 
-      <Section title="① 平均日給の推移" sub="毎月1日時点。白抜きの点は、記録を始める前の月を人員マスタの「1つ前の単価」からさかのぼって出した参考値です。"
+      <Section title="① 平均日給の推移" sub="毎月1日時点。白抜きの点は、記録を始める前の月を人員マスタの「1つ前の単価」からさかのぼって出した参考値です。四角の点は給料解説書（毎年10月1日の確定日給）から取り込んだ日本人の点です。外国人の資料が無い年は、全体の平均を出していません。"
         actions={points.length > 0 && (
           <label className="flex items-center gap-2 text-xs text-hibi-sub dark:text-gray-400">目標にする月
             <select value={tYm} onChange={e => { setTargetYm(e.target.value); setTargetIn(null) }}
               className="h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 text-sm text-gray-900 dark:text-gray-100">
-              {points.map(p => <option key={p.ym} value={p.ym}>{ymLabel(p.ym)}</option>)}
+              {points.filter(p => p.all.avg !== null).map(p => <option key={p.ym} value={p.ym}>{ymLabel(p.ym)}</option>)}
             </select>
           </label>
         )}>
@@ -176,19 +182,23 @@ export default function WageAveragePage() {
             {view && view.comparisons.length > 1 && (
               <select value={cmpIdx} onChange={e => { setCmpIdx(Number(e.target.value)); resetInputs() }}
                 className="h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 text-sm text-gray-900 dark:text-gray-100">
-                {view.comparisons.map((c, i) => <option key={c.from + c.to} value={i}>{ymLabel(c.from)} → {ymLabel(c.to)}</option>)}
+                {view.comparisons.map((c, i) => <option key={c.from + c.to} value={i}>{cmpLabel(c.from)} → {cmpLabel(c.to)}</option>)}
               </select>
             )}
           </div>
         }>
-        {cmp && dec ? (
+        {cmp && dec && group === 'all' && dec.avgFrom === null && sourceOf.get(cmp.from) === 'document' ? (
+          <p className="text-sm text-hibi-sub dark:text-gray-400 py-6 text-center">
+            {ymLabel(cmp.from)}は外国人の資料が無いので、全体では比べられません。「日本人」を選んでください。
+          </p>
+        ) : cmp && dec ? (
           <>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-hibi-sub dark:text-gray-400 mb-1">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-gray-400" />平均</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500" />平均を上げた</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-sky-600" />平均を下げた</span>
             </div>
-            <WaterfallChart d={dec} fromLabel={ymLabel(cmp.from)} toLabel={ymLabel(cmp.to)} />
+            <WaterfallChart d={dec} fromLabel={cmpLabel(cmp.from).replace('【資料から】', '（資料）')} toLabel={cmpLabel(cmp.to).replace('【資料から】', '（資料）')} />
             <ul className="mt-2 grid md:grid-cols-3 gap-2 text-xs text-gray-700 dark:text-gray-300 tabular-nums">
               <li className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2">続けている人 {dec.stayers}人<br />
                 <span className="text-hibi-sub dark:text-gray-400">1人あたりの昇給 {dec.raisePerStayer != null ? signedYen(dec.raisePerStayer) : '—'}／日</span></li>

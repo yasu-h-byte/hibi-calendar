@@ -13,9 +13,10 @@ import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 import { getMainData } from '@/lib/compute.server'
 import { currentYmJst } from '@/lib/date-utils'
 import {
-  AVG_WAGE_RESTORE_FROM_YM, buildPeople, ymRange, ymToAsOf,
+  AVG_WAGE_RESTORE_FROM_YM, buildPeople, documentPerson, mergeDocumentPoint, ymRange, ymToAsOf,
   type RawWageWorker, type WageRateSnapshot,
 } from '@/lib/avg-wage'
+import { DOCUMENT_JP_POINTS } from '@/lib/avg-wage-documents.server'
 
 export const AVG_WAGE_COLLECTION = 'wageRateSnapshots'
 
@@ -28,6 +29,22 @@ function rawWorkers(main: unknown): RawWageWorker[] {
 export function snapshotFromMaster(main: unknown, ym: string, source: WageRateSnapshot['source']): WageRateSnapshot {
   const asOf = ymToAsOf(ym)
   return { ym, asOf, source, takenAt: new Date().toISOString(), people: buildPeople(rawWorkers(main), asOf) }
+}
+
+/**
+ * 手元の資料（給料解説書）から取り込んだ日本人の点（lib/avg-wage-documents.server.ts）。
+ * 職種は人員マスタの今の職種（役員・事務になった人は平均から外れる）。辞めた人（負の番号）は現場の人として数える
+ */
+export function documentSnapshots(main: unknown): WageRateSnapshot[] {
+  const jobById = new Map(rawWorkers(main).map(w => [w.id, w.job || '']))
+  return Object.entries(DOCUMENT_JP_POINTS).map(([ym, rows]) => ({
+    ym,
+    asOf: ymToAsOf(ym),
+    source: 'document' as const,
+    takenAt: '',
+    people: rows.map(r => documentPerson(r, jobById.get(r[0]) || 'tobi')),
+    groups: ['jp' as const],
+  }))
 }
 
 /** 保存してある記録を全部読む（1か月1件・小さいので全件でよい） */
@@ -51,6 +68,8 @@ export async function loadSnapshotsForView(): Promise<WageRateSnapshot[]> {
   for (const ym of ymRange(AVG_WAGE_RESTORE_FROM_YM, now)) {
     if (!stored.has(ym)) stored.set(ym, snapshotFromMaster(main, ym, ym === now ? 'cron' : 'restored'))
   }
+  // 資料の点を重ねる（その月の1日に残した記録があればそちらが正。restored とは日本人だけ資料に差し替える）
+  for (const doc of documentSnapshots(main)) stored.set(doc.ym, mergeDocumentPoint(stored.get(doc.ym), doc))
   return [...stored.values()].filter(s => s.ym <= now).sort((a, b) => a.ym.localeCompare(b.ym))
 }
 

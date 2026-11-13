@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import {
   personOnDate, buildPeople, inScope, statOf, decomposeAverage, requiredHires,
-  shiftYm, ymRange, buildAvgWageView, DEFAULT_AVG_FILTER, type WageRatePerson,
+  shiftYm, ymRange, buildAvgWageView, documentPerson, mergeDocumentPoint, DEFAULT_AVG_FILTER, type WageRatePerson,
 } from '@/lib/avg-wage'
 
 // 数字はすべて架空（実在の人の単価は書かない）
@@ -132,5 +132,33 @@ describe('平均日給: 画面へ渡す形', () => {
   test('1人ずつの単価は渡さない', () => {
     const v = buildAvgWageView([snap('202610', [P(1, 12345)])], DEFAULT_AVG_FILTER)
     expect(JSON.stringify(v)).not.toContain('"people"')
+  })
+})
+
+describe('平均日給: 資料（給料解説書）の点', () => {
+  const snap = (ym: string, people: WageRatePerson[], source: 'cron' | 'restored' | 'document' = 'restored', groups?: ('jp' | 'foreign')[]) =>
+    ({ ym, asOf: '', source, takenAt: '', people, groups })
+  test('日本人だけの点では全体を出さない（比べるときも）', () => {
+    const doc = snap('202410', [documentPerson([2, 20000]), documentPerson([-1, 15000])], 'document', ['jp'])
+    const cur = snap('202510', [P(2, 20500), P(101, 10000, 'foreign')])
+    const v = buildAvgWageView([doc, cur], DEFAULT_AVG_FILTER)
+    expect(v.points[0].all.avg).toBeNull()
+    expect(v.points[0].foreignShare).toBeNull()
+    expect(v.points[0].jp).toMatchObject({ n: 2, avg: 17500 })
+    expect(v.comparisons[0].all.avgFrom).toBeNull()
+    expect(v.comparisons[0].jp).toMatchObject({ stayers: 1, leavers: 1, joiners: 0, raisePerStayer: 500 })
+  })
+  test('restored と重なる月は日本人だけ資料に差し替え、外国人は残す', () => {
+    const restored = snap('202510', [P(2, 20800), P(9, 12000), P(101, 10000, 'foreign')])
+    const doc = snap('202510', [documentPerson([2, 20500])], 'document', ['jp'])
+    const m = mergeDocumentPoint(restored, doc)
+    expect(m.source).toBe('document')
+    expect(m.groups).toBeUndefined()
+    expect(m.people.map(p => [p.id, p.daily])).toEqual([[2, 20500], [101, 10000]])
+  })
+  test('その月の1日に残した記録（cron）は資料より正', () => {
+    const cron = snap('202510', [P(2, 20800)], 'cron')
+    expect(mergeDocumentPoint(cron, snap('202510', [documentPerson([2, 1])], 'document', ['jp']))).toBe(cron)
+    expect(mergeDocumentPoint(undefined, cron)).toBe(cron)
   })
 })

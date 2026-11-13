@@ -34,11 +34,24 @@ export function TrendChart({ points, target }: { points: AvgWagePoint[]; target:
   if (vals.length === 0) return <p className="text-sm text-hibi-sub dark:text-gray-400 py-8 text-center">まだ記録がありません</p>
   const step = niceStep(Math.max(...vals) - Math.min(...vals), 4)
   const lo = Math.floor(Math.min(...vals) / step) * step, hi = Math.ceil(Math.max(...vals) / step) * step + (Math.max(...vals) === Math.min(...vals) ? step : 0)
-  const x = (i: number) => L + (points.length <= 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (points.length - 1))
+  // 横軸は時間（年1回の資料の点と毎月の点が混ざるので、点の順番ではなく月で並べる）
+  const mi = points.map(p => Number(p.ym.slice(0, 4)) * 12 + Number(p.ym.slice(4, 6)) - 1)
+  const m0 = mi[0] ?? 0, mSpan = Math.max(1, (mi[mi.length - 1] ?? 0) - m0)
+  const x = (i: number) => L + (points.length <= 1 ? (W - L - R) / 2 : ((mi[i] - m0) * (W - L - R)) / mSpan)
+  // マウスを当てる幅: 隣の点との中間まで
+  const edge = (i: number, side: -1 | 1) => {
+    const j = i + side
+    return j < 0 || j >= points.length ? x(i) + side * 8 : (x(i) + x(j)) / 2
+  }
   const y = (v: number) => T + ((hi - v) * (H - T - B)) / Math.max(1, hi - lo)
   const ticks: number[] = []
   for (let v = lo; v <= hi + 1e-6; v += step) ticks.push(v)
-  const labelEvery = Math.max(1, Math.ceil(points.length / 12))
+  // 目盛りの文字: 右端（最新）から左へ、間が詰まりすぎない点だけ
+  const labelIdx = new Set<number>()
+  let prevX = Infinity
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (prevX - x(i) >= 44) { labelIdx.add(i); prevX = x(i) }
+  }
   return (
     <div className="relative">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img"
@@ -50,33 +63,35 @@ export function TrendChart({ points, target }: { points: AvgWagePoint[]; target:
             <text x={L - 6} y={y(v) + 4} textAnchor="end" className="fill-gray-500 dark:fill-gray-400 text-2xs">{v.toLocaleString()}</text>
           </g>
         ))}
-        {points.map((p, i) => (i % labelEvery === 0 || i === points.length - 1) && (
+        {points.map((p, i) => labelIdx.has(i) && (
           <text key={p.ym} x={x(i)} y={H - 10} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400 text-2xs">{ymShort(p.ym)}</text>
         ))}
         {target !== null && (
           <line x1={L} x2={W - R} y1={y(target)} y2={y(target)} className="stroke-gray-500 dark:stroke-gray-400" strokeWidth={1.5} strokeDasharray="5 4" />
         )}
         {SERIES.map(s => {
-          const pts = points.map((p, i) => ({ i, v: p[s.key].avg, restored: p.source === 'restored' })).filter(q => q.v !== null) as { i: number; v: number; restored: boolean }[]
+          const pts = points.map((p, i) => ({ i, v: p[s.key].avg, src: p.source })).filter(q => q.v !== null) as { i: number; v: number; src: AvgWagePoint['source'] }[]
           return (
             <g key={s.key}>
               <polyline fill="none" className={s.line} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
                 strokeDasharray={s.dash} points={pts.map(q => `${x(q.i)},${y(q.v)}`).join(' ')} />
-              {pts.map(q => q.restored
-                ? <circle key={q.i} cx={x(q.i)} cy={y(q.v)} r={3.5} className={`${s.line} fill-white dark:fill-gray-900`} strokeWidth={1.5} />
-                : <circle key={q.i} cx={x(q.i)} cy={y(q.v)} r={3.5} className={s.dot} />)}
+              {pts.map(q => q.src === 'document'
+                ? <rect key={q.i} x={x(q.i) - 3.5} y={y(q.v) - 3.5} width={7} height={7} className={`${s.line} fill-white dark:fill-gray-900`} strokeWidth={1.5} />
+                : q.src === 'restored'
+                  ? <circle key={q.i} cx={x(q.i)} cy={y(q.v)} r={3.5} className={`${s.line} fill-white dark:fill-gray-900`} strokeWidth={1.5} />
+                  : <circle key={q.i} cx={x(q.i)} cy={y(q.v)} r={3.5} className={s.dot} />)}
             </g>
           )
         })}
         {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={T} y2={H - B} className="stroke-gray-300 dark:stroke-gray-600" strokeWidth={1} />}
         {points.map((p, i) => (
-          <rect key={p.ym} x={x(i) - (W - L - R) / Math.max(2, points.length) / 2} y={T} height={H - T - B}
-            width={(W - L - R) / Math.max(2, points.length)} fill="transparent" onMouseEnter={() => setHover(i)} />
+          <rect key={p.ym} x={edge(i, -1)} y={T} height={H - T - B}
+            width={Math.max(1, edge(i, 1) - edge(i, -1))} fill="transparent" onMouseEnter={() => setHover(i)} />
         ))}
       </svg>
       {hover !== null && points[hover] && (
         <div className="absolute top-2 right-2 rounded-lg border border-hibi-line dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 px-3 py-2 text-xs text-gray-800 dark:text-gray-200 tabular-nums pointer-events-none">
-          <div className="font-bold mb-1">{ymLabel(points[hover].ym)}{points[hover].source === 'restored' && <span className="ml-1 font-normal text-hibi-sub">（参考）</span>}</div>
+          <div className="font-bold mb-1">{ymLabel(points[hover].ym)}{points[hover].source === 'restored' && <span className="ml-1 font-normal text-hibi-sub">（参考）</span>}{points[hover].source === 'document' && <span className="ml-1 font-normal text-hibi-sub">【資料から】</span>}</div>
           {SERIES.map(s => {
             const st = points[hover][s.key]
             return <div key={s.key}>{s.label} {st.avg !== null ? yenRound(st.avg) : '—'}<span className="text-hibi-sub dark:text-gray-400">（{st.n}人）</span></div>
@@ -95,6 +110,7 @@ export function TrendLegend({ showTarget }: { showTarget: boolean }) {
       <span className="flex items-center gap-1.5"><svg width="18" height="6" aria-hidden="true"><line x1="0" x2="18" y1="3" y2="3" className="stroke-emerald-600 dark:stroke-emerald-400" strokeWidth="2" strokeDasharray="2 3" /></svg>外国人</span>
       {showTarget && <span className="flex items-center gap-1.5"><svg width="18" height="6" aria-hidden="true"><line x1="0" x2="18" y1="3" y2="3" className="stroke-gray-500 dark:stroke-gray-400" strokeWidth="1.5" strokeDasharray="5 4" /></svg>目標</span>}
       <span className="flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3.5" className="stroke-gray-500 fill-white dark:fill-gray-900" strokeWidth="1.5" /></svg>白抜き＝人員マスタからさかのぼった点（参考）</span>
+      <span className="flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><rect x="1.5" y="1.5" width="7" height="7" className="stroke-gray-500 fill-white dark:fill-gray-900" strokeWidth="1.5" /></svg>四角＝【資料から】給料解説書の10月1日の確定日給（日本人だけ）</span>
     </div>
   )
 }

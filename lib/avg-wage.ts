@@ -59,10 +59,45 @@ export interface WageRateSnapshot {
   ym: string
   /** 何日時点の単価か 'YYYY-MM-01' */
   asOf: string
-  /** cron = その月の1日に記録 ／ restored = 人員マスタの prev* からさかのぼって組み立てた（参考） */
-  source: 'cron' | 'restored'
+  /**
+   * cron = その月の1日に記録 ／ restored = 人員マスタの prev* からさかのぼって組み立てた（参考）／
+   * document = 手元の資料（給料解説書）から取り込んだ（lib/avg-wage-documents.server.ts）
+   */
+  source: 'cron' | 'restored' | 'document'
   takenAt: string
   people: WageRatePerson[]
+  /**
+   * この記録に入っている区分。無ければ日本人・外国人の両方。
+   * 資料は日本人だけなので ['jp']。片方しか無い点では「全体」の平均を出さない（外国人が抜けて全体が高く見えるため）
+   */
+  groups?: WageGroup[]
+}
+
+/** その記録が日本人・外国人の両方を含むか（全体の平均を出してよいか） */
+export const coversAllGroups = (s: Pick<WageRateSnapshot, 'groups'>): boolean =>
+  !s.groups || (s.groups.includes('jp') && s.groups.includes('foreign'))
+
+/** 資料の1人（[人員マスタの id（辞めた人は負の番号）, 1日あたりの単価]）→ 記録の1人。資料は日本人・日比建設・現場の人だけ */
+export function documentPerson([id, daily]: readonly [number, number], job = 'tobi'): WageRatePerson {
+  return { id, group: 'jp', org: 'hibi', job, daily: Math.round(daily), basis: 'daily' }
+}
+
+/**
+ * 同じ月に資料の点と、その月の1日に残した記録以外（restored）があるとき、日本人は資料を正にする。
+ * 資料は確定した給料表で、restored は人員マスタの「1つ前の単価」（途中で直した額が入っていることがある）だから。
+ * 外国人は restored のまま。その月の1日に残した記録（cron）は資料より正なので、そのまま返す。
+ */
+export function mergeDocumentPoint(base: WageRateSnapshot | undefined, doc: WageRateSnapshot): WageRateSnapshot {
+  if (!base) return doc
+  if (base.source === 'cron') return base
+  const foreign = base.people.filter(p => p.group === 'foreign')
+  const hasForeign = !base.groups || base.groups.includes('foreign')
+  return {
+    ...base,
+    source: 'document',
+    people: [...doc.people, ...foreign].sort((a, b) => a.id - b.id),
+    groups: hasForeign ? undefined : ['jp'],
+  }
 }
 
 export interface AvgFilter {
@@ -297,8 +332,10 @@ export function buildAvgWageView(snaps: WageRateSnapshot[], filter: AvgFilter): 
   const sorted = [...snaps].sort((a, b) => a.ym.localeCompare(b.ym))
   const byYm = new Map(sorted.map(s => [s.ym, s]))
   const pick = (s: WageRateSnapshot, g: 'all' | WageGroup) => s.people.filter(p => inScope(p, filter, g))
+  // 日本人・外国人の片方しか無い点では「全体」を空にする（比べるときも同じ）
+  const pickAll = (s: WageRateSnapshot) => (coversAllGroups(s) ? pick(s, 'all') : [])
   const points: AvgWagePoint[] = sorted.map(s => {
-    const all = pick(s, 'all')
+    const all = pickAll(s)
     return {
       ym: s.ym,
       source: s.source,
@@ -310,7 +347,7 @@ export function buildAvgWageView(snaps: WageRateSnapshot[], filter: AvgFilter): 
   })
   const compare = (a: WageRateSnapshot, b: WageRateSnapshot): AvgWageComparison => ({
     from: a.ym, to: b.ym,
-    all: decomposeAverage(pick(a, 'all'), pick(b, 'all')),
+    all: decomposeAverage(pickAll(a), pickAll(b)),
     jp: decomposeAverage(pick(a, 'jp'), pick(b, 'jp')),
     foreign: decomposeAverage(pick(a, 'foreign'), pick(b, 'foreign')),
   })
