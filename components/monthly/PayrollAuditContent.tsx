@@ -18,6 +18,7 @@ import { JP_SALARY_AVG_MONTHLY_HOURS, JP_AVG_MONTHLY_WORK_DAYS } from '@/lib/con
 // 型・区分判定・監査チェックは lib/payroll-validator.ts へ移した（2026-10-02 総合点検）。
 //   理由: .tsx に置くとテストから読めず（tsconfig の jsx: preserve）、監査チェックの誤検知（10月の全社所定27日で
 //   日本人・旧ルールが全員 ❌ になった件）が機械的に防げなかった。画面側は再輸出だけ残す
+import { longLeaveDuring } from '@/lib/long-leave'
 import {
   getEmploymentMode, calcLegalMonthlyLimit, fmtNum, fmtH, buildAuditChecks,
   type PayrollAuditWorker, type AuditCheck,
@@ -231,7 +232,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 </td>
               </tr>
             )}
-            {(w.hkDays || 0) > 0 && <tr><td>帰国中</td><td className="font-mono">{w.hkDays}日<span className="text-3xs text-gray-500 ml-1">（在籍日数から除外・無給・欠勤に数えない。基本給・所定日数を暦日比で日割り）</span></td></tr>}
+            {(w.hkDays || 0) > 0 && <tr><td>{longLeaveDuring(w.hkKind || 'kikoku')}</td><td className="font-mono">{w.hkDays}日<span className="text-3xs text-gray-500 ml-1">（在籍日数から除外・無給・欠勤に数えない。基本給・所定日数を暦日比で日割り）</span></td></tr>}
             {(w.siteOffDays || 0) > 0 && <tr><td>現場休</td><td className="font-mono">{w.siteOffDays}日</td></tr>}
             {(w.legalHolidayHours || 0) > 0 && <tr><td>法定休日労働</td><td className="font-mono">{fmtNum(w.legalHolidayHours, 'h')}</td></tr>}
             {(w.nightHours || 0) > 0 && <tr><td>深夜労働</td><td className="font-mono">{fmtNum(w.nightHours, 'h')}</td></tr>}

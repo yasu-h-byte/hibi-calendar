@@ -7,6 +7,7 @@ import { siteLeaderLabel } from '@/lib/companies'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { isBreakCheckResponse, confirmBreakCheck } from '@/lib/break-check-confirm'
 import { notify } from '@/lib/notify'
+import { hkDuringLabel } from '@/lib/long-leave'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { todayJstIso } from '@/lib/date-utils'
 import DriverModal from '@/app/(app)/attendance/components/DriverModal'
@@ -811,7 +812,7 @@ export default function ForemanAttendancePage() {
                 const statusText = m.entry.p ? '🌴 有給'
                   : m.entry.r ? '🏠 休み'
                   : m.entry.h ? '🚧 現場休み'
-                  : m.entry.hk ? '✈️ 帰国中'
+                  : m.entry.hk ? hkDuringLabel(m.entry.hk)
                   : m.entry.exam ? '📝 試験'
                   : m.entry.w ? (m.entry.o && m.entry.o > 0 ? `⏰ 出勤 +${m.entry.o}h` : '🔨 出勤')
                   : '❓ 不明'

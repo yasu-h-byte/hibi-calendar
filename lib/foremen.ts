@@ -74,3 +74,34 @@ export function isProxyApprovalSite(
 ): boolean {
   return approvingForemenOfSite(site, mforeman, ym, workers).length === 0
 }
+
+/**
+ * その日に職長承認できる職長（長い休み＝帰国・育休などの人を除く・2026-11-14 代表）。
+ *
+ * 白戸職長の育休（2026-12-07〜12-19・12-26〜2027-02-16）で、休みの日の職長承認が止まらないよう、
+ * 承認できる職長が全員休みの日は、政仁さん（事業責任者）が代わりに承認する（{@link isProxyApprovalDay}）。
+ * 職長が出ている日は今までどおり職長が承認する。休みの記録は homeLongLeave（最終承認済み）。
+ */
+export function approvingForemenOnDay(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+  workers: { id: number; jobType?: string; job?: string }[],
+  dateIso: string,
+  leaves: { workerId: number; startDate: string; endDate: string }[],
+): number[] {
+  return approvingForemenOfSite(site, mforeman, ym, workers)
+    .filter(id => !leaves.some(l => l.workerId === id && dateIso >= l.startDate && dateIso <= l.endDate))
+}
+
+/** その日の職長承認を政仁さんが代わりに行うか（承認できる職長がいない現場、または職長が全員休みの日） */
+export function isProxyApprovalDay(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+  workers: { id: number; jobType?: string; job?: string }[],
+  dateIso: string,
+  leaves: { workerId: number; startDate: string; endDate: string }[],
+): boolean {
+  return approvingForemenOnDay(site, mforeman, ym, workers, dateIso, leaves).length === 0
+}

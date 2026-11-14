@@ -5,6 +5,7 @@ import { orgKeyOf } from '@/lib/locks'
 import { fmtYen as yen } from '@/lib/format'
 import { Chip, AmountChip, type ChipTone } from '@/components/ui/PageParts'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './StaffConfirmBadge'
+import { longLeaveDuring } from '@/lib/long-leave'
 
 // 月次集計・締めの「見やすい一覧」と「締めの準備カード」（2026-10-01 代表依頼・見本キャンバス5段目）
 //
@@ -57,6 +58,8 @@ export interface OverviewWorker {
   isDispatched?: boolean
   dispatchTo?: string
   hkDays?: number
+  /** 長い休みの種類（育休など・2026-11-14） */
+  hkKind?: import('@/lib/long-leave').LongLeaveKind
   hkEarlyReturnDays?: number
   legalShortfall?: number
   sundayNoRestDays?: number[]
@@ -291,7 +294,7 @@ function badgesOf(w: OverviewWorker, auditIds: Set<number>): { text: string; ton
   if ((w.restMismatchDays?.length || 0) > 0) b.push({ text: `休みの区別？ ${w.restMismatchDays!.join('・')}日`, tone: 'amber' })
   if ((w.sundayNoRestDays?.length || 0) > 0) b.push({ text: `休みなし週の日曜 ${w.sundayNoRestDays!.join('・')}日`, tone: 'amber' })
   if ((w.hkEarlyReturnDays || 0) > 0) b.push({ text: `早期復帰 ${w.hkEarlyReturnDays}日`, tone: 'amber' })
-  if ((w.hkDays || 0) > 0) b.push({ text: `帰国中 ${w.hkDays}日`, tone: 'cyan' })
+  if ((w.hkDays || 0) > 0) b.push({ text: `${longLeaveDuring(w.hkKind || 'kikoku')} ${w.hkDays}日`, tone: 'cyan' })
   if (w.isDispatched) b.push({ text: '出向中', tone: 'blue', title: w.dispatchTo ? `出向先: ${w.dispatchTo}` : undefined })
   if (w.useOldRules && w.visa !== 'none') b.push({ text: '旧ルール', tone: 'gray' })
   return b

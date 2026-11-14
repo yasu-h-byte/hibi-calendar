@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/ui/Icon'
+import { hkCodeOf, hkShortLabel } from '@/lib/long-leave'
 import Link from 'next/link'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { siteLeaderLabel } from '@/lib/companies'
@@ -531,11 +532,12 @@ export default function AttendanceGrid({
                         )
                         if (!entry?.hk && !hasExplicitStatus && data.homeLeaves?.length) {
                           const dateStr = `${data.year}-${String(data.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
-                          const isOnLeave = data.homeLeaves.some(hl =>
+                          const onLeave = data.homeLeaves.find(hl =>
                             String(hl.workerId) === wId && hl.status === 'approved' && dateStr >= hl.startDate && dateStr <= hl.endDate
                           )
-                          if (isOnLeave) {
-                            entry = { ...(entry || { w: 0 }), hk: 1 }
+                          if (onLeave) {
+                            // hk の値は休みの種類（2026-11-14・lib/long-leave.ts）
+                            entry = { ...(entry || { w: 0 }), hk: hkCodeOf(onLeave.kind || 'kikoku') }
                           }
                         }
                         // 休日出勤判定: カレンダーがoff/holidayなのに出勤あり
@@ -550,7 +552,7 @@ export default function AttendanceGrid({
                         if (isWorkerTimeBased) {
                           // 帰国中: 特別表示
                           if (getTimeStatusValue(entry) === 'HK') {
-                            return <HomeLeaveCell key={d.day} colBg={colBg} cellWidth={cellWidth} />
+                            return <HomeLeaveCell key={d.day} colBg={colBg} cellWidth={cellWidth} label={hkShortLabel(entry?.hk)} />
                           }
                           // ベトナム人スタッフのスマホ入力待ち: admin/foreman は触れない (2026-05-08)
                           // entry が無い場合はスタッフ本人のスマホからの入力を待つ
@@ -607,7 +609,7 @@ export default function AttendanceGrid({
                         // ── レガシーモード（日本人 or 〜202604 or 旧契約継続者） ──
                         // 帰国中: 特別表示
                         if (getWorkValue(entry) === 'HK') {
-                          return <HomeLeaveCell key={d.day} colBg={colBg} cellWidth={cellWidth} />
+                          return <HomeLeaveCell key={d.day} colBg={colBg} cellWidth={cellWidth} label={hkShortLabel(entry?.hk)} />
                         }
                         return (
                           <LegacyCell

@@ -25,6 +25,7 @@
  */
 
 import RestMismatchBanner from '../components/RestMismatchBanner'
+import { longLeaveDuring } from '@/lib/long-leave'
 import Link from 'next/link'
 import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth } from '@/lib/api-client'
@@ -90,7 +91,7 @@ interface GridData {
   finalApprovals: Record<number, unknown>
   calendarDays: Record<string, DayType> | null
   sites: { id: string; name: string; archived?: boolean }[]
-  homeLeaves: { workerId: number; startDate: string; endDate: string }[]
+  homeLeaves: { workerId: number; startDate: string; endDate: string; kind?: import('@/lib/long-leave').LongLeaveKind }[]
   /** 日 → 別の現場に入力がある人（配置に残っているが移動・掛け持ち。未入力に数えない・2026-10-02） */
   elsewhereByDay?: Record<number, number[]>
   /** 休みの区別の取り違えの疑い（lib/rest-mismatch.ts・2026-09-30） */
@@ -450,6 +451,11 @@ export default function ForemanMobilePage() {
   const isHomeLeave = useCallback((wid: number) => {
     return (data?.homeLeaves || []).some(hl =>
       hl.workerId === wid && hl.startDate <= dateIso && dateIso <= hl.endDate)
+  }, [data, dateIso])
+  /** 帰国中・育休中など（2026-11-14・lib/long-leave.ts） */
+  const leaveDuringLabel = useCallback((wid: number) => {
+    const hl = (data?.homeLeaves || []).find(x => x.workerId === wid && x.startDate <= dateIso && dateIso <= x.endDate)
+    return longLeaveDuring(hl?.kind || 'kikoku')
   }, [data, dateIso])
 
   const lockedFor = useCallback((w: GridWorker) => {
@@ -861,7 +867,7 @@ export default function ForemanMobilePage() {
                     return (
                       <div key={w.id} className="bg-white rounded-xl border border-gray-200 px-3 py-2.5 flex items-center justify-between">
                         <span className="font-bold text-sm">{w.name}</span>
-                        <span className="text-xs font-bold text-cyan-700 bg-cyan-50 px-2 py-1 rounded-md">帰国中</span>
+                        <span className="text-xs font-bold text-cyan-700 bg-cyan-50 px-2 py-1 rounded-md">{leaveDuringLabel(w.id)}</span>
                       </div>
                     )
                   }

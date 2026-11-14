@@ -1,5 +1,6 @@
 import { db } from './firebase'
 import { getDocs, collection, query, where } from '@/lib/fsdb'
+import { longLeaveKindOf, type LongLeaveKind } from './long-leave'
 
 /**
  * 帰国期間情報を取得（2026-05-13 単一ソース化）
@@ -20,6 +21,8 @@ export interface HomeLeaveEntry {
   workerId: number
   startDate: string  // YYYY-MM-DD
   endDate: string    // YYYY-MM-DD
+  /** 種類（帰国・育休など。2026-11-14〜。lib/long-leave.ts）。無いときは帰国 */
+  kind?: LongLeaveKind
 }
 
 /**
@@ -51,6 +54,7 @@ export async function getAllActiveHomeLeaves(): Promise<HomeLeaveEntry[]> {
         workerId: hl.workerId,
         startDate: hl.startDate,
         endDate: hl.endDate,
+        kind: longLeaveKindOf(hl),
       })
     })
   } catch { /* ignore */ }

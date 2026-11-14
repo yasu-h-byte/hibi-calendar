@@ -1,3 +1,4 @@
+import { longLeaveKindOf, type LongLeaveKind } from '@/lib/long-leave'
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, requireCap, approvingForemenOfSite, isProxyApprovalSite, actorLabel } from '@/lib/auth'
 import {
@@ -338,7 +339,7 @@ export async function GET(request: NextRequest) {
     const monthStart = `${String(y)}-${String(m).padStart(2, '0')}-01`
     const horizonDate = new Date(y, m - 1 + 6, daysInMonth)
     const horizonEnd = `${horizonDate.getFullYear()}-${String(horizonDate.getMonth() + 1).padStart(2, '0')}-${String(horizonDate.getDate()).padStart(2, '0')}`
-    const homeLeaves: { workerId: number; workerName: string; startDate: string; endDate: string; reason: string; status: string }[] = []
+    const homeLeaves: { workerId: number; workerName: string; startDate: string; endDate: string; reason: string; status: string; kind: LongLeaveKind }[] = []
 
     try {
       const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
@@ -357,6 +358,7 @@ export async function GET(request: NextRequest) {
           endDate: hl.endDate,
           reason: hl.reason || '一時帰国',
           status: hl.status,
+          kind: longLeaveKindOf(hl),
         })
       })
     } catch (e) {

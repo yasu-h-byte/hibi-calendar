@@ -6,6 +6,7 @@ import { logActivity } from '@/lib/activity'
 import { resolveWorkerName } from '@/lib/workers'
 import { getWorkers } from '@/lib/workers.server'
 import { HOME_LEAVE_SENTINEL_END } from '@/lib/homeLeave'
+import { isForeignOnlyKind, isLongLeaveKind, longLeaveKindOf, longLeaveLabel, type LongLeaveKind } from '@/lib/long-leave'
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -112,6 +113,8 @@ interface HomeLeaveRecord {
   startDate: string
   endDate: string
   reason: string
+  /** 種類（帰国・育休など・2026-11-14〜。lib/long-leave.ts） */
+  kind: LongLeaveKind
   note?: string
   createdAt: string
   status?: string
@@ -146,6 +149,7 @@ export async function GET(request: NextRequest) {
           startDate: v.startDate,
           endDate: v.endDate,
           reason: v.reason || '一時帰国',
+          kind: longLeaveKindOf(v),
           ...(v.note ? { note: v.note } : {}),
           ...(v.returnUndecided || v.endDate >= HOME_LEAVE_SENTINEL_END ? { returnUndecided: true } : {}),
           ...(Array.isArray(v.changeHistory) && v.changeHistory.length > 0 ? { changeHistory: v.changeHistory } : {}),
@@ -189,7 +193,14 @@ export async function POST(request: NextRequest) {
     // ── 管理者の手動追加 ──
     // 旧UI が action='create' を送ってきていた経緯があるので両方受け付ける
     if (action === 'add' || action === 'create') {
-      const { workerId, workerName, startDate, reason, note, returnUndecided } = body
+      const { workerId, workerName, startDate, note, returnUndecided } = body
+      // 2026-11-14: 種類（帰国・育休・産休・介護休業・休職）。送られないときは帰国（今までの画面・古いクライアント）
+      if (body.kind !== undefined && !isLongLeaveKind(body.kind)) {
+        return NextResponse.json({ error: '休みの種類が正しくありません' }, { status: 400 })
+      }
+      const kind: LongLeaveKind = isLongLeaveKind(body.kind) ? body.kind : 'kikoku'
+      // 帰国以外は理由＝種類の名前（帰国は「一時帰国・ビザ更新帰国・その他」から選ぶ）
+      const reason = kind === 'kikoku' ? body.reason : longLeaveLabel(kind)
       // 2026-07-18 追加: 「復帰未定（急な帰国）」対応。終了日に番兵値を入れて
       //   既存の文字列比較ロジック（endDate >= 月末 等）を壊さずに「開始日以降ずっと帰国中」を表現する。
       //   復帰時は update で実際の復帰日に置き換える。
@@ -206,10 +217,17 @@ export async function POST(request: NextRequest) {
       if (startDate >= endDate) {
         return NextResponse.json({ error: 'startDate must be before endDate' }, { status: 400 })
       }
+      // 帰国は外国人スタッフだけ（日本人の長い休みは育休・休職などの種類で登録する）
+      if (isForeignOnlyKind(kind)) {
+        const w = (await getWorkers()).find(x => x.id === Number(workerId))
+        if (w && (!w.visaType || w.visaType === 'none')) {
+          return NextResponse.json({ error: '帰国は外国人スタッフだけ登録できます。日本人の長い休みは「育児休業」「休職」などを選んでください' }, { status: 400 })
+        }
+      }
       const overlapAdd = await findOverlappingLeave(Number(workerId), startDate, endDate)
       if (overlapAdd) {
         return NextResponse.json({
-          error: `既存の帰国期間（${overlapAdd.startDate}〜${overlapAdd.endDate}・${overlapAdd.status}）と重なっています。既存の記録を編集してください`,
+          error: `既存の休みの期間（${overlapAdd.startDate}〜${overlapAdd.endDate}・${overlapAdd.status}）と重なっています。既存の記録を編集してください`,
         }, { status: 409 })
       }
       {
@@ -235,7 +253,7 @@ export async function POST(request: NextRequest) {
         if (conflicts.length > 0) {
           return NextResponse.json({
             error: 'WORKED_DAYS_IN_RANGE',
-            message: `帰国期間の中に出勤打刻のある日が ${conflicts.length}日 あります。終了日には「最終帰国日」を入れてください（復帰日ではありません）。`,
+            message: `休みの期間の中に出勤打刻のある日が ${conflicts.length}日 あります。終了日には「休みの最終日」を入れてください（復帰日ではありません）。`,
             conflicts,
             suggestedEndDate: prevDateIso(conflicts[0].date),
           }, { status: 409 })
@@ -248,6 +266,7 @@ export async function POST(request: NextRequest) {
         startDate,
         endDate,
         reason,
+        kind,
         ...(note ? { note } : {}),
         ...(returnUndecided ? { returnUndecided: true } : {}),
         status: 'approved',
@@ -258,17 +277,17 @@ export async function POST(request: NextRequest) {
       // 手動登録は status='approved' で作るのに、これまで出面へ何も書いていなかった。
       // 承認経路と同じ状態になるよう、ここでも必ず同期する。
       const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
-      const sync = await syncHomeLeaveAttendance(Number(workerId), null, { startDate, endDate }, { excludeDocId: id })
+      const sync = await syncHomeLeaveAttendance(Number(workerId), null, { startDate, endDate, kind }, { excludeDocId: id })
 
       const endLabel = returnUndecided ? '復帰未定' : endDate
-      await logActivity(actorLabel, 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
+      await logActivity(actorLabel, 'homeLeave.add', `${workerName} ${longLeaveLabel(kind)}登録 ${startDate}〜${endLabel}`)
 
       return NextResponse.json({ success: true, id, attendanceSync: sync })
     }
 
     // ── 更新 ──
     if (action === 'update') {
-      const { id, startDate, reason, note, returnUndecided } = body
+      const { id, startDate, note, returnUndecided } = body
       if (!id) {
         return NextResponse.json({ error: 'Missing id' }, { status: 400 })
       }
@@ -279,6 +298,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
       }
       const current = snap.data()
+      // 種類は登録のときに決める（変えるときは削除して登録し直す）。理由も帰国のときだけ選べる
+      const kind = longLeaveKindOf(current)
+      const reason = kind === 'kikoku' ? body.reason : undefined
 
       // 2026-07-18: endDate の決定。
       //   - returnUndecided===true  → 番兵値（復帰未定へ変更）
@@ -302,7 +324,7 @@ export async function POST(request: NextRequest) {
       const overlapUpd = await findOverlappingLeave(Number(current.workerId), newStart, newEnd, id)
       if (overlapUpd) {
         return NextResponse.json({
-          error: `別の帰国期間（${overlapUpd.startDate}〜${overlapUpd.endDate}・${overlapUpd.status}）と重なっています`,
+          error: `別の休みの期間（${overlapUpd.startDate}〜${overlapUpd.endDate}・${overlapUpd.status}）と重なっています`,
         }, { status: 409 })
       }
       {
@@ -323,7 +345,7 @@ export async function POST(request: NextRequest) {
         if (conflicts.length > 0) {
           return NextResponse.json({
             error: 'WORKED_DAYS_IN_RANGE',
-            message: `帰国期間の中に出勤打刻のある日が ${conflicts.length}日 あります。終了日には「最終帰国日」を入れてください（復帰日ではありません）。`,
+            message: `休みの期間の中に出勤打刻のある日が ${conflicts.length}日 あります。終了日には「休みの最終日」を入れてください（復帰日ではありません）。`,
             conflicts,
             suggestedEndDate: prevDateIso(conflicts[0].date),
           }, { status: 409 })
@@ -376,14 +398,14 @@ export async function POST(request: NextRequest) {
         const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
         sync = await syncHomeLeaveAttendance(
           current.workerId,
-          { startDate: current.startDate, endDate: current.endDate },
-          { startDate: newStart, endDate: newEnd },
+          { startDate: current.startDate, endDate: current.endDate, kind },
+          { startDate: newStart, endDate: newEnd, kind },
           { excludeDocId: id },
         )
       }
 
       const endLabel = newEnd >= HOME_LEAVE_SENTINEL_END ? '復帰未定' : newEnd
-      await logActivity(actorLabel, 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${endLabel}`)
+      await logActivity(actorLabel, 'homeLeave.update', `${current.workerName} ${longLeaveLabel(kind)}更新 ${newStart}〜${endLabel}`)
 
       return NextResponse.json({ success: true, attendanceSync: sync })
     }
@@ -419,13 +441,13 @@ export async function POST(request: NextRequest) {
         const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
         sync = await syncHomeLeaveAttendance(
           data.workerId,
-          { startDate: data.startDate, endDate: data.endDate },
+          { startDate: data.startDate, endDate: data.endDate, kind: longLeaveKindOf(data) },
           null,
           { excludeDocId: id },
         )
       }
 
-      await logActivity(actorLabel, 'homeLeave.delete', `${data.workerName} 一時帰国削除 ${data.startDate}〜${data.endDate}`)
+      await logActivity(actorLabel, 'homeLeave.delete', `${data.workerName} ${longLeaveLabel(longLeaveKindOf(data))}削除 ${data.startDate}〜${data.endDate}`)
 
       return NextResponse.json({ success: true, attendanceSync: sync })
     }

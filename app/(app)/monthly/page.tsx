@@ -22,6 +22,7 @@ import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { UnderlineTabs, ToolButton, Segment, SearchBox, RowButton } from '@/components/ui/PageParts'
 import { CloseCard, OverviewList, needsAttention, type ApprovalStatus } from './components/MonthlyOverview'
+import { longLeaveDuring } from '@/lib/long-leave'
 
 // ────────────────────────────────────────
 //  Types
@@ -56,6 +57,8 @@ interface WorkerMonthly {
   netPay: number
   // Salary calc fields (variable working hours system)
   hkDays?: number
+  /** 長い休みの種類（育休など・2026-11-14） */
+  hkKind?: import('@/lib/long-leave').LongLeaveKind
   hkEarlyReturnDays?: number
   hkEarlyReturnFirstDate?: string  // 帰国中（一時帰国・復帰未定）日数。所定から除外され無給・非欠勤
   prescribedHours?: number
@@ -1621,9 +1624,9 @@ function MonthlyPageInner() {
                         {(w.hkDays || 0) > 0 && (
                           <span
                             className="ml-1.5 text-3xs bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
-                            title={`当月 ${w.hkDays}日 帰国中（所定から除外・無給。欠勤ではありません）`}
+                            title={`当月 ${w.hkDays}日 ${longLeaveDuring(w.hkKind || 'kikoku')}（所定から除外・無給。欠勤ではありません）`}
                           >
-                            帰国中{w.hkDays}日
+                            {longLeaveDuring(w.hkKind || 'kikoku')}{w.hkDays}日
                           </span>
                         )}
                         {/* 申請より早く復帰して出勤している。給与は打刻ベースで正しく計算されるが、

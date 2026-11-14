@@ -11,6 +11,7 @@ import { notify } from '@/lib/notify'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { Icon } from '@/components/ui/Icon'
 import { RowButton } from '@/components/ui/PageParts'
+import { HOME_LEAVE_REASONS, LONG_LEAVE_KINDS, isForeignOnlyKind, longLeaveDuring, longLeaveLabel, longLeaveShort, type LongLeaveKind } from '@/lib/long-leave'
 
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた（帰国の「登録する」ボタン）
 
@@ -32,6 +33,8 @@ type ReconcileState =
 export interface HomeLeaveUiState {
   formOpen: boolean
   showPast: boolean
+  /** 休みの種類（帰国・育休など・2026-11-14） */
+  formKind: LongLeaveKind
   formWorkerId: number | ''
   formStart: string
   formEnd: string
@@ -50,6 +53,7 @@ export interface HomeLeaveUiState {
 export const initialHomeLeaveUi: HomeLeaveUiState = {
   formOpen: false,
   showPast: false,
+  formKind: 'kikoku',
   formWorkerId: '',
   formStart: '',
   formEnd: '',
@@ -97,6 +101,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
   }
   // 復帰未定（番兵終了日）判定。API GET が returnUndecided を正規化して返す
   const isUndecided = (h: HomeLeave) => !!h.returnUndecided
+  /** 種類（古い API 応答は帰国） */
+  const kindOf = (h: HomeLeave): LongLeaveKind => h.kind || 'kikoku'
   const currentLeaves = homeLeaves.filter(h => h.startDate <= today && h.endDate >= today)
     .sort((a, b) => a.endDate.localeCompare(b.endDate))
   const upcomingLeaves = homeLeaves.filter(h => h.startDate > today)
@@ -119,13 +125,13 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     if (data.error !== 'WORKED_DAYS_IN_RANGE' || !data.suggestedEndDate) {
       // 期間の重なり・ロック済み月などの 409 は error に理由が入る（2026-10-02 総合点検。旧: message だけ見て何も出なかった）
       const reason = data.message || data.error
-      notify.failed('登録', reason || '既存の帰国期間と重なっているか、締め済みの月です。')
+      notify.failed('登録', reason || '既存の休みの期間と重なっているか、締め済みの月です。')
       return null
     }
     const list = (data.conflicts || []).slice(0, 8).map(c => `　${c.date}  ${c.summary}`).join('\n')
     const more = (data.conflicts || []).length > 8 ? `\n　…他${(data.conflicts || []).length - 8}日` : ''
     const ok = await confirmDialog({
-      title: `最終帰国日を ${data.suggestedEndDate} に直して登録しますか？`,
+      title: `休みの最終日を ${data.suggestedEndDate} に直して登録しますか？`,
       description: `${data.message}\n\n出勤打刻のある日:\n${list}${more}`,
       confirmLabel: '直して登録する',
       cancelLabel: '入力に戻る',
@@ -148,12 +154,13 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           workerName: w?.name || '',
           startDate: ui.formStart,
           ...(ui.formUndecided ? { returnUndecided: true } : { endDate: ui.formEnd }),
+          kind: ui.formKind,
           reason: ui.formReason,
           note: ui.formNote
         })
       })
       if (res.ok) {
-        patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
+        patchUi({ formOpen: false, formKind: 'kikoku', formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
         onRefresh()
         return
       }
@@ -169,12 +176,13 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
             workerName: w?.name || '',
             startDate: ui.formStart,
             endDate: fixed,
+            kind: ui.formKind,
             reason: ui.formReason,
             note: ui.formNote
           })
         })
         if (retry.ok) {
-          patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
+          patchUi({ formOpen: false, formKind: 'kikoku', formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
           onRefresh()
           return
         }
@@ -274,17 +282,17 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     if (ui.editingId === h.id) {
       return (
         <div key={h.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-blue-300 dark:border-blue-600">
-          <div className="font-semibold mb-3 text-gray-900 dark:text-white">{h.workerName}</div>
+          <div className="font-semibold mb-3 text-gray-900 dark:text-white">{h.workerName}<span className="ml-2 text-xs font-normal text-gray-500">{longLeaveLabel(kindOf(h))}</span></div>
           <div className="grid grid-cols-2 gap-3 mb-2">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">出発日</label>
+              <label className="block text-xs text-gray-500 mb-1">{kindOf(h) === 'kikoku' ? '出発日' : '休みの初日'}</label>
               <input type="date" value={ui.editStart} onChange={e => patchUi({ editStart: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">
-                最終帰国日
-                <span className="block text-3xs text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
+                {kindOf(h) === 'kikoku' ? '最終帰国日' : '休みの最終日'}
+                <span className="block text-3xs text-gray-400 leading-tight">この日まで休み（翌日から出勤）</span>
               </label>
               <input type="date" value={ui.editEnd} disabled={ui.editUndecided} onChange={e => patchUi({ editEnd: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />
@@ -293,15 +301,17 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           <label className="flex items-center gap-2 mb-3 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
             <input type="checkbox" checked={ui.editUndecided}
               onChange={e => patchUi({ editUndecided: e.target.checked })} className="w-4 h-4" />
-            復帰日は未定（急な帰国・戻る時期が決まっていない）
+            復帰日は未定（戻る時期が決まっていない）
           </label>
+          {kindOf(h) === 'kikoku' && (
           <div className="mb-3">
             <label className="block text-xs text-gray-500 mb-1">理由</label>
             <select value={ui.editReason} onChange={e => patchUi({ editReason: e.target.value })}
               className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-              {['一時帰国', 'ビザ更新帰国', 'その他'].map(r => <option key={r} value={r}>{r}</option>)}
+              {HOME_LEAVE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
+          )}
           <div className="mb-3">
             <label className="block text-xs text-gray-500 mb-1">備考</label>
             <textarea value={ui.editNote} onChange={e => patchUi({ editNote: e.target.value })} rows={2}
@@ -318,19 +328,22 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     return (
       <div key={h.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2">
-          <div className="font-semibold text-gray-900 dark:text-white">{h.workerName}</div>
+          <div className="font-semibold text-gray-900 dark:text-white">
+            {h.workerName}
+            <span className="ml-2 align-middle text-xs font-medium px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300">{longLeaveShort(kindOf(h))}</span>
+          </div>
           {section === 'current' && (undecided ? (
             <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-full font-medium">
-              帰国中・復帰未定（{daysSinceDeparture}日経過）
+              {longLeaveDuring(kindOf(h))}・復帰未定（{daysSinceDeparture}日経過）
             </span>
           ) : (
             <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full">
-              帰国まで {daysRemaining}日
+              休みの終わりまで {daysRemaining}日
             </span>
           ))}
           {section === 'upcoming' && (
             <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
-              出発まで {daysUntilDeparture}日
+              休みに入るまで {daysUntilDeparture}日
             </span>
           )}
         </div>
@@ -426,26 +439,41 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
         {ui.formOpen && (
           <div className="px-4 pb-4 space-y-3 border-t border-gray-100 dark:border-gray-700 pt-3">
             <div>
+              <label className="block text-sm text-gray-600 mb-1">休みの種類</label>
+              <select value={ui.formKind}
+                onChange={e => patchUi({ formKind: e.target.value as LongLeaveKind, formWorkerId: '' })}
+                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                {LONG_LEAVE_KINDS.map(k => <option key={k} value={k}>{longLeaveLabel(k)}</option>)}
+              </select>
+              {ui.formKind !== 'kikoku' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  休みの日は出面に「{longLeaveShort(ui.formKind)}」と出て、入力漏れ・欠勤・カレンダーの署名の対象から外れます。
+                  {ui.formKind !== 'kyushoku' && '有給の出勤率では出勤したものとみなします（法律の決まり）。'}
+                  職長が休む日は、その現場の職長承認を政仁さんへ回します。
+                </p>
+              )}
+            </div>
+            <div>
               <label className="block text-sm text-gray-600 mb-1">スタッフ</label>
               <select value={ui.formWorkerId}
                 onChange={e => patchUi({ formWorkerId: e.target.value ? Number(e.target.value) : '' })}
                 className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                 <option value="">選択してください</option>
-                {workers.filter(w => w.visa && w.visa !== 'none').map(w => (
+                {workers.filter(w => !isForeignOnlyKind(ui.formKind) || (w.visa && w.visa !== 'none')).map(w => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">出発日</label>
+                <label className="block text-sm text-gray-600 mb-1">{ui.formKind === 'kikoku' ? '出発日' : '休みの初日'}</label>
                 <input type="date" value={ui.formStart} onChange={e => patchUi({ formStart: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  最終帰国日
-                  <span className="block text-2xs font-normal text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
+                  {ui.formKind === 'kikoku' ? '最終帰国日' : '休みの最終日'}
+                  <span className="block text-2xs font-normal text-gray-400 leading-tight">この日まで休み（翌日から出勤）</span>
                 </label>
                 <input type="date" value={ui.formEnd} disabled={ui.formUndecided} onChange={e => patchUi({ formEnd: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />
@@ -454,15 +482,17 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
               <input type="checkbox" checked={ui.formUndecided}
                 onChange={e => patchUi({ formUndecided: e.target.checked, ...(e.target.checked ? { formEnd: '' } : {}) })} className="w-4 h-4" />
-              復帰日は未定（急な帰国・戻る時期が決まっていない）
+              復帰日は未定（戻る時期が決まっていない）
             </label>
+            {ui.formKind === 'kikoku' && (
             <div>
               <label className="block text-sm text-gray-600 mb-1">理由</label>
               <select value={ui.formReason} onChange={e => patchUi({ formReason: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                {['一時帰国', 'ビザ更新帰国', 'その他'].map(r => <option key={r} value={r}>{r}</option>)}
+                {HOME_LEAVE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
+            )}
             <div>
               <label className="block text-sm text-gray-600 mb-1">備考</label>
               <textarea value={ui.formNote} onChange={e => patchUi({ formNote: e.target.value })} rows={2} placeholder="任意"
@@ -478,14 +508,14 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       <div>
         <div className="border-l-4 border-red-500 pl-3 mb-3">
           <h2 className="font-bold text-gray-900 dark:text-white">
-            現在帰国中
+            いま休んでいる人
             {currentLeaves.length > 0 && (
               <span className="ml-2 text-sm font-normal text-red-600">({currentLeaves.length}名)</span>
             )}
           </h2>
         </div>
         {currentLeaves.length === 0 ? (
-          <div className="text-sm text-gray-400 pl-7">現在帰国中のスタッフはいません</div>
+          <div className="text-sm text-gray-400 pl-7">いま休んでいるスタッフはいません</div>
         ) : (
           <div className="space-y-3">{currentLeaves.map(h => renderHlCard(h, 'current'))}</div>
         )}
@@ -495,14 +525,14 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       <div>
         <div className="border-l-4 border-blue-500 pl-3 mb-3">
           <h2 className="font-bold text-gray-900 dark:text-white">
-            帰国予定
+            これからの予定
             {upcomingLeaves.length > 0 && (
               <span className="ml-2 text-sm font-normal text-blue-600">({upcomingLeaves.length}件)</span>
             )}
           </h2>
         </div>
         {upcomingLeaves.length === 0 ? (
-          <div className="text-sm text-gray-400 pl-7">帰国予定はありません</div>
+          <div className="text-sm text-gray-400 pl-7">これからの予定はありません</div>
         ) : (
           <div className="space-y-3">{upcomingLeaves.map(h => renderHlCard(h, 'upcoming'))}</div>
         )}
@@ -513,20 +543,20 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
         <div className="border-l-4 border-gray-300 pl-3 mb-3">
           <button onClick={() => patchUi({ showPast: !ui.showPast })}
             className="font-bold text-gray-600 dark:text-gray-400 flex items-center gap-2">
-            過去の帰国履歴
+            過去の履歴
             {pastLeaves.length > 0 && <span className="text-sm font-normal">({pastLeaves.length}件)</span>}
             <span className="text-sm">{ui.showPast ? '▲' : '▼'}</span>
           </button>
         </div>
         {ui.showPast && (pastLeaves.length === 0 ? (
-          <div className="text-sm text-gray-400 pl-7">過去の帰国履歴はありません</div>
+          <div className="text-sm text-gray-400 pl-7">過去の履歴はありません</div>
         ) : (
           <div className="space-y-2">
             {pastLeaves.map(h => (
               <div key={h.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-gray-700 dark:text-gray-300">{h.workerName}</span>
-                  <span className="text-xs text-gray-400">{h.reason}</span>
+                  <span className="text-xs text-gray-400">{kindOf(h) === 'kikoku' ? h.reason : longLeaveLabel(kindOf(h))}</span>
                 </div>
                 <div className="text-sm text-gray-500 mt-1">
                   {fmt(h.startDate)} 〜 {fmt(h.endDate)} <span className="ml-2">({daysBetween(h.startDate, h.endDate)}日間)</span>

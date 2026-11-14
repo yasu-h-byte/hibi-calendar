@@ -10,9 +10,11 @@
  * クライアント・サーバー両方から import する（サーバー専用の依存を入れないこと）。
  */
 
+import { longLeaveShort, type LongLeaveKind } from './long-leave'
+
 export type TimeOffKind = 'home' | 'leave' | 'absence'
 export const TIME_OFF_KIND_LABEL: Record<TimeOffKind, string> = {
-  home: '帰国',
+  home: '帰国・長い休み',
   leave: '有給',
   absence: '欠勤届',
 }
@@ -39,6 +41,13 @@ export interface TimeOffItem {
   end: string    // YYYY-MM-DD（同じ日なら start と同じ）
   /** 帰国の復帰日が決まっていない */
   returnUndecided?: boolean
+  /** kind='home' の休みの種類（帰国・育休など・2026-11-14） */
+  leaveKind?: LongLeaveKind
+}
+
+/** 行に出す種類の名前（長い休みは「帰国」「育休」など） */
+export function timeOffChipLabel(t: Pick<TimeOffItem, 'kind' | 'leaveKind'>): string {
+  return t.kind === 'home' ? longLeaveShort(t.leaveKind || 'kikoku') : TIME_OFF_KIND_LABEL[t.kind]
 }
 
 export interface TimeOffDay {

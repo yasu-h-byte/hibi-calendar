@@ -6,6 +6,7 @@
  *   社労士が「この人が何日にどう働いたか」を一目で確認できる。
  */
 'use client'
+import { hkDuringLabel, hkShortLabel } from '@/lib/long-leave'
 
 interface AttendanceEntry {
   w?: number       // 出勤 (1=フル, 0.5=半日, 0.6=補償, 0=休)
@@ -37,7 +38,7 @@ function getStatus(e: AttendanceEntry | undefined): {
 } {
   if (!e) return { label: '－', short: '－', bgClass: 'bg-gray-50', textClass: 'text-gray-400' }
   if (e.p) return { label: '有給', short: '有', bgClass: 'bg-green-100', textClass: 'text-green-800' }
-  if (e.hk) return { label: '帰国中', short: '帰', bgClass: 'bg-cyan-100', textClass: 'text-cyan-800' }
+  if (e.hk) return { label: hkDuringLabel(e.hk), short: hkShortLabel(e.hk).slice(0, 1), bgClass: 'bg-cyan-100', textClass: 'text-cyan-800' }
   if (e.exam) return { label: '試験', short: '試', bgClass: 'bg-purple-100', textClass: 'text-purple-800' }
   if (e.r) return { label: '欠勤', short: '欠', bgClass: 'bg-red-100', textClass: 'text-red-800' }
   if (e.h) return { label: '現場休', short: '現休', bgClass: 'bg-yellow-100', textClass: 'text-yellow-800' }

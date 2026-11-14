@@ -43,6 +43,8 @@ export type LeaveTab = 'list' | 'grantdates' | 'requests' | 'monthly' | 'calenda
 export interface HomeLeave {
   id: string; workerId: number; workerName: string
   startDate: string; endDate: string; reason: string; note?: string; createdAt: string
+  /** 種類（帰国・育休など・2026-11-14〜。lib/long-leave.ts）。古い API 応答には無い＝帰国 */
+  kind?: import('@/lib/long-leave').LongLeaveKind
   returnUndecided?: boolean  // 2026-07-18: 復帰未定（番兵終了日）。endDate は番兵値が入る
   // 2026-08-25: 期間の変更履歴。「当初の帰国予定日は何日だったか」を画面から追えるようにする
   changeHistory?: { field: string; before: string; after: string; at: string; by: string; note?: string }[]

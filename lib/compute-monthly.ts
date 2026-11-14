@@ -163,6 +163,8 @@ export interface WorkerMonthly {
   // 2026-07-18 追加: 当月の帰国中（一時帰国・復帰未定含む）日数。
   //   在籍日数から差し引かれ、その日は無給かつ欠勤に計上されない。UI/書類で「帰国中◯日」表示用。
   hkDays?: number
+  /** 長い休みの種類（育休など。帰国のときは無し・2026-11-14・lib/long-leave.ts） */
+  hkKind?: import('./long-leave').LongLeaveKind
   /** 帰国申請の期間内なのに出勤打刻があった日数（＝予定より早く復帰した。申請の終了日を直すべき） */
   hkEarlyReturnDays?: number
   /** 同上の最初の日付（画面に「◯◯から復帰済み」と出すため） */
@@ -804,6 +806,9 @@ export function computeMonthly(
         }
         if (hk.days > 0) {
           wm.hkDays = hk.days
+          // 休みの種類（帰国・育休など・2026-11-14）。月次の表示を「育休中◯日」にする。帰国のときは付けない（今までどおり）
+          const hkKind = homeLeaves?.find(l => l.workerId === wm.id && l.startDate <= endIso && l.endDate >= startIso)?.kind
+          if (hkKind && hkKind !== 'kikoku') wm.hkKind = hkKind
           activeDays = Math.max(0, activeDays - hk.days)
         }
         if (activeDays < totalDaysInMonth) {

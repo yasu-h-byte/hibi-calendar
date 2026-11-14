@@ -21,6 +21,7 @@ import { isAlreadyRetired } from '@/lib/workers'
 import { todayJstIso, addDaysIso } from '@/lib/date-utils'
 import { isReturnUndecided } from '@/lib/homeLeave'
 import { mergeTimeOffDays, sortTimeOff, TIME_OFF_DAYS_AHEAD, type TimeOffDay, type TimeOffItem } from '@/lib/time-off'
+import { longLeaveKindOf } from '@/lib/long-leave'
 
 const CACHE_MS = 60_000
 let cache: { at: number; today: string; items: TimeOffItem[]; sites: { id: string; name: string }[] } | null = null
@@ -43,7 +44,7 @@ async function build(today: string) {
   // ── 帰国（期間で持っている）──
   const hl = await getDocs(collection(db, 'homeLongLeave'))
   hl.forEach(d => {
-    const h = d.data() as { workerId: number; startDate?: string; endDate?: string; status?: string }
+    const h = d.data() as { workerId: number; startDate?: string; endDate?: string; status?: string; kind?: string; reason?: string }
     if (!workers.has(h.workerId) || !h.startDate || !h.endDate) return
     const stage = h.status === 'approved' ? 'approved' : (h.status === 'pending' || h.status === 'foreman_approved') ? 'pending' : null
     if (!stage) return
@@ -51,7 +52,7 @@ async function build(today: string) {
     if (h.endDate < today) return
     ranges.push({
       kind: 'home', stage, workerId: h.workerId, workerName: nameOf(h.workerId), siteIds: siteIdsOf(h.workerId),
-      start: h.startDate, end: h.endDate, ...(isReturnUndecided(h.endDate) ? { returnUndecided: true } : {}),
+      start: h.startDate, end: h.endDate, leaveKind: longLeaveKindOf(h), ...(isReturnUndecided(h.endDate) ? { returnUndecided: true } : {}),
     })
   })
 
