@@ -4,6 +4,8 @@ import { type MainData } from '@/lib/compute'
 import { getMainData } from '@/lib/compute.server'
 import { getAttendanceDoc, getApprovalForDay, setFinalApprovalForDay } from '@/lib/attendance.server'
 import { approvingForemenOfSite, isProxyApprovalSite } from '@/lib/auth'
+import { isProxyApprovalDay } from '@/lib/foremen'
+import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 import { db } from '@/lib/firebase'
 import { getDocs, collection, query, where } from '@/lib/fsdb'
 import {
@@ -22,6 +24,7 @@ import { approvalDateError } from '@/lib/attendance-authz'
  * 政仁さん・代表（管理者・事業責任者）:
  *   出面の最終承認（職長承認済みの日）・有給／帰国申請の最終承認・
  *   職長がいない現場（とび・役員が登録）の職長承認の代行・配置の見直し（移動したのに前の現場に残っている人）
+ *   職長が長い休み（育休・帰国など）の日の職長承認の代わり（2026-11-14 代表・白戸職長の育休）
  *
  * GET  ?token=
  * POST {token, action:'approve_days' | 'final_days', siteId, ym, days}
@@ -93,11 +96,14 @@ export async function GET(request: NextRequest) {
 
     // 有給・帰国申請は出面と同時に読み始める（管理者は職長承認済みも読む）
     const leaveStatuses = manager ? ['pending', 'foreman_approved'] : ['pending']
+    // 長い休み（育休・帰国など）の職長の日は政仁さんが代わりに職長承認する（2026-11-14）
+    const longLeavesPromise = manager ? getAllActiveHomeLeaves() : Promise.resolve([])
     const leavePromise = Promise.all(leaveStatuses.map(st => getDocs(query(collection(db, 'leaveRequests'), where('status', '==', st)))))
     const hlPromise = Promise.all(leaveStatuses.map(st => getDocs(query(collection(db, 'homeLongLeave'), where('status', '==', st)))))
 
     // ── 出面（2か月を同時に。出面ドキュメントは月ごとに1回だけ読む） ──
     const attByYm = new Map<string, Record<string, AttendanceEntry>>()
+    const longLeaves = await longLeavesPromise
     const perMonth = await Promise.all(months.map(async ym => {
       const att = await getAttendanceDoc(ym)
       attByYm.set(ym, att)
@@ -105,11 +111,16 @@ export async function GET(request: NextRequest) {
       const targets = manager ? parentSites(main) : foremanParentSites(worker, sites, mforeman, ym)
       return Promise.all(targets.map(async site => {
         const proxy = isProxyApprovalSite(site, mforeman, ym, main.workers)
-        // 管理者が職長承認するのは代行の現場だけ
-        const needForeman = !manager || proxy
         // 承認は現場×月まとめて1回の範囲読み・外国人スタッフ0人の現場はカレンダーも読まない（読み取りを減らす・2026-10-01）
         const days = await siteMonthDays(site.id, ym, { att, ...siteRosterFromMain(main, site.id, ym), skipCalendarIfNoWorkers: true })
-        const fb = needForeman ? foremanBlock(site, ym, days, todayIso, !!manager && proxy) : null
+        // 管理者が職長承認するのは代行の現場と、職長が長い休みの日だけ（2026-11-14）
+        const proxyDays = manager && !proxy
+          ? days.filter(d => isProxyApprovalDay(site, mforeman, ym, main.workers, d.dateISO, longLeaves))
+          : []
+        const needForeman = !manager || proxy || proxyDays.length > 0
+        const fb = needForeman
+          ? foremanBlock(site, ym, manager && !proxy ? proxyDays : days, todayIso, !!manager)
+          : null
         let final: FinalBlock | null = null
         if (manager) {
           const waiting = days.filter(d => d.approved && !d.final)
@@ -209,11 +220,21 @@ export async function POST(request: NextRequest) {
       // 職長: その月にその現場の職長（職種が職長）／管理者: 職長がいない現場の代行だけ
       const isForeman = foremanParentSites(worker, main.sites as unknown as Site[], mforeman, ym).some(s => s.id === siteId)
       const isProxy = !!manager && isProxyApprovalSite(site, mforeman, ym, main.workers)
-      if (!isForeman && !isProxy) {
+      // 職長が長い休み（育休・帰国など）の日は政仁さんが代わりに承認できる（2026-11-14）。休みでない日は職長が行う
+      let approveDays = days
+      if (!isForeman && !isProxy && manager) {
+        const longLeaves = await getAllActiveHomeLeaves()
+        const pad = (n: number) => String(n).padStart(2, '0')
+        approveDays = days.filter(dd => isProxyApprovalDay(site, mforeman, ym, main.workers,
+          `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${pad(Number(dd))}`, longLeaves))
+        if (approveDays.length !== days.length) {
+          return NextResponse.json({ error: '職長が出ている日の職長承認は、職長が行います（政仁さんが代わりに押せるのは、職長が休みの日だけです）' }, { status: 403 })
+        }
+      } else if (!isForeman && !isProxy) {
         return NextResponse.json({ error: 'この現場の職長承認はできません' }, { status: 403 })
       }
       { const r = await breakCheck(); if (r) return r }
-      const result = await approveDaysForSite(siteId, ym, days, worker.id)
+      const result = await approveDaysForSite(siteId, ym, approveDays, worker.id)
       return NextResponse.json({ success: true, ...result })
     }
 

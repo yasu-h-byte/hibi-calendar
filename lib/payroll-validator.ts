@@ -303,6 +303,8 @@ export interface PayrollAuditWorker {
   prescribedHours?: number
   workerPrescribedDays?: number  // 配置現場 calendar の所定日数（baseDays とは別概念）
   hkDays?: number                // 帰国中（一時帰国・復帰未定）日数。所定から除外され無給・非欠勤
+  /** 長い休みの種類（育休など・2026-11-14） */
+  hkKind?: import('@/lib/long-leave').LongLeaveKind
   actualWorkHours?: number
   legalOtHours?: number
   dailyOtHours?: number

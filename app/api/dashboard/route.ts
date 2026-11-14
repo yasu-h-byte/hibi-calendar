@@ -89,7 +89,7 @@ function computeTodayStatus(
     if (pk.ym !== ym || pk.day !== dayStr) continue
     const wid = Number(pk.wid)
     if (!Number.isFinite(wid)) continue
-    if (entry.hk === 1) homeLeaveByEntry.add(wid)
+    if ((entry.hk ?? 0) > 0) homeLeaveByEntry.add(wid)  // hk の値は休みの種類（2026-11-14）
     const worker = main.workers.find(w => w.id === wid)
     if (!worker || !isPresent(entry, worker.visa)) continue
     const parent = parentOf(pk.sid)

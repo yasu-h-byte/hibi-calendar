@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { fetchWithAuth } from '@/lib/api-client'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
+import { hkDuringLabel } from '@/lib/long-leave'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { RowButton } from '@/components/ui/PageParts'
 
@@ -36,7 +37,7 @@ function describe(e: Record<string, unknown> | null): string {
   if (e.p) return '有給'
   if (e.r) return '欠勤'
   if (e.h) return '現場休'
-  if (e.hk) return '帰国中'
+  if (e.hk) return hkDuringLabel(e.hk)
   if (e.exam) return '試験'
   if (e.w === 0.6) return '0.6補償'
   const t = e.st && e.et ? ` ${e.st}〜${e.et}` : ''

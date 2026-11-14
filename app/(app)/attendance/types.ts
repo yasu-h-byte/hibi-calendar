@@ -80,6 +80,8 @@ export interface HomeLeaveInfo {
   endDate: string
   reason: string
   status: string
+  /** 種類（帰国・育休など・2026-11-14〜） */
+  kind?: import('@/lib/long-leave').LongLeaveKind
 }
 
 export interface GridData {

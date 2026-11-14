@@ -6,6 +6,7 @@ import { getAttendanceDoc, getStaffSites } from './attendance.server'
 import { loadLockContext } from './locks.server'
 import type { AttendanceEntry } from '@/types'
 import { currentYmJst } from '@/lib/date-utils'
+import { hkCodeOf, longLeaveKindOf, type LongLeaveKind } from './long-leave'
 
 /**
  * 帰国期間 ⇄ 出面の帰国フラグ(hk) 同期（2026-08-03 追加）
@@ -36,6 +37,8 @@ import { currentYmJst } from '@/lib/date-utils'
 export interface HomeLeaveRange {
   startDate: string  // YYYY-MM-DD
   endDate: string    // YYYY-MM-DD
+  /** 種類（帰国・育休など・2026-11-14〜）。出面の hk に種類の値を書く。無いときは帰国（1） */
+  kind?: LongLeaveKind
 }
 
 export interface HomeLeaveSyncResult {
@@ -118,15 +121,17 @@ export type HomeLeaveDayAction =
  * 1日分の判定（副作用なし）。同期処理の心臓部をここに切り出してテスト可能にしている。
  *
  * @param entry         現在の出面エントリ（無ければ undefined）
- * @param shouldHaveHk  その日が帰国期間内か（日曜は呼び出し側で false にする）
+ * @param shouldHaveHk  その日に立てる hk の値（0/false＝立てない。true は帰国＝1）。日曜は呼び出し側で 0 にする。
+ *   2026-11-14: 種類（帰国・育休など）で値が違う。値が違う印は書き直す（種類を変えたとき）
  */
 export function planHomeLeaveDay(
   entry: AttendanceEntry | undefined,
-  shouldHaveHk: boolean,
+  shouldHaveHk: boolean | number,
 ): HomeLeaveDayAction {
-  if (shouldHaveHk) {
+  const want = shouldHaveHk === true ? 1 : Number(shouldHaveHk) || 0
+  if (want > 0) {
     if (hasExplicitStatus(entry)) return 'skip'
-    return entry?.hk ? 'noop' : 'write'
+    return entry?.hk === want ? 'noop' : 'write'
   }
   if (!entry?.hk) return 'noop'
   return isPureHomeLeaveStub(entry) ? 'clear-entry' : 'clear-field'
@@ -250,12 +255,16 @@ export async function syncHomeLeaveAttendance(
     ))
     othersSnap.forEach(d0 => {
       if (options.excludeDocId && d0.id === options.excludeDocId) return
-      const v = d0.data() as { startDate?: string; endDate?: string }
-      if (v.startDate && v.endDate) protectRanges.push({ startDate: v.startDate, endDate: v.endDate })
+      const v = d0.data() as { startDate?: string; endDate?: string; kind?: string; reason?: string }
+      if (v.startDate && v.endDate) protectRanges.push({ startDate: v.startDate, endDate: v.endDate, kind: longLeaveKindOf(v) })
     })
   } catch { /* 保護リストが取れなくても本処理は続行（従来挙動） */ }
-  const isProtected = (iso: string) =>
-    protectRanges.some(r => iso >= r.startDate && iso <= r.endDate)
+  /** 他の承認済み期間がカバーする日の hk の値（0＝カバーしない） */
+  const protectedCode = (iso: string): number => {
+    const r = protectRanges.find(x => iso >= x.startDate && iso <= x.endDate)
+    return r ? hkCodeOf(r.kind ?? 'kikoku') : 0
+  }
+  const newCode = newRange ? hkCodeOf(newRange.kind ?? 'kikoku') : 0
 
   // 対象月 = 旧期間 ∪ 新期間 が触れる月。旧期間を含めるのは残骸を消すため。
   const starts: string[] = []
@@ -291,14 +300,14 @@ export async function syncHomeLeaveAttendance(
       const entry = att[key]
       // 日曜は元々出面対象外なので帰国フラグも立てない（承認時の既存仕様を踏襲）
       const isSunday = new Date(y, m - 1, day).getDay() === 0
-      const shouldHaveHk =
-        (!!newRange && !isSunday && iso >= newRange.startDate && iso <= newRange.endDate)
-        || (!isSunday && isProtected(iso))  // 他の承認済み期間がカバーする日は維持
+      const shouldHaveHk = isSunday ? 0
+        : (newRange && iso >= newRange.startDate && iso <= newRange.endDate) ? newCode
+        : protectedCode(iso)  // 他の承認済み期間がカバーする日は維持
 
       switch (planHomeLeaveDay(entry, shouldHaveHk)) {
         case 'write':
           updates[`d.${key}.w`] = 0
-          updates[`d.${key}.hk`] = 1
+          updates[`d.${key}.hk`] = shouldHaveHk
           result.written.push(iso)
           break
         case 'clear-entry':

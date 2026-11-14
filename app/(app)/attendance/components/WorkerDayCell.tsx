@@ -122,15 +122,15 @@ export function WorkTypeTag({ workTypeTag, isLocked }: { workTypeTag?: WorkTypeT
   )
 }
 
-/** 帰国中の特別表示セル */
-export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: number }) {
+/** 長い休み（帰国・育休など）の特別表示セル */
+export function HomeLeaveCell({ colBg, cellWidth, label = '帰国' }: { colBg: string; cellWidth: number; /** 帰国・育休など（2026-11-14） */ label?: string }) {
   return (
     <td
       className={`px-0 py-0 border-l border-gray-100 ${colBg}`}
       style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
     >
       <div className="flex items-center justify-center h-full py-2">
-        <span className="text-3xs font-bold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-md">帰国</span>
+        <span className="text-3xs font-bold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-md">{label}</span>
       </div>
     </td>
   )

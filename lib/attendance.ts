@@ -306,7 +306,7 @@ export function getEntryStatus(entry: AttendanceEntry | null | undefined): Atten
   if (entry.exam && entry.exam === 1) return 'exam'
   if (entry.r && entry.r === 1) return 'rest'
   if (entry.h && entry.h === 1) return 'site_off'
-  if (entry.hk && entry.hk === 1) return 'home_leave'
+  if (entry.hk && entry.hk > 0) return 'home_leave'  // 2026-11-14: hk の値は休みの種類（1=帰国・2=育休…）
   // 0.6補償（現場都合休み）。w=1 だけを出勤とみなす旧判定では 'none' に落ち、
   // スマホ・職長画面で「未入力」と誤表示されていた（2026-08-28 実機確認で発覚）
   if (entry.w === 0.6) return 'comp'

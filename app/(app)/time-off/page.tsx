@@ -13,7 +13,7 @@ import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { notify } from '@/lib/notify'
 import { PageHeader, Segment, Chip, SearchBox } from '@/components/ui/PageParts'
 import {
-  TIME_OFF_KIND_LABEL, TIME_OFF_STAGE_LABEL, TIME_OFF_DAYS_AHEAD, coversDate,
+  TIME_OFF_KIND_LABEL, TIME_OFF_STAGE_LABEL, TIME_OFF_DAYS_AHEAD, coversDate, timeOffChipLabel,
   type TimeOffItem, type TimeOffKind, type TimeOffStage,
 } from '@/lib/time-off'
 
@@ -78,7 +78,7 @@ export default function TimeOffPage() {
     <div className="border-t first:border-t-0 border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[170px_minmax(0,1fr)_minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
       <span className="text-sm font-bold text-gray-900 dark:text-gray-100 tabular-nums">{fmtRange(t)}</span>
       <span className="flex items-center gap-1.5 md:order-none order-first col-span-2 md:col-span-1">
-        <Chip tone={KIND_TONE[t.kind]}>{TIME_OFF_KIND_LABEL[t.kind]}</Chip>
+        <Chip tone={KIND_TONE[t.kind]}>{timeOffChipLabel(t)}</Chip>
         <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{t.workerName}</span>
       </span>
       <span className="text-xs text-hibi-sub dark:text-gray-400 truncate">
@@ -93,7 +93,7 @@ export default function TimeOffPage() {
       <PageHeader
         group="出面・勤怠"
         title="休みの予定"
-        sub={`帰国・有給・欠勤届の予定です（帰国は先の予定もすべて、有給・欠勤届は今日から${TIME_OFF_DAYS_AHEAD}日先まで）。見るだけの画面です。承認は休暇管理、入力は出面入力で行います`}
+        sub={`帰国・育休などの長い休み・有給・欠勤届の予定です（長い休みは先の予定もすべて、有給・欠勤届は今日から${TIME_OFF_DAYS_AHEAD}日先まで）。見るだけの画面です。承認は休暇管理、入力は出面入力で行います`}
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -104,7 +104,7 @@ export default function TimeOffPage() {
           {usedSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <Segment value={kind} onChange={setKind} items={[
-          ['all', 'すべて'], ['home', '帰国'], ['leave', '有給'], ['absence', '欠勤届'],
+          ['all', 'すべて'], ['home', '帰国・長い休み'], ['leave', '有給'], ['absence', '欠勤届'],
         ]} />
         <SearchBox value={query} onChange={setQuery} placeholder="名前で探す" />
       </div>

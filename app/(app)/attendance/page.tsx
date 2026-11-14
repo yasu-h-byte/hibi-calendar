@@ -12,6 +12,7 @@ import { orgKeyOf } from '@/lib/locks'
 import { readAuth } from '@/lib/hooks/useAuthPassword'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
+import { hkDuringLabel } from '@/lib/long-leave'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import { isTimeBasedMonth, calcOvertimeHours, DAY_START_OPTIONS, DAY_END_OPTIONS } from '@/types'
 import {
@@ -549,7 +550,7 @@ export default function AttendanceGridPage() {
     const cur = workerEntries[workerId]?.[day] as (AttEntry & { s?: string }) | undefined
     if (cur?.s !== 'staff') return true
     const w = data?.workers.find(x => String(x.id) === String(workerId))
-    const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? '帰国中'
+    const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? hkDuringLabel(cur.hk)
       : cur.exam ? '試験' : cur.w === 0.6 ? '0.6補償'
       : `出勤${cur.st && cur.et ? ` ${cur.st}〜${cur.et}` : ''}${cur.o ? ` 残業${cur.o}h` : ''}`
     const name = w?.name || `ID ${workerId}`

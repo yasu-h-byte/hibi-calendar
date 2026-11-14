@@ -193,7 +193,7 @@ export default function LeavePage() {
           { key: 'calendar', label: 'カレンダー' },
           { key: 'monthly', label: '月別' },
           { key: 'grantdates', label: '付与日' },
-          { key: 'homeleave', label: '帰国' },
+          { key: 'homeleave', label: '帰国・長い休み' },
         ]}
       />
 
